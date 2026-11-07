@@ -1,0 +1,47 @@
+{
+  "name": "lead_gen_sme_web_v1",
+  "region": {
+    "name": "Greater Manchester",
+    "lad_codes": [
+      "E08000001",
+      "E08000002",
+      "E08000003",
+      "E08000004",
+      "E08000005",
+      "E08000006",
+      "E08000007",
+      "E08000008",
+      "E08000009",
+      "E08000010"
+    ],
+    "lad_names": {
+      "E08000001": "Bolton",
+      "E08000002": "Bury",
+      "E08000003": "Manchester",
+      "E08000004": "Oldham",
+      "E08000005": "Rochdale",
+      "E08000006": "Salford",
+      "E08000007": "Stockport",
+      "E08000008": "Tameside",
+      "E08000009": "Trafford",
+      "E08000010": "Wigan"
+    }
+  },
+  "company_status": ["active"],
+  "exclude_dormant": true,
+  "staff": { "min": 5, "max": 100, "unknown_policy": "include_flagged" },
+  "sic_exclude": [
+    { "code": "64209", "reason": "Activities of other holding companies: not website buyers" },
+    { "code": "68209", "reason": "Letting of own property: typically shells" },
+    { "code": "74990", "reason": "Non-trading company" },
+    { "code": "99999", "reason": "Dormant company" }
+  ],
+  "sic_keep_notes": [
+    { "code": "68310", "reason": "Estate agents: real website buyers (kept deliberately)" },
+    {
+      "code": "68320",
+      "reason": "Letting agents / property management: real website buyers (kept deliberately)"
+    }
+  ],
+  "location_basis": "registered_office"
+}

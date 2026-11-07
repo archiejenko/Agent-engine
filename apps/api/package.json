@@ -1,0 +1,23 @@
+{
+  "name": "@ae/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/node.ts",
+    "dev:worker": "wrangler dev",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json",
+    "cf-typegen": "wrangler types --strict-vars=false",
+    "cf:deploy": "wrangler deploy && wrangler d1 migrations apply DB --remote"
+  },
+  "dependencies": {
+    "@ae/contracts": "workspace:*",
+    "@ae/storage": "workspace:*",
+    "@hono/node-server": "2.1.6",
+    "hono": "4.13.16",
+    "jose": "6.2.15"
+  },
+  "devDependencies": {
+    "wrangler": "4.158.0"
+  }
+}

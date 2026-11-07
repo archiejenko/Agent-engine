@@ -1,0 +1,6 @@
+# Copy to .dev.vars and fill in. .dev.vars is git-ignored. Never commit real values.
+# Phase 1: Companies House REST API key (developer.company-information.service.gov.uk)
+CH_API_KEY=
+# Cloudflare Access (only needed to test Access validation locally; leave blank for local dev)
+ACCESS_TEAM_DOMAIN=
+ACCESS_POLICY_AUD=
