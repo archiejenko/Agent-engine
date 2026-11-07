@@ -7,7 +7,6 @@ import {
   type WebsiteFinder,
 } from "@ae/ports";
 import type { EntityRow, Storage } from "@ae/storage";
-import type { VerificationContext } from "../../context.ts";
 import { canonicalJson, stableUuid } from "../../ids.ts";
 import { domainOf, nameSimilarity, normalisePostcode } from "../../resolve.ts";
 import { ALLOWED_EXTRACT_FIELDS, ROLE_EMAIL, WEBSITE_EXTRACT } from "./prompts.ts";

@@ -253,10 +253,22 @@ export function phase2(db: SqlDriver) {
       }) => {
         const w: string[] = [];
         const p: SqlValue[] = [];
-        if (q.status) w.push("status = ?"), p.push(q.status);
-        if (q.module) w.push("module = ?"), p.push(q.module);
-        if (q.runId) w.push("run_id = ?"), p.push(q.runId);
-        if (q.entityId) w.push("entity_id = ?"), p.push(q.entityId);
+        if (q.status) {
+          w.push("status = ?");
+          p.push(q.status);
+        }
+        if (q.module) {
+          w.push("module = ?");
+          p.push(q.module);
+        }
+        if (q.runId) {
+          w.push("run_id = ?");
+          p.push(q.runId);
+        }
+        if (q.entityId) {
+          w.push("entity_id = ?");
+          p.push(q.entityId);
+        }
         const rows = await db.all<Row>(
           `SELECT * FROM opportunities ${w.length ? `WHERE ${w.join(" AND ")}` : ""} ORDER BY created_at DESC, rank LIMIT ? OFFSET ?`,
           [...p, q.limit, q.offset ?? 0],
@@ -352,8 +364,14 @@ export function phase2(db: SqlDriver) {
       }) => {
         const w: string[] = [];
         const p: SqlValue[] = [];
-        if (q.status) w.push("status = ?"), p.push(q.status);
-        if (q.playbook) w.push("playbook = ?"), p.push(q.playbook);
+        if (q.status) {
+          w.push("status = ?");
+          p.push(q.status);
+        }
+        if (q.playbook) {
+          w.push("playbook = ?");
+          p.push(q.playbook);
+        }
         const rows = await db.all<Row>(
           `SELECT * FROM tasks ${w.length ? `WHERE ${w.join(" AND ")}` : ""} ORDER BY created_at ${q.order === "asc" ? "ASC" : "DESC"}, task_id LIMIT ? OFFSET ?`,
           [...p, q.limit, q.offset ?? 0],
