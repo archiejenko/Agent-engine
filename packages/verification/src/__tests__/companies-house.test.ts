@@ -77,7 +77,7 @@ describe("Companies House client", () => {
     await expect(c.get("/company/01234567")).rejects.toThrow(ChAuthError);
   });
 
-  it("backs off and retries on 429 and 5xx", async () => {
+  it("retries 5xx with backoff (and 429 after pausing)", async () => {
     const statuses = [429, 503, 200];
     const c = client((async () => {
       const s = statuses.shift() as number;
@@ -85,6 +85,55 @@ describe("Companies House client", () => {
     }) as unknown as typeof fetch);
     expect(await c.get("/company/01234567")).toEqual({ ok: true });
     expect(c.calls).toBe(3);
+  });
+
+  it("429 pauses until the reset time in the header, then carries on", async () => {
+    let t = 1_000_000;
+    const sleeps: number[] = [];
+    const responses = [
+      new Response("", {
+        status: 429,
+        headers: { "x-ratelimit-remain": "0", "x-ratelimit-reset": String((t + 120_000) / 1000) },
+      }),
+      Response.json({ ok: true }, { headers: { "x-ratelimit-remain": "599" } }),
+    ];
+    const c = new CompaniesHouseClient({
+      apiKey: "k",
+      config: cfg,
+      fetch: (async () => responses.shift()) as unknown as typeof fetch,
+      now: () => t,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+        t += ms;
+      },
+    });
+    expect(await c.get("/company/01234567")).toEqual({ ok: true });
+    expect(sleeps).toContain(121_000); // reset in 120s, +1s margin
+    expect(c.limiter.pauses).toBe(1);
+  });
+
+  it("pauses before calling when the remaining quota hits the reserve", async () => {
+    let t = 0;
+    const sleeps: number[] = [];
+    let n = 0;
+    const c = new CompaniesHouseClient({
+      apiKey: "k",
+      config: cfg,
+      fetch: (async () =>
+        Response.json(
+          { n: n++ },
+          { headers: { "x-ratelimit-remain": n === 1 ? "90" : "500", "x-ratelimit-reset": "300" } },
+        )) as unknown as typeof fetch,
+      now: () => t,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+        t += ms;
+      },
+    });
+    await c.get("/company/00000001"); // response says 90 left: at the reserve (600 × 15%)
+    await c.get("/company/00000002"); // so this one waits for the reset first
+    expect(c.limiter.pauses).toBe(1);
+    expect(sleeps.some((s) => s >= 300_000)).toBe(true);
   });
 
   it("gives up after max_retries", async () => {

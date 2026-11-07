@@ -2,6 +2,24 @@
 
 Newest first. Each entry: what we decided, why, and who approved it.
 
+## 2026-11-08 — Keyless build of Phases 2–5 (Archie's change of plan)
+
+- **Build Phases 2–5 without stopping at gates**; each phase still ends with a synthetic gate report.
+  Every external system sits behind an interface ("port") with a fake; real adapters plug in at
+  cutover (`docs/live-cutover.md`). The global kill switch defaults to ON (external actions off).
+- **Period-dated facts don't decay** (Archie's change). Headcount, accounts category and accounts
+  made-up date describe a fixed accounting period: confidence stays at the source's reliability, and
+  the fact goes `stale` after its shelf life (640 days from the period end), when a newer period's
+  figure is due. Alternative considered: decay from period end (made headcount confidence 0.3–0.6).
+  *Interpretation note:* the full wording of this request wasn't visible in the session; this is how
+  it was implemented, from the one-line summary.
+- **Header-driven rate limiter** (Archie's change). Each response's `X-Ratelimit-Remain` /
+  `X-Ratelimit-Reset` drive the pacing: when the remaining quota reaches the reserve (15% of the
+  limit) we pause until the reset; a 429 pauses until the reset (not exponential backoff) and doesn't
+  use up retries (capped at 20 pauses per request). The token bucket stays as a ceiling if headers are
+  missing. Alternative: token bucket only (ignores the server's own view of the quota).
+- **Companies House Streaming API in Phase 4** (Archie's change): see `docs/PLAN-phases-2-5.md`.
+
 ## 2026-11-07 — Phase 1 build decisions (for Archie's review at the gate)
 
 - **Point-in-time answers are rebuilt from claims**, not looked up from stored fact versions. Each

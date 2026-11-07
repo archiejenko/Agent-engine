@@ -128,8 +128,9 @@
     "tolerance": {
       "kind": "exact"
     },
-    "shelf_life_days": 400,
-    "half_life_days": 200
+    "shelf_life_days": 640,
+    "half_life_days": null,
+    "period_dated": true
   },
   {
     "field": "last_accounts_made_up_to",
@@ -139,8 +140,9 @@
     "tolerance": {
       "kind": "exact"
     },
-    "shelf_life_days": 400,
-    "half_life_days": 200
+    "shelf_life_days": 640,
+    "half_life_days": null,
+    "period_dated": true
   },
   {
     "field": "accounts_next_due",
@@ -273,6 +275,7 @@
       "value": 0.1
     },
     "shelf_life_days": 640,
-    "half_life_days": 365
+    "half_life_days": null,
+    "period_dated": true
   }
 ]

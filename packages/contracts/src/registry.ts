@@ -30,9 +30,30 @@ export const FieldDefinition = z
     tolerance: Tolerance,
     shelf_life_days: z.number().int().positive().nullable(),
     half_life_days: z.number().positive().nullable(),
+    /**
+     * Period-dated facts describe a fixed period (e.g. headcount in filed accounts). They don't decay:
+     * they don't become less true with age. They still go stale after shelf_life_days, when a newer
+     * period's figure should exist.
+     */
+    period_dated: z.boolean().default(false),
   })
   .superRefine((f, ctx) => {
-    if ((f.shelf_life_days === null) !== (f.half_life_days === null)) {
+    if (f.period_dated) {
+      if (f.half_life_days !== null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["half_life_days"],
+          message: "period-dated facts don't decay: half_life_days must be null",
+        });
+      }
+      if (f.shelf_life_days === null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["shelf_life_days"],
+          message: "period-dated facts need a shelf life (when a newer period is due)",
+        });
+      }
+    } else if ((f.shelf_life_days === null) !== (f.half_life_days === null)) {
       ctx.addIssue({
         code: "custom",
         path: ["half_life_days"],

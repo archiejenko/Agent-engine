@@ -339,6 +339,35 @@ describe("triangulation, staleness and filters", () => {
   });
 });
 
+describe("period-dated facts (headcount from accounts)", () => {
+  it("don't decay, but go stale once a newer period is due", async () => {
+    await ingest([
+      await chClaim(runId, {
+        field: "employees_average",
+        value: 12,
+        observed: "2025-03-31T00:00:00Z", // period end
+        published: "2025-11-20T00:00:00Z", // accounts published
+        source: "companies_house_accounts",
+      }),
+    ]);
+    const q2 = (asOf: string) =>
+      getVerifiedFacts(storage, ctx, {
+        entities: ["01234567"],
+        fields: ["employees_average"],
+        minConfidence: 0,
+        asOf,
+        lanes: ["open"],
+        caller: "dashboard",
+      });
+    const [a] = await q2("2026-11-07"); // 19 months after period end
+    expect(a?.confidence).toBeCloseTo(0.95, 12);
+    expect(a?.status).toBe("verified");
+    const [b] = await q2("2027-01-15"); // > 640 days after period end
+    expect(b?.status).toBe("stale");
+    expect(b?.confidence).toBeCloseTo(0.95, 12);
+  });
+});
+
 describe("ingest pipeline", () => {
   it("drops and logs unknown fields; never guesses", async () => {
     const stats = await ingest([

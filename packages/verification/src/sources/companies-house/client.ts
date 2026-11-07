@@ -1,12 +1,13 @@
 import type { CompaniesHouseConfig } from "@ae/config";
-import { TokenBucket } from "./rate-limit.ts";
+import { HeaderRateLimiter, TokenBucket } from "./rate-limit.ts";
 
 /**
  * Companies House Public Data API client.
  * ASSUMPTIONS TO VERIFY against current docs before the first live run (docs/sources/companies-house.md):
  *  - auth is HTTP Basic with the API key as username and an empty password;
  *  - the limit is 600 requests per 5 minutes per key; 429 when exceeded;
- *  - X-Ratelimit-Reset carries the reset time as epoch seconds.
+ *  - X-Ratelimit-Remain / X-Ratelimit-Reset (epoch seconds) are sent on every response.
+ * Rate limiting is header-driven: we pause until the reset time when the quota runs low or on 429.
  */
 export interface ResponseCache {
   get(key: string): Promise<unknown | undefined>;
@@ -34,7 +35,7 @@ export interface ClientOptions {
 }
 
 export class CompaniesHouseClient {
-  private readonly bucket: TokenBucket;
+  readonly limiter: HeaderRateLimiter;
   private readonly fetchFn: typeof fetch;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => number;
@@ -46,7 +47,7 @@ export class CompaniesHouseClient {
     const rl = o.config.rate_limit;
     this.now = o.now ?? Date.now;
     this.sleep = o.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
-    this.bucket =
+    const bucket =
       o.bucket ??
       new TokenBucket(
         Math.floor(rl.requests * rl.use_share),
@@ -54,6 +55,16 @@ export class CompaniesHouseClient {
         this.now,
         this.sleep,
       );
+    this.limiter = new HeaderRateLimiter(
+      bucket,
+      // Keep the unused share of the limit (15%) in reserve; pause until reset when we reach it.
+      {
+        reserve: Math.ceil(rl.requests * (1 - rl.use_share)),
+        fallbackWindowMs: rl.window_seconds * 1000,
+      },
+      this.now,
+      this.sleep,
+    );
     this.fetchFn = o.fetch ?? fetch;
   }
 
@@ -69,8 +80,9 @@ export class CompaniesHouseClient {
       return cached;
     }
     let attempt = 0;
+    let pauses429 = 0;
     for (;;) {
-      await this.bucket.take();
+      await this.limiter.beforeRequest();
       this.calls++;
       let res: Response;
       try {
@@ -82,6 +94,7 @@ export class CompaniesHouseClient {
         await this.sleep(2 ** attempt * 1000);
         continue;
       }
+      this.limiter.observe(res.headers);
       if (res.status === 200) {
         const body = await res.json();
         await this.o.cache?.set(path, body);
@@ -91,14 +104,19 @@ export class CompaniesHouseClient {
         await this.o.cache?.set(path, null);
         return null;
       }
-      if (res.status === 401 || res.status === 403)
+      if (res.status === 401 || res.status === 403) {
         throw new ChAuthError(`Companies House refused the API key (${res.status})`);
-      if ((res.status === 429 || res.status >= 500) && attempt < this.o.config.max_retries) {
+      }
+      if (res.status === 429) {
+        // Over the limit: pause until the window resets, then carry on. Doesn't use up retries,
+        // but a cap stops an endless loop if the server keeps refusing.
+        if (++pauses429 > 20) throw new ChHttpError(429, path);
+        await this.limiter.on429();
+        continue;
+      }
+      if (res.status >= 500 && attempt < this.o.config.max_retries) {
         attempt++;
-        if (res.status === 429) this.bucket.drain();
-        const reset = Number(res.headers.get("x-ratelimit-reset"));
-        const untilReset = Number.isFinite(reset) && reset > 0 ? reset * 1000 - this.now() : 0;
-        await this.sleep(Math.max(untilReset, 2 ** attempt * 1000));
+        await this.sleep(2 ** attempt * 1000);
         continue;
       }
       throw new ChHttpError(res.status, path);

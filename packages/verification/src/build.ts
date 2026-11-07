@@ -132,7 +132,7 @@ export function buildFactAt(
     supporting: winner.c.map(toConf),
     conflicting: conflictingViews.map(toConf),
     lambda: ctx.confidence.conflict_penalty_lambda,
-    halfLifeDays: def.half_life_days,
+    halfLifeDays: def.period_dated ? null : def.half_life_days, // period-dated facts don't decay
     asOfMs,
   });
 

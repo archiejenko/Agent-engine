@@ -228,6 +228,20 @@ describe("Field registry", () => {
       FieldDefinition.safeParse({ ...def, shelf_life_days: null, half_life_days: null }).success,
     ).toBe(true);
   });
+  it("period-dated fields have no half-life but must have a shelf life", () => {
+    expect(
+      FieldDefinition.safeParse({ ...def, period_dated: true, half_life_days: null }).success,
+    ).toBe(true);
+    expect(FieldDefinition.safeParse({ ...def, period_dated: true }).success).toBe(false);
+    expect(
+      FieldDefinition.safeParse({
+        ...def,
+        period_dated: true,
+        half_life_days: null,
+        shelf_life_days: null,
+      }).success,
+    ).toBe(false);
+  });
   it("rejects duplicate fields", () => {
     expect(FieldRegistry.safeParse([def, def]).success).toBe(false);
   });
