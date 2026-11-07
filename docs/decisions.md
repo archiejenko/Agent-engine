@@ -2,6 +2,35 @@
 
 Newest first. Each entry: what we decided, why, and who approved it.
 
+## 2026-11-07 — Phase 1 build decisions (for Archie's review at the gate)
+
+- **Point-in-time answers are rebuilt from claims**, not looked up from stored fact versions. Each
+  claim keeps when it was published and when we fetched it, so "what was known on date X" (and its
+  confidence then) is recomputed exactly; rolled-back runs drop out automatically. Stored fact
+  versions remain the audit trail of what we recorded, and when.
+- **`observed_at` = when the source said it was true** (original brief); `published_at` = when it was
+  knowable (Archie's rule). Facts carry `valid_from` (earliest published) and `first_observed_at`
+  (renamed from `effective_from`, which mixed the two).
+- **Registers keep asserting their current state.** Companies House is "continuous": a value stays
+  fresh until superseded or until our last fetch, so a historical state wasn't "decaying" at the time.
+- **Copies of one upstream count once and the freshest copy wins** (CH API vs CH bulk file), so a
+  month-old bulk value never "conflicts" with today's API value.
+- **Deterministic claim IDs**: the same source saying the same thing at the same published time gets the
+  same ID; a re-fetch records an observation, not a duplicate. Ingestion is idempotent.
+- **History as snapshots** (officers, PSC, charges: 6 years; filings: 3 years) — one claim per
+  publication date, so backtests can see past states. Window sizes are config.
+- **When a publication date can't be proved, use the fetch time** (conservative; counted per field).
+- **Headcount shelf life 640 days, half-life 365 days**, measured from the accounts period end. The
+  next figure arrives up to ~21 months after a period ends, so 400 days marked current figures stale.
+  Consequence: headcount confidence is honest but low (≈ 0.3–0.6). Phase 2's size signal should use its
+  own `min_input_confidence`; calibrate in Phase 3.
+- **Conflict margin 0.15**: a disagreement is a `conflict` (review queue) unless the winning cluster's
+  independent reliability beats the next by at least 0.15. Config: `verification.json`.
+- **Unknown-staff companies scored neutral** is recorded in config (`unknown_policy: include_flagged`);
+  the neutral scoring itself is Phase 2's signal code.
+- **Phase 1 runs on synthetic data until the key is added.** A seeded generator produces bulk, ONS and
+  accounts files plus fake API responses with a known right answer (`pnpm rehearse`).
+
 ## 2026-11-07 — Phase 0 build decisions
 
 - **Worker compatibility date pinned to 2026-08-01** (not "today"). The local Cloudflare runtime used

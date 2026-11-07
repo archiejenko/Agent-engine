@@ -57,8 +57,8 @@ Every contract is a Zod schema with tests. Change the schema → change the test
 
 ### 3.1 Verification
 
-- **Claim** — append-only, never edited, only superseded. `claim_id`, `entity_id` (CH number, nullable until matched), `raw_entity_ref`, `field` (from the field registry), `value` (json, normalised units), `source`, `source_tier` (1–5), `lane` (`open`|`licensed`), `method` (`api`|`bulk_file`|`scrape`|`llm_extract`|`human`), `evidence` (**required** for `llm_extract`), `observed_at` (when the change took effect / the source says it was true), **`published_at`** (when the source made it knowable — for Companies House, when the filing was received/published), `fetched_at`, `run_id`.
-- **Verified fact** — one current row per entity + field, history kept. `entity_id`, `field`, `value`, `confidence` (0–1), `supporting_claims`, `conflicting_claims`, `lane` (`licensed` if any supporting claim is), **`valid_from` = earliest supporting `published_at`** (used by point-in-time queries), `effective_from` = earliest supporting `observed_at`, `last_verified_at`, `expires_at`, `status` (`verified`|`conflict`|`stale`|`quarantined`).
+- **Claim** — append-only, never edited, only superseded. `claim_id`, `entity_id` (CH number, nullable until matched), `raw_entity_ref`, `field` (from the field registry), `value` (json, normalised units), `source`, `source_tier` (1–5), `lane` (`open`|`licensed`), `method` (`api`|`bulk_file`|`scrape`|`llm_extract`|`human`), `evidence` (**required** for `llm_extract`), `observed_at` (when the source said it was true; a register fetched today says so today), **`published_at`** (when the source made it knowable — for Companies House, when the filing was received/published), `fetched_at`, `run_id`.
+- **Verified fact** — one current row per entity + field, history kept. `entity_id`, `field`, `value`, `confidence` (0–1), `supporting_claims`, `conflicting_claims`, `lane` (`licensed` if any supporting claim is), **`valid_from` = earliest supporting `published_at`** (used by point-in-time queries), `first_observed_at` = earliest supporting `observed_at`, `last_verified_at`, `expires_at`, `status` (`verified`|`conflict`|`stale`|`quarantined`).
 - **Source tiers** (default trust until measured): 1 statutory filing (Companies House) · 2 regulator register (FCA, Gazette) · 3 company's own disclosure (website) · 4 vendor estimate (not connected) · 5 LLM extraction.
 - **Field registry** — each field declares unit, agreement tolerance and shelf life (see `packages/config`).
 - **Confidence v1**: `c = (1 − Π_{i∈S}(1 − r_i)) × (1 − λ · Σ_{j∈K} r_j / (Σ_{i∈S} r_i + Σ_{j∈K} r_j)) × 2^(−age / h)`. S independent supporting claims (sources copying the same upstream count once), K conflicting, r reliability (tier prior until measured), λ conflict penalty (config, 1.0), h field half-life, age since newest supporting `observed_at`.
@@ -112,6 +112,15 @@ pnpm dev              # migrate local DB, run API (Node, :8787) + dashboard (:51
 pnpm check            # typecheck + lint + tests (what CI runs)
 pnpm test             # tests only
 pnpm cf:deploy        # build dashboard + deploy Worker + apply D1 migrations (needs Cloudflare login)
+
+# Phase 1 ingestion (see docs/runbooks/phase1-ingestion.md)
+pnpm rehearse --count 20000   # full pipeline on synthetic data → data/rehearsal.sqlite (no key)
+pnpm sources:download         # CH bulk + accounts files → data/sources (ONS file by hand)
+pnpm ingest:universe ...      # step 1: GM universe (no key)
+pnpm ingest:accounts ...      # step 2: staff numbers (no key)
+pnpm ingest:companies         # step 3: CH API (needs CH_API_KEY in .dev.vars), resumable
+pnpm gate:phase1              # gate evidence (AE_DB=... to point at another database)
+pnpm rollback <run_id>        # withdraw a run; facts recomputed
 ```
 
 ## 7. Repo map
