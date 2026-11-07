@@ -36,7 +36,11 @@ export function checkRationale(text: string, o: Opportunity): string[] {
   let withoutIds = text.replace(/\[[^\]]+\]/g, "");
   // Signal names may contain digits ("director change 90d"); they aren't claims.
   for (const t of o.trace) {
-    withoutIds = withoutIds.split(t.signal_id).join(" ").split(t.signal_id.replace(/_/g, " ")).join(" ");
+    withoutIds = withoutIds
+      .split(t.signal_id)
+      .join(" ")
+      .split(t.signal_id.replace(/_/g, " "))
+      .join(" ");
   }
   for (const m of withoutIds.matchAll(/\d+(?:\.\d+)?/g))
     if (!allowedNumbers.has(m[0])) problems.push(`number ${m[0]} not in trace`);
