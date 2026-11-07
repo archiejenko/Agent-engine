@@ -8,6 +8,7 @@ import { z } from "zod";
 import chJson from "./companies_house.json" with { type: "json" };
 import confidenceJson from "./confidence.json" with { type: "json" };
 import registryJson from "./field-registry.json" with { type: "json" };
+import modelsJson from "./models.json" with { type: "json" };
 import universeJson from "./universe.lead_gen.json" with { type: "json" };
 import verificationJson from "./verification.json" with { type: "json" };
 
@@ -105,7 +106,39 @@ export function loadCompaniesHouseConfig(raw: unknown = chJson): CompaniesHouseC
   return CompaniesHouseConfig.parse(raw);
 }
 
+const Effort = z.enum(["low", "medium", "high", "xhigh", "max"]);
+const RoleName = z.enum([
+  "extractor",
+  "researcher",
+  "writer",
+  "checker",
+  "explainer",
+  "adjudicator",
+  "verifier",
+]);
+export const ModelsConfig = z
+  .object({
+    usd_to_gbp: z.number().positive(),
+    prices: z.record(
+      z.string(),
+      z.object({ input_usd_per_mtok: z.number().min(0), output_usd_per_mtok: z.number().min(0) }),
+    ),
+    roles: z.record(RoleName, z.object({ model: z.string().min(1), effort: Effort })),
+  })
+  .superRefine((c, ctx) => {
+    for (const [role, r] of Object.entries(c.roles)) {
+      if (!c.prices[r.model])
+        ctx.addIssue({ code: "custom", path: ["roles", role], message: `no price for ${r.model}` });
+    }
+  });
+export type ModelsConfig = z.infer<typeof ModelsConfig>;
+
+export function loadModelsConfig(raw: unknown = modelsJson): ModelsConfig {
+  return ModelsConfig.parse(raw);
+}
+
 export const rawConfig = {
+  models: modelsJson,
   companies_house: chJson,
   universe: universeJson,
   confidence: confidenceJson,

@@ -2,6 +2,7 @@
 export { type D1Like, d1Driver } from "./d1.ts";
 export type { SqlDriver, SqlStatement, SqlValue } from "./driver.ts";
 export { type Migration, migrate, splitSqlStatements } from "./migrate.ts";
+export type * from "./phase2.ts";
 export { SqlStorage } from "./sql-storage.ts";
 export type * from "./storage.ts";
 

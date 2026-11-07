@@ -99,3 +99,17 @@ describe("field registry", async () => {
     expect(await configVersion({ a: 1 })).not.toBe(await configVersion({ a: 2 }));
   });
 });
+
+describe("models config", async () => {
+  const { loadModelsConfig, rawConfig } = await import("./index.ts");
+  it("every role has a model with a known price", () => {
+    const m = loadModelsConfig();
+    expect(m.roles.writer.model).toBe("claude-opus-5-5");
+    expect(m.prices["claude-opus-5-5"]).toEqual({ input_usd_per_mtok: 4, output_usd_per_mtok: 20 });
+  });
+  it("refuses a role pointing at an unpriced model", () => {
+    const raw = structuredClone(rawConfig.models) as { roles: { writer: { model: string } } };
+    raw.roles.writer.model = "mystery-model";
+    expect(() => loadModelsConfig(raw)).toThrow(/no price/);
+  });
+});

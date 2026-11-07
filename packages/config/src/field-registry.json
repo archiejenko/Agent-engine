@@ -277,5 +277,115 @@
     "shelf_life_days": 640,
     "half_life_days": null,
     "period_dated": true
+  },
+  {
+    "field": "website_found",
+    "description": "Whether a website was found for the company (false = searched, none found)",
+    "value_type": "boolean",
+    "unit": "flag",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 90,
+    "half_life_days": 45.0
+  },
+  {
+    "field": "website_url",
+    "description": "Company website (registrable domain)",
+    "value_type": "string",
+    "unit": "domain",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 180,
+    "half_life_days": 90.0
+  },
+  {
+    "field": "website_https",
+    "description": "Website served over HTTPS",
+    "value_type": "boolean",
+    "unit": "flag",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 90,
+    "half_life_days": 45.0
+  },
+  {
+    "field": "website_mobile_ready",
+    "description": "Website declares a mobile viewport",
+    "value_type": "boolean",
+    "unit": "flag",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 90,
+    "half_life_days": 45.0
+  },
+  {
+    "field": "website_copyright_year",
+    "description": "Latest copyright year shown on the website",
+    "value_type": "integer",
+    "unit": "year",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 180,
+    "half_life_days": 90.0
+  },
+  {
+    "field": "website_last_modified",
+    "description": "Last-Modified date reported by the website's server",
+    "value_type": "date",
+    "unit": "date",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 90,
+    "half_life_days": 45.0
+  },
+  {
+    "field": "website_company_number",
+    "description": "Company number printed on the website (LLM extraction, evidence span)",
+    "value_type": "string",
+    "unit": "id",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 180,
+    "half_life_days": 90.0
+  },
+  {
+    "field": "trading_address_postcode",
+    "description": "Trading address postcode on the website (LLM extraction, evidence span)",
+    "value_type": "string",
+    "unit": "postcode",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 180,
+    "half_life_days": 90.0
+  },
+  {
+    "field": "contact_email",
+    "description": "Role-based contact email on the website (info@, hello@...), LLM extraction",
+    "value_type": "string",
+    "unit": "email",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 90,
+    "half_life_days": 45.0
+  },
+  {
+    "field": "job_postings",
+    "description": "Job titles advertised on the website's careers page (LLM extraction, evidence span)",
+    "value_type": "array",
+    "unit": "job_title",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 30,
+    "half_life_days": 15.0
   }
 ]

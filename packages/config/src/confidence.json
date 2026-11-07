@@ -1,5 +1,11 @@
 {
-  "tier_priors": { "1": 0.95, "2": 0.9, "3": 0.75, "4": 0.65, "5": 0.5 },
+  "tier_priors": {
+    "1": 0.95,
+    "2": 0.9,
+    "3": 0.75,
+    "4": 0.65,
+    "5": 0.5
+  },
   "conflict_penalty_lambda": 1.0,
   "sources": {
     "companies_house": {
@@ -36,6 +42,27 @@
       "continuous": false,
       "lane": "open",
       "description": "Archie's own verification in the dashboard"
+    },
+    "website_discovery": {
+      "tier": 3,
+      "upstream": "company_website",
+      "continuous": false,
+      "lane": "open",
+      "description": "Whether a company website could be found"
+    },
+    "company_website": {
+      "tier": 3,
+      "upstream": "company_website",
+      "continuous": false,
+      "lane": "open",
+      "description": "Facts read directly from the company's website (metadata, copyright line)"
+    },
+    "company_website_llm": {
+      "tier": 5,
+      "upstream": "company_website",
+      "continuous": false,
+      "lane": "open",
+      "description": "Values a model extracted from the company's website, each with an evidence span"
     }
   }
 }

@@ -311,6 +311,89 @@ export function storageSuite(adapter: string, makeHarness: () => Promise<Harness
       ]);
     });
 
+    it("phase 2: tasks are idempotent; run log sums spend; approvals, examples, controls, alerts, quarantine", async () => {
+      const task = {
+        task_id: crypto.randomUUID(),
+        idempotency_key: "opp:1",
+        playbook: "sme_outreach",
+        playbook_version: 1,
+        revenue_path: "sme_outreach" as const,
+        source_ref: "opportunity:1",
+        lane: "open" as const,
+        autonomy: "L0" as const,
+        status: "queued" as const,
+        budget_gbp: 0.4,
+        revenue_gbp: 0,
+        cost_gbp: 0,
+        priority: "outreach",
+      };
+      const a = await s.tasks.insertIdempotent(task);
+      const b = await s.tasks.insertIdempotent({ ...task, task_id: crypto.randomUUID() });
+      expect(b.task_id).toBe(a.task_id); // same key → same task
+      await s.tasks.update(a.task_id, { status: "running", state: { step: "draft" } });
+      await s.tasks.addCost(a.task_id, 0.05);
+      const t = await s.tasks.get(a.task_id);
+      expect(t?.status).toBe("running");
+      expect(t?.state).toEqual({ step: "draft" });
+      expect(t?.cost_gbp).toBeCloseTo(0.05, 12);
+
+      await s.runLog.append({
+        task_id: a.task_id,
+        step_id: "draft",
+        role: "writer",
+        model: "fake-model",
+        tool_calls: [],
+        output: { text: "hi" },
+        check_result: null,
+        tokens: { input: 10, output: 5 },
+        cost_gbp: 0.05,
+        duration_ms: 12,
+        timestamp: "2026-11-08T10:00:00Z",
+      });
+      expect(await s.runLog.spendSince("2026-11-08T00:00:00Z")).toBeCloseTo(0.05, 12);
+      expect(await s.runLog.spendSince("2026-11-08T00:00:00Z", "other")).toBe(0);
+      expect((await s.runLog.forTask(a.task_id))[0]?.output).toEqual({ text: "hi" });
+
+      await s.approvals.add({
+        task_id: a.task_id,
+        step_id: "approve",
+        item_shown: { d: 1 },
+        decision: "edit",
+        edited_text: "better",
+      });
+      expect((await s.approvals.forTask(a.task_id))[0]?.edited_text).toBe("better");
+      await s.examples.add({
+        playbook: "sme_outreach",
+        step_id: "draft",
+        task_id: a.task_id,
+        original: "x",
+        edited: "better",
+      });
+      expect(await s.examples.list("sme_outreach", "draft", 5)).toEqual([
+        { original: "x", edited: "better", task_id: a.task_id },
+      ]);
+
+      expect(await s.controls.get("kill:global")).toBeNull();
+      await s.controls.set("kill:global", true, "test");
+      expect(await s.controls.get<boolean>("kill:global")).toBe(true);
+      await s.alerts.raise("spend_cap", "Daily cap hit", { cap: 5 });
+      const [alert] = await s.alerts.list({ unacknowledged: true, limit: 5 });
+      expect(alert?.kind).toBe("spend_cap");
+      await s.alerts.acknowledge(alert?.id as number);
+      expect(await s.alerts.list({ unacknowledged: true, limit: 5 })).toEqual([]);
+
+      const qid = await s.quarantine.add({
+        source: "company_website",
+        raw_ref: "https://x",
+        record: {},
+        candidates: [],
+        reason: "low score",
+      });
+      expect((await s.quarantine.listOpen(5)).map((q) => q.id)).toEqual([qid]);
+      await s.quarantine.resolve(qid, null);
+      expect(await s.quarantine.listOpen(5)).toEqual([]);
+    });
+
     it("returns null for unknown rows", async () => {
       expect(await s.claims.get(crypto.randomUUID())).toBeNull();
       expect(await s.facts.getCurrent("99999999", "company_status")).toBeNull();

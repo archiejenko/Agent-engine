@@ -1,0 +1,19 @@
+{
+  "_note": "Prices from the Claude API reference (cached 2026-10-06), USD per million tokens. Verify at cutover. Default model for every role is claude-opus-5-5 (the reference's default); switching bulk roles to a cheaper model is Archie's decision (see docs/decisions.md).",
+  "usd_to_gbp": 0.79,
+  "prices": {
+    "claude-opus-5-5": { "input_usd_per_mtok": 4.0, "output_usd_per_mtok": 20.0 },
+    "claude-sonnet-5-5": { "input_usd_per_mtok": 2.0, "output_usd_per_mtok": 10.0 },
+    "claude-haiku-5-5": { "input_usd_per_mtok": 0.1, "output_usd_per_mtok": 0.5 },
+    "fake-model": { "input_usd_per_mtok": 4.0, "output_usd_per_mtok": 20.0 }
+  },
+  "roles": {
+    "extractor": { "model": "claude-opus-5-5", "effort": "low" },
+    "researcher": { "model": "claude-opus-5-5", "effort": "low" },
+    "writer": { "model": "claude-opus-5-5", "effort": "medium" },
+    "checker": { "model": "claude-opus-5-5", "effort": "high" },
+    "explainer": { "model": "claude-opus-5-5", "effort": "low" },
+    "adjudicator": { "model": "claude-opus-5-5", "effort": "medium" },
+    "verifier": { "model": "claude-opus-5-5", "effort": "medium" }
+  }
+}
