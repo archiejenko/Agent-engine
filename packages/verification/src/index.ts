@@ -1,3 +1,19 @@
-// Verification engine. Phase 1: Companies House adapter, field registry, anchoring, sanity rules,
-// confidence and getVerifiedFacts. Engines use the Storage interface only, never a database.
-export {};
+// Verification engine. Engines use the Storage interface only, never a database.
+export * from "./agreement.ts";
+export * from "./build.ts";
+export * from "./confidence.ts";
+export * from "./context.ts";
+export * from "./ids.ts";
+export * from "./ingest.ts";
+export * from "./persist.ts";
+export * from "./query.ts";
+export * from "./resolve.ts";
+export * from "./rollback.ts";
+export * from "./sanity.ts";
+export * from "./sources/companies-house/bulk.ts";
+export * from "./sources/companies-house/client.ts";
+export * from "./sources/companies-house/ixbrl.ts";
+export * from "./sources/companies-house/mapper.ts";
+export * from "./sources/companies-house/rate-limit.ts";
+export * from "./sources/ons/postcodes.ts";
+export * from "./universe.ts";

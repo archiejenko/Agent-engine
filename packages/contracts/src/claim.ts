@@ -23,7 +23,7 @@ export const RawEntityRef = z.object({
  * Append-only. Never edited, only superseded.
  *
  * Timestamps:
- * - observed_at: when the source says it became true (effective date).
+ * - observed_at: when the source said it was true (for a register fetched today: today).
  * - published_at: when it became knowable (for Companies House: filing received/published).
  *   Point-in-time queries use this.
  * - fetched_at: when we fetched it.

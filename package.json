@@ -16,7 +16,14 @@
     "test:watch": "vitest",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
     "build:dashboard": "pnpm --filter @ae/dashboard build",
-    "cf:deploy": "pnpm build:dashboard && pnpm --filter @ae/api run cf:deploy"
+    "cf:deploy": "pnpm build:dashboard && pnpm --filter @ae/api run cf:deploy",
+    "sources:download": "tsx scripts/download-sources.ts",
+    "ingest:universe": "tsx scripts/ingest-universe.ts",
+    "ingest:accounts": "tsx scripts/ingest-accounts.ts",
+    "ingest:companies": "tsx scripts/ingest-companies.ts",
+    "gate:phase1": "tsx scripts/gate-phase1.ts",
+    "rehearse": "tsx scripts/rehearse.ts",
+    "rollback": "tsx scripts/rollback.ts"
   },
   "devDependencies": {
     "@ae/storage": "workspace:*",
@@ -25,7 +32,9 @@
     "miniflare": "4.20260730.0",
     "tsx": "4.23.15",
     "typescript": "5.9.3",
-    "vitest": "4.1.12"
+    "vitest": "4.1.12",
+    "@ae/config": "workspace:*",
+    "@ae/verification": "workspace:*"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

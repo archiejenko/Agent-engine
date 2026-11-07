@@ -37,7 +37,7 @@ export function fact(overrides: Partial<VerifiedFact> = {}): VerifiedFact {
     conflicting_claims: [],
     lane: "open",
     valid_from: "2026-10-02T00:00:00Z",
-    effective_from: "2026-10-01T00:00:00Z",
+    first_observed_at: "2026-10-01T00:00:00Z",
     last_verified_at: "2026-11-07T09:00:00Z",
     expires_at: "2026-11-14T09:00:00Z",
     status: "verified",

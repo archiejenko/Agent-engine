@@ -1,0 +1,10 @@
+{
+  "api_base_url": "https://api.company-information.service.gov.uk",
+  "rate_limit": { "requests": 600, "window_seconds": 300, "use_share": 0.85 },
+  "items_per_page": 100,
+  "max_pages": 10,
+  "max_retries": 5,
+  "history_years": 6,
+  "filing_history_years": 3,
+  "fetch_charges_only_if_flagged": true
+}

@@ -36,5 +36,20 @@ export const ConfidenceConfig = z.object({
   }),
   /** λ, the conflict penalty in confidence v1. */
   conflict_penalty_lambda: z.number().min(0),
+  /**
+   * Every source we ingest. `upstream`: sources that copy the same upstream count as ONE independent
+   * source. `continuous`: a register (e.g. Companies House) keeps asserting its current state until it
+   * publishes a change, so a claim stays fresh until superseded or last re-fetched.
+   */
+  sources: z.record(
+    z.string().regex(/^[a-z][a-z0-9_]*$/),
+    z.object({
+      tier: z.number().int().min(1).max(5),
+      upstream: z.string().min(1),
+      continuous: z.boolean(),
+      lane: z.enum(["open", "licensed"]),
+      description: z.string().min(1),
+    }),
+  ),
 });
 export type ConfidenceConfig = z.infer<typeof ConfidenceConfig>;

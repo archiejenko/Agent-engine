@@ -15,7 +15,7 @@ export type FactStatus = z.infer<typeof FactStatus>;
 /**
  * A verified fact: the engine's current answer for one entity + field.
  * - valid_from: earliest supporting published_at (when it became knowable). Used for point-in-time.
- * - effective_from: earliest supporting observed_at (when it became true).
+ * - first_observed_at: earliest supporting observed_at (first time a source asserted it).
  */
 export const VerifiedFact = z
   .object({
@@ -27,7 +27,7 @@ export const VerifiedFact = z
     conflicting_claims: z.array(Uuid),
     lane: Lane,
     valid_from: IsoDateTime,
-    effective_from: IsoDateTime,
+    first_observed_at: IsoDateTime,
     last_verified_at: IsoDateTime,
     expires_at: IsoDateTime.nullable(),
     status: FactStatus,

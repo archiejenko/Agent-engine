@@ -1,0 +1,278 @@
+[
+  {
+    "field": "company_number",
+    "description": "Companies House company number",
+    "value_type": "string",
+    "unit": "id",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": null,
+    "half_life_days": null
+  },
+  {
+    "field": "company_name",
+    "description": "Registered company name",
+    "value_type": "string",
+    "unit": "text",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 90,
+    "half_life_days": 45
+  },
+  {
+    "field": "company_status",
+    "description": "Register status (active, dissolved, liquidation, ...)",
+    "value_type": "enum",
+    "unit": "status",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 7,
+    "half_life_days": 3.5
+  },
+  {
+    "field": "company_type",
+    "description": "Company type (ltd, plc, llp, ...)",
+    "value_type": "enum",
+    "unit": "type",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 365,
+    "half_life_days": 182.5
+  },
+  {
+    "field": "incorporation_date",
+    "description": "Date of incorporation",
+    "value_type": "date",
+    "unit": "date",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": null,
+    "half_life_days": null
+  },
+  {
+    "field": "dissolution_date",
+    "description": "Date of dissolution / cessation",
+    "value_type": "date",
+    "unit": "date",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": null,
+    "half_life_days": null
+  },
+  {
+    "field": "registered_office_address",
+    "description": "Registered office address",
+    "value_type": "object",
+    "unit": "address",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 90,
+    "half_life_days": 45
+  },
+  {
+    "field": "registered_office_postcode",
+    "description": "Registered office postcode (normalised)",
+    "value_type": "string",
+    "unit": "postcode",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 90,
+    "half_life_days": 45
+  },
+  {
+    "field": "registered_office_lad",
+    "description": "Local authority district (ONS code) of the registered office",
+    "value_type": "string",
+    "unit": "ons_lad_code",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 90,
+    "half_life_days": 45
+  },
+  {
+    "field": "registered_office_flags",
+    "description": "Undeliverable / in-dispute flags on the registered office",
+    "value_type": "object",
+    "unit": "flags",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 30,
+    "half_life_days": 15
+  },
+  {
+    "field": "sic_codes",
+    "description": "SIC 2007 codes (sorted)",
+    "value_type": "array",
+    "unit": "sic_code",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 365,
+    "half_life_days": 182.5
+  },
+  {
+    "field": "accounts_category",
+    "description": "Category of the last accounts filed (micro, small, full, dormant, ...)",
+    "value_type": "enum",
+    "unit": "category",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 400,
+    "half_life_days": 200
+  },
+  {
+    "field": "last_accounts_made_up_to",
+    "description": "Period end of the last accounts filed",
+    "value_type": "date",
+    "unit": "date",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 400,
+    "half_life_days": 200
+  },
+  {
+    "field": "accounts_next_due",
+    "description": "Next accounts due date",
+    "value_type": "date",
+    "unit": "date",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 7,
+    "half_life_days": 3.5
+  },
+  {
+    "field": "accounts_overdue",
+    "description": "Accounts overdue flag",
+    "value_type": "boolean",
+    "unit": "flag",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 7,
+    "half_life_days": 3.5
+  },
+  {
+    "field": "confirmation_statement_next_due",
+    "description": "Next confirmation statement due date",
+    "value_type": "date",
+    "unit": "date",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 7,
+    "half_life_days": 3.5
+  },
+  {
+    "field": "confirmation_statement_overdue",
+    "description": "Confirmation statement overdue flag",
+    "value_type": "boolean",
+    "unit": "flag",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 7,
+    "half_life_days": 3.5
+  },
+  {
+    "field": "insolvency_flags",
+    "description": "has_insolvency_history / has_been_liquidated / has_charges",
+    "value_type": "object",
+    "unit": "flags",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 7,
+    "half_life_days": 3.5
+  },
+  {
+    "field": "officers_active",
+    "description": "Current officers: name, role, appointed_on, birth month/year",
+    "value_type": "array",
+    "unit": "officer",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 30,
+    "half_life_days": 15
+  },
+  {
+    "field": "officer_appointments",
+    "description": "All officer appointments and resignations (history)",
+    "value_type": "array",
+    "unit": "officer_event",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 30,
+    "half_life_days": 15
+  },
+  {
+    "field": "filing_events",
+    "description": "Filing history: date received, effective date, category, type",
+    "value_type": "array",
+    "unit": "filing",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 30,
+    "half_life_days": 15
+  },
+  {
+    "field": "charges",
+    "description": "Charges: created_on, delivered_on, status, satisfied_on",
+    "value_type": "array",
+    "unit": "charge",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 30,
+    "half_life_days": 15
+  },
+  {
+    "field": "psc_active",
+    "description": "Persons with significant control (current)",
+    "value_type": "array",
+    "unit": "psc",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 30,
+    "half_life_days": 15
+  },
+  {
+    "field": "psc_history",
+    "description": "All PSC notifications and cessations (history)",
+    "value_type": "array",
+    "unit": "psc_event",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 30,
+    "half_life_days": 15
+  },
+  {
+    "field": "employees_average",
+    "description": "Average number of employees from filed accounts (freshness measured from the period end; next figure arrives up to ~21 months later)",
+    "value_type": "integer",
+    "unit": "people",
+    "tolerance": {
+      "kind": "relative",
+      "value": 0.1
+    },
+    "shelf_life_days": 640,
+    "half_life_days": 365
+  }
+]

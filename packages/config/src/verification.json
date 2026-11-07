@@ -1,0 +1,14 @@
+{
+  "triangulation": {
+    "clear_margin": 0.15
+  },
+  "sanity": {
+    "max_employees": 500000,
+    "revenue_per_employee_gbp": { "min": 5000, "max": 5000000 }
+  },
+  "resolution": {
+    "weights": { "name": 0.6, "postcode": 0.3, "domain": 0.1 },
+    "auto_match": 0.9,
+    "adjudicate": 0.6
+  }
+}

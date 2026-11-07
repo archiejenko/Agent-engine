@@ -4,13 +4,23 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./node": "./src/node/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@ae/contracts": "workspace:*",
-    "@ae/storage": "workspace:*"
+    "@ae/storage": "workspace:*",
+    "@ae/config": "workspace:*",
+    "csv-parse": "7.0.3",
+    "htmlparser2": "12.0.0",
+    "yauzl": "3.4.0",
+    "yazl": "3.3.1"
+  },
+  "devDependencies": {
+    "@types/yauzl": "3.4.0",
+    "@types/yazl": "3.3.1"
   }
 }

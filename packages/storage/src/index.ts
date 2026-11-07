@@ -3,7 +3,7 @@ export { type D1Like, d1Driver } from "./d1.ts";
 export type { SqlDriver, SqlStatement, SqlValue } from "./driver.ts";
 export { type Migration, migrate, splitSqlStatements } from "./migrate.ts";
 export { SqlStorage } from "./sql-storage.ts";
-export type { Run, RunStatus, Storage } from "./storage.ts";
+export type * from "./storage.ts";
 
 import { type D1Like, d1Driver } from "./d1.ts";
 import { SqlStorage } from "./sql-storage.ts";

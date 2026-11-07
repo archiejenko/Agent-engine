@@ -29,6 +29,8 @@ const ADAPTER_ALLOWED = [
   /^apps\/api\/src\/node\.ts$/,
   /^apps\/api\/src\/worker\.ts$/,
   /^apps\/api\/src\/app\.test\.ts$/,
+  // Tests wire their own storage (like a composition root); engine source files may not.
+  /^packages\/[a-z-]+\/src\/__tests__\//,
   /^scripts\//,
 ];
 

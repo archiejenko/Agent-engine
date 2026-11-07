@@ -47,7 +47,7 @@ export function storageSuite(adapter: string, makeHarness: () => Promise<Harness
       conflicting_claims: [],
       lane: "open",
       valid_from: "2026-10-02T00:00:00Z",
-      effective_from: "2026-10-01T00:00:00Z",
+      first_observed_at: "2026-10-01T00:00:00Z",
       last_verified_at: "2026-11-07T09:00:00Z",
       expires_at: null,
       status: "verified",
@@ -148,6 +148,167 @@ export function storageSuite(adapter: string, makeHarness: () => Promise<Harness
         s.facts.put(fact([], {}), { run_id: runId, recorded_at: "2026-11-07T09:00:00Z" }),
       ).rejects.toThrow();
       expect(await s.facts.countCurrent()).toBe(0);
+    });
+
+    it("record(): re-fetching a claim adds an observation, not a duplicate", async () => {
+      const c = claim();
+      expect(await s.claims.record([c], { run_id: runId, fetched_at: c.fetched_at })).toEqual({
+        inserted: 1,
+      });
+      const run2 = (await s.runs.start({ kind: "refetch" })).run_id;
+      expect(
+        await s.claims.record([c], { run_id: run2, fetched_at: "2026-11-14T09:00:00Z" }),
+      ).toEqual({
+        inserted: 0,
+      });
+      const usable = await s.claims.listUsable("01234567", "company_status");
+      expect(usable).toHaveLength(1);
+      expect(usable[0]?.observations).toEqual(["2026-11-07T09:00:00Z", "2026-11-14T09:00:00Z"]);
+      expect(await s.claims.touchedByRun(run2)).toEqual([
+        { entity_id: "01234567", field: "company_status" },
+      ]);
+    });
+
+    it("listUsable excludes superseded, rejected and rolled-back claims", async () => {
+      const keep = claim();
+      const superseded = claim();
+      const rejected = claim();
+      await s.claims.insertMany([keep, superseded, rejected]);
+      await s.claims.supersede([superseded.claim_id], "test", null);
+      await s.claims.reject([{ claim_id: rejected.claim_id, rule: "test_rule", detail: "x" }]);
+      const run2 = (await s.runs.start({ kind: "bad" })).run_id;
+      const fromBadRun = claim({ run_id: run2 });
+      await s.claims.insertMany([fromBadRun]);
+      await s.runs.finish(run2, "rolled_back");
+      const ids = (await s.claims.listUsable("01234567", "company_status")).map(
+        (u) => u.claim.claim_id,
+      );
+      expect(ids).toEqual([keep.claim_id]);
+      expect(await s.claims.listRejections(10)).toEqual([
+        { claim_id: rejected.claim_id, rule: "test_rule", detail: "x" },
+      ]);
+    });
+
+    it("listVersionsFor hides versions written by rolled-back runs", async () => {
+      const c = claim();
+      await s.claims.insertMany([c]);
+      await s.facts.put(fact([c.claim_id]), { run_id: runId, recorded_at: "2026-11-07T09:00:00Z" });
+      const bad = (await s.runs.start({ kind: "bad" })).run_id;
+      await s.facts.put(fact([c.claim_id], { value: "dissolved" }), {
+        run_id: bad,
+        recorded_at: "2026-11-08T09:00:00Z",
+      });
+      await s.runs.finish(bad, "rolled_back");
+      const versions = await s.facts.listVersionsFor(["01234567"], ["company_status"]);
+      expect(versions.map((v) => v.fact.value)).toEqual(["active"]);
+      expect((await s.facts.listVersionsFor(null, ["company_status"])).length).toBe(1);
+    });
+
+    it("touch updates the current row without a new version; removeCurrent keeps history", async () => {
+      const c = claim();
+      await s.claims.insertMany([c]);
+      await s.facts.put(fact([c.claim_id]), { run_id: runId, recorded_at: "2026-11-07T09:00:00Z" });
+      await s.facts.touch("01234567", "company_status", {
+        last_verified_at: "2026-11-14T09:00:00Z",
+        confidence: 0.95,
+        expires_at: "2026-11-21T09:00:00Z",
+        status: "verified",
+      });
+      expect((await s.facts.getCurrent("01234567", "company_status"))?.last_verified_at).toBe(
+        "2026-11-14T09:00:00Z",
+      );
+      expect(await s.facts.listVersions("01234567", "company_status")).toHaveLength(1);
+      expect(await s.facts.countByStatus()).toEqual({ verified: 1 });
+      await s.facts.removeCurrent("01234567", "company_status");
+      expect(await s.facts.getCurrent("01234567", "company_status")).toBeNull();
+      expect(await s.facts.listVersions("01234567", "company_status")).toHaveLength(1);
+    });
+
+    it("stores entities, universe decisions, progress and verification requests", async () => {
+      const e = {
+        entity_id: "01234567",
+        name: "ACME WIDGETS LTD",
+        name_normalised: "ACME WIDGETS",
+        postcode: "M1 1AA",
+        lad_code: "E08000003",
+        company_status: "active",
+        accounts_category: "MICRO ENTITY",
+        sic_codes: ["62012"],
+        charges_count: 0,
+        incorporation_date: "2015-03-01",
+      };
+      await s.entities.upsertMany(
+        [e, { ...e, entity_id: "07654321", name_normalised: "OTHER", postcode: "BL1 1AA" }],
+        runId,
+      );
+      expect(await s.entities.get("01234567")).toEqual(e);
+      expect(await s.entities.count()).toBe(2);
+      expect(
+        (await s.entities.findCandidates({ nameNormalised: "ACME WIDGETS", limit: 5 })).map(
+          (x) => x.entity_id,
+        ),
+      ).toEqual(["01234567"]);
+      expect(
+        (await s.entities.findCandidates({ postcode: "BL1 1AA", limit: 5 })).map(
+          (x) => x.entity_id,
+        ),
+      ).toEqual(["07654321"]);
+
+      await s.universe.setMany(
+        [
+          {
+            universe: "u",
+            entity_id: "01234567",
+            included: true,
+            reason: "in",
+            staff_flag: "staff_unknown",
+          },
+          {
+            universe: "u",
+            entity_id: "07654321",
+            included: false,
+            reason: "sic_excluded",
+            staff_flag: "not_checked",
+          },
+        ],
+        runId,
+      );
+      expect(await s.universe.counts("u")).toEqual({ included: 1, excluded: 1, staff_unknown: 1 });
+      expect((await s.universe.list("u", { included: true })).map((m) => m.entity_id)).toEqual([
+        "01234567",
+      ]);
+
+      await s.progress.ensure("job", ["01234567", "07654321"], ["profile"]);
+      await s.progress.ensure("job", ["01234567"], ["profile"]); // idempotent
+      await s.progress.mark("job", "01234567", "profile", "done");
+      await s.progress.mark("job", "07654321", "profile", "failed", "HTTP 500");
+      expect(await s.progress.summary("job")).toEqual({
+        pending: 0,
+        done: 1,
+        failed: 1,
+        skipped: 0,
+      });
+      expect(await s.progress.next("job", 10, 3)).toEqual([
+        { entity_id: "07654321", step: "profile", attempts: 1 },
+      ]);
+      expect(await s.progress.next("job", 10, 1)).toEqual([]);
+
+      await s.verificationRequests.add([
+        { entity_id: "01234567", field: "officers_active", reason: "outreach", deadline: null },
+      ]);
+      expect((await s.verificationRequests.listOpen(5)).map((r) => r.field)).toEqual([
+        "officers_active",
+      ]);
+
+      expect(await s.stats.universeReasons("u")).toEqual({ in: 1, sic_excluded: 1 });
+      expect(await s.stats.unanchoredMembers("u")).toEqual(["01234567"]);
+      expect((await s.stats.counts()).entities).toBe(2);
+
+      await s.dropped.record("companies_house", "mystery_field", runId, 2);
+      await s.dropped.record("companies_house", "mystery_field", runId, 3);
+      expect(await s.dropped.list(runId)).toEqual([
+        { source: "companies_house", source_field: "mystery_field", run_id: runId, occurrences: 5 },
+      ]);
     });
 
     it("returns null for unknown rows", async () => {

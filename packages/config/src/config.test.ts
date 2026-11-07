@@ -45,3 +45,57 @@ describe("confidence config", () => {
     expect(c.conflict_penalty_lambda).toBe(1);
   });
 });
+
+describe("field registry", async () => {
+  const { loadFieldRegistry, loadConfidenceConfigChecked, configVersion, rawConfig } = await import(
+    "./index.ts"
+  );
+  const reg = loadFieldRegistry();
+
+  it("covers every field lead gen and the x402 check need", () => {
+    for (const f of [
+      "company_status",
+      "incorporation_date",
+      "registered_office_postcode",
+      "registered_office_lad",
+      "sic_codes",
+      "accounts_category",
+      "officers_active",
+      "officer_appointments",
+      "filing_events",
+      "charges",
+      "psc_active",
+      "employees_average",
+    ]) {
+      expect(reg.has(f), f).toBe(true);
+    }
+  });
+
+  it("uses the agreed tolerances and shelf lives", () => {
+    expect(reg.get("employees_average")?.tolerance).toEqual({ kind: "relative", value: 0.1 });
+    expect(reg.get("officers_active")?.shelf_life_days).toBe(30);
+    expect(reg.get("company_number")?.shelf_life_days).toBeNull();
+  });
+
+  it("refuses an invalid registry", () => {
+    expect(() => loadFieldRegistry([{ field: "x" }])).toThrow();
+  });
+
+  it("every source is open-lane and copies of the CH register share one upstream", () => {
+    const c = loadConfidenceConfigChecked();
+    expect(c.sources.companies_house?.upstream).toBe(c.sources.companies_house_bulk?.upstream);
+    expect(() =>
+      loadConfidenceConfigChecked({
+        ...rawConfig.confidence,
+        sources: {
+          vendor: { tier: 4, upstream: "v", continuous: false, lane: "licensed", description: "x" },
+        },
+      }),
+    ).toThrow(/licensed/);
+  });
+
+  it("config versions are stable fingerprints", async () => {
+    expect(await configVersion({ a: 1 })).toBe(await configVersion({ a: 1 }));
+    expect(await configVersion({ a: 1 })).not.toBe(await configVersion({ a: 2 }));
+  });
+});

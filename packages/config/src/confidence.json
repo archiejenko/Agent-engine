@@ -1,4 +1,41 @@
 {
   "tier_priors": { "1": 0.95, "2": 0.9, "3": 0.75, "4": 0.65, "5": 0.5 },
-  "conflict_penalty_lambda": 1.0
+  "conflict_penalty_lambda": 1.0,
+  "sources": {
+    "companies_house": {
+      "tier": 1,
+      "upstream": "companies_house_register",
+      "continuous": true,
+      "lane": "open",
+      "description": "Companies House Public Data API (statutory register)"
+    },
+    "companies_house_bulk": {
+      "tier": 1,
+      "upstream": "companies_house_register",
+      "continuous": true,
+      "lane": "open",
+      "description": "Companies House Free Company Data Product (monthly bulk file of the same register)"
+    },
+    "companies_house_accounts": {
+      "tier": 1,
+      "upstream": "companies_house_register",
+      "continuous": false,
+      "lane": "open",
+      "description": "Companies House accounts data product (iXBRL filed accounts)"
+    },
+    "ons_postcode_directory": {
+      "tier": 2,
+      "upstream": "ons_postcode_directory",
+      "continuous": true,
+      "lane": "open",
+      "description": "ONS postcode to local authority lookup"
+    },
+    "human": {
+      "tier": 1,
+      "upstream": "human_review",
+      "continuous": false,
+      "lane": "open",
+      "description": "Archie's own verification in the dashboard"
+    }
+  }
 }
