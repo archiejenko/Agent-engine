@@ -11,6 +11,8 @@ needed to go live, in order. Tick items as you go. **Nothing external happens un
 | 2 | `wrangler login` on your laptop (or an API token: Workers Edit + D1 Edit) | laptop / GitHub secrets | 0 | free |
 | 3 | Cloudflare Access on the workers.dev URL; copy AUD tag + team domain into `wrangler.jsonc` vars | Cloudflare dashboard | 0 | free |
 | 4 | Companies House REST API key | `.dev.vars` `CH_API_KEY`; Worker secret | 1 | free |
+| 5 | Anthropic API key, with a monthly spend limit set in the Claude Console | `.dev.vars` `ANTHROPIC_API_KEY`; container secret | 2 | usage |
+| 6 | Decide the website User-Agent contact URL (e.g. a page on ejtech.co.uk explaining the bot) | `HttpWebFetcher` option | 2 | free |
 
 ## B. Assumptions to verify against live docs
 
@@ -18,11 +20,23 @@ needed to go live, in order. Tick items as you go. **Nothing external happens un
 - [ ] 1–10 in `docs/sources/companies-house.md` (auth, rate limit, field names, bulk/accounts file formats, ONS columns)
 - [ ] Rate-limit header names `X-Ratelimit-Remain` / `X-Ratelimit-Reset` (epoch seconds) — the limiter is driven by them
 
+### Phase 2 — Claude API and websites
+- [ ] Re-check the Claude API request shape in `packages/ports/src/anthropic.ts` against current docs (model ids, `output_config.format`, `fallbacks: "default"` + beta header) — written against `@anthropic-ai/sdk` 1.6.0 types
+- [ ] Model prices in `packages/config/src/models.json` (cached from the Claude API reference, 2026-10-06) and the USD→GBP rate
+- [ ] Wire the real adapters in the agent runner (`AnthropicModelClient`, `HttpWebFetcher`, `DomainGuessFinder`) behind a `LIVE=1` switch; keep fakes as the default
+
 ## C. Prompts to test on the real model
-(none yet — added from Phase 2)
+Run each against ~20 real companies; check outputs by hand before relying on them.
+- [ ] `website_extract` v1 (`packages/verification/src/sources/website/prompts.ts`): exact quotes, allow-listed fields only, role-based emails only; try pages with injected instructions
+- [ ] `opportunity_explain` v1 (`packages/opportunity/src/explain.ts`): cites only trace facts; the code check falls back to a template otherwise — measure how often
+- [ ] `sme_outreach_draft` v1 (`packages/infra/src/playbooks/sme_outreach.ts`): uses brief statements verbatim; measure how often the checker rejects; read 20 drafts for tone
 
 ## D. Live gate runs
 ### Phase 0
 - [ ] `pnpm cf:deploy`, enable Access, redeploy; open the URL logged out (blocked) and logged in (health ok)
 ### Phase 1
 - [ ] Follow `docs/runbooks/phase1-ingestion.md`; `pnpm gate:phase1` shows ≥ 10,000 ingested, 100% anchored
+### Phase 2
+- [ ] Website ingestion on the real universe (start with 100 companies; check quarantine and rejected extractions)
+- [ ] Run `lead_gen_sme_web` on the day of the data refresh; check the top 20 by hand
+- [ ] Approve 50 leads; read all 50 drafts; record cost per draft from the run log (`/api/tasks/:id`)

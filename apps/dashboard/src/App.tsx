@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Company } from "./Company.tsx";
 import { Facts } from "./Facts.tsx";
 import { Overview } from "./Overview.tsx";
+import { Review } from "./Review.tsx";
 
 /** Tiny hash router: #/, #/facts, #/company/01234567. Functional, not pretty (Phase 1). */
 function useRoute() {
@@ -37,9 +38,18 @@ export function App() {
       >
         <h1 style={{ fontSize: "1.3rem" }}>Agent Engine</h1>
         <a href="#/">Overview</a>
+        <a href="#/review">Review</a>
         <a href="#/facts">Facts</a>
       </header>
-      {company ? <Company id={company} /> : route.startsWith("/facts") ? <Facts /> : <Overview />}
+      {company ? (
+        <Company id={company} />
+      ) : route.startsWith("/review") ? (
+        <Review />
+      ) : route.startsWith("/facts") ? (
+        <Facts />
+      ) : (
+        <Overview />
+      )}
     </main>
   );
 }

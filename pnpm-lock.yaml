@@ -8,9 +8,24 @@ importers:
 
   .:
     devDependencies:
+      '@ae/agent-runner':
+        specifier: workspace:*
+        version: link:apps/agent-runner
       '@ae/config':
         specifier: workspace:*
         version: link:packages/config
+      '@ae/contracts':
+        specifier: workspace:*
+        version: link:packages/contracts
+      '@ae/infra':
+        specifier: workspace:*
+        version: link:packages/infra
+      '@ae/opportunity':
+        specifier: workspace:*
+        version: link:packages/opportunity
+      '@ae/ports':
+        specifier: workspace:*
+        version: link:packages/ports
       '@ae/storage':
         specifier: workspace:*
         version: link:packages/storage
@@ -38,18 +53,42 @@ importers:
 
   apps/agent-runner:
     dependencies:
-      '@ae/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
-
-  apps/api:
-    dependencies:
       '@ae/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@ae/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@ae/infra':
+        specifier: workspace:*
+        version: link:../../packages/infra
+      '@ae/opportunity':
+        specifier: workspace:*
+        version: link:../../packages/opportunity
+      '@ae/ports':
+        specifier: workspace:*
+        version: link:../../packages/ports
+      '@ae/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      '@ae/verification':
+        specifier: workspace:*
+        version: link:../../packages/verification
+
+  apps/api:
+    dependencies:
+      '@ae/agent-runner':
+        specifier: workspace:*
+        version: link:../agent-runner
+      '@ae/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@ae/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@ae/opportunity':
+        specifier: workspace:*
+        version: link:../../packages/opportunity
       '@ae/storage':
         specifier: workspace:*
         version: link:../../packages/storage

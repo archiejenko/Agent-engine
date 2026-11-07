@@ -2,6 +2,37 @@
 
 Newest first. Each entry: what we decided, why, and who approved it.
 
+## 2026-11-08 — Phase 2 decisions (review at the end)
+
+- **⚠ Confidence floor 0.7 vs single-source website facts.** A tier-3 website fact starts at 0.75 and
+  decays below 0.7 within ~5 days of fetching; tier-1 officer facts (half-life 15 days) fall below 0.7
+  after ~7 days. With the 0.7 floor in `lead_gen_sme_web`, signals go neutral unless the module runs
+  right after a refresh. **Kept your 0.7**; modules run on the day of the data refresh. Alternatives:
+  lower the floor to 0.5, or per-signal floors (`min_input_confidence` already exists on signals).
+- **Every model role uses `claude-opus-5-5`** (the Claude API guidance's default; it forbids silently
+  downgrading for cost). Effort per role is set in `models.json` (low for extraction/research/
+  explanations, medium for writing, high for checking). Alternative to consider at cutover: Haiku 5.5
+  or Sonnet 5.5 for bulk website extraction (~40× / 2× cheaper) — your call.
+- **Server-side refusal fallbacks on** (`fallbacks: "default"`) in the real Claude adapter, as the
+  guidance recommends. Turn off in `packages/ports/src/anthropic.ts` if you prefer.
+- **Playbook steps are orchestrated in code, with one model call per role step** (Claude Messages API
+  behind `ModelClient`), rather than giving each role an autonomous Claude Agent SDK loop. The tool
+  registry, checks and costs stay fully under our control and testable. The Agent SDK is reserved for
+  roles that genuinely need open-ended tool use (none at L0). Alternative: Agent SDK `query()` per role.
+- **The truth checker is deterministic code**, not a model: claims must cite brief facts, contain the
+  fact's key value, appear in the body, and no unsupported number/date may appear. Sender identity and
+  opt-out are added by code, never the model. Alternative: an extra model-based checker (can be added).
+- **Expected value v1**: P(win) = base_win_rate × score ÷ 0.5 (capped), × deal value, both in the
+  framework note (2%, £1,500 placeholders). Phase 3 calibrates from outcomes.
+- **Unknown signals score neutral (0.5)** for every signal, not just staff size (your staff_unknown rule
+  generalised). "No website found" scores as the oldest possible website.
+- **Website anchoring**: a site's facts attach only if it shows this company's number, or its title
+  matches the name (≥ 0.6 similarity), or its trading postcode matches; a site showing another
+  company's number goes to quarantine.
+- **The dashboard API records decisions; the agent runner applies them** (Workers can't run
+  playbooks). Locally both run in one process, so decisions apply immediately.
+- **Approved leads map to playbooks in config** (`infra.json` → `playbook_for_module`).
+
 ## 2026-11-08 — Keyless build of Phases 2–5 (Archie's change of plan)
 
 - **Build Phases 2–5 without stopping at gates**; each phase still ends with a synthetic gate report.

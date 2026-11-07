@@ -4,9 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "tick": "tsx src/main.ts"
   },
   "dependencies": {
-    "@ae/contracts": "workspace:*"
+    "@ae/contracts": "workspace:*",
+    "@ae/config": "workspace:*",
+    "@ae/infra": "workspace:*",
+    "@ae/opportunity": "workspace:*",
+    "@ae/ports": "workspace:*",
+    "@ae/storage": "workspace:*",
+    "@ae/verification": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts"
   }
 }

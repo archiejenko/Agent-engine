@@ -10,11 +10,12 @@ phase; commit + push per phase with CI green. Branch: `claude/nifty-curie-91l1nq
 | 0 Foundations | built; Cloudflare deploy live-pending |
 | 1 Verification on open data | built; synthetic gate passed; live run pending |
 | 1b Archie's changes (period-dated facts, header rate limiter, streaming plan) | done |
-| 2 Lead gen to drafts | in progress: ports+fakes, real Claude adapter, Phase 2 storage, website ingestion done; next: signals + module runner, infra + runner, review queue, gate |
-| 3 Measurement | not started |
+| 2 Lead gen to drafts | built; synthetic gate passed (`docs/gates/phase2.md`); live pending |
+| 3 Measurement | next |
 | 4 x402 check | not started |
 | 5 Alerts, human check, autonomy | not started |
 
 ## Log
 - 2026-11-08: period-dated facts (no decay), header-driven rate limiter, Phases 2–5 plan written.
 - 2026-11-08: Phase 2 checkpoint — ports package (model/web/email/queue fakes; real Anthropic adapter at @ae/ports/anthropic), models.json, migration 0003, website ingestion with guardrail tests.
+- 2026-11-08: Phase 2 complete — signals, framework note, module runner, explanations, review queue (API + dashboard), tasks/tool registry/controls/runner, sme_outreach L0, agent runner service, real web adapters; gate passed on synthetic data.

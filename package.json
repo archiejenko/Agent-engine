@@ -23,7 +23,9 @@
     "ingest:companies": "tsx scripts/ingest-companies.ts",
     "gate:phase1": "tsx scripts/gate-phase1.ts",
     "rehearse": "tsx scripts/rehearse.ts",
-    "rollback": "tsx scripts/rollback.ts"
+    "rollback": "tsx scripts/rollback.ts",
+    "gate:phase2": "tsx scripts/gate-phase2.ts",
+    "runner:tick": "pnpm --filter @ae/agent-runner tick"
   },
   "devDependencies": {
     "@ae/storage": "workspace:*",
@@ -34,7 +36,12 @@
     "typescript": "5.9.3",
     "vitest": "4.1.12",
     "@ae/config": "workspace:*",
-    "@ae/verification": "workspace:*"
+    "@ae/verification": "workspace:*",
+    "@ae/agent-runner": "workspace:*",
+    "@ae/infra": "workspace:*",
+    "@ae/opportunity": "workspace:*",
+    "@ae/ports": "workspace:*",
+    "@ae/contracts": "workspace:*"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

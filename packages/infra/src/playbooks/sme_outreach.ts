@@ -127,7 +127,9 @@ export function checkDraft(draft: EmailDraft, brief: CompanyBrief): string[] {
   }
   // Anything that looks like a factual number or date must come from a checked claim.
   const supported = (draft.claims ?? []).map((c) => c.text).join(" ");
-  const bodyWithoutName = draft.body.split(brief.company_name).join(" ");
+  // The company's own name (with or without "Limited"/"Ltd") isn't a factual claim.
+  const short = brief.company_name.replace(/\s+(LIMITED|LTD\.?|PLC|LLP)$/i, "");
+  const bodyWithoutName = draft.body.split(brief.company_name).join(" ").split(short).join(" ");
   for (const m of bodyWithoutName.matchAll(/\b\d[\d,.]*\b/g)) {
     if (!supported.includes(m[0])) reasons.push(`unsupported number or date "${m[0]}"`);
   }

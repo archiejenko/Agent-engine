@@ -147,6 +147,8 @@ export const InfraConfig = z.object({
   task_timeout_minutes: z.number().int().positive(),
   max_attempts: z.number().int().positive(),
   priority_by_revenue_path: z.record(z.string(), z.enum(["customer", "outreach", "internal"])),
+  /** Which playbook an approved opportunity from each module runs. */
+  playbook_for_module: z.record(z.string(), z.string()),
   sender: z.object({
     name: z.string().min(1),
     company: z.string().min(1),
