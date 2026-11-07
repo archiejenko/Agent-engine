@@ -190,6 +190,20 @@ export const SIGNALS: Record<string, SignalImpl> = {
     },
     normalise: (v) => clamp01(v / 5),
   },
+  x402_interest: {
+    def: def(
+      "x402_interest",
+      "Distinct paying AI agents that checked this company via x402 in the last 30 days (normalised over 0–5). Agents check companies they're about to transact with.",
+      ["x402_checks_30d"],
+    ),
+    compute(facts) {
+      const f = facts.get("x402_checks_30d");
+      return f && typeof f.value === "number"
+        ? { value: f.value, fact_ids: [factId(f)] }
+        : { value: null, fact_ids: [] };
+    },
+    normalise: (v) => clamp01(v / 5),
+  },
   ownership_change_180d: {
     def: def(
       "ownership_change_180d",

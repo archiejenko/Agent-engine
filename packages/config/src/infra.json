@@ -27,7 +27,8 @@
     "opt_out_text": "If you'd rather not hear from me again, just reply 'no thanks' and I won't contact you again."
   },
   "playbook_for_module": {
-    "lead_gen_sme_web": "sme_outreach"
+    "lead_gen_sme_web": "sme_outreach",
+    "x402_discovery": "sme_outreach"
   },
   "modules": {
     "pilot_weekly_limit": 50,

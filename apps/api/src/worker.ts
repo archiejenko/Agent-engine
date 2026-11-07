@@ -1,18 +1,63 @@
+import { loadCompaniesHouseConfig, loadInfraConfig } from "@ae/config";
+import { externalActionsAllowed } from "@ae/infra";
+import { guardedFacilitator, liveRefresh } from "@ae/products";
+import { HttpX402Facilitator } from "@ae/products/x402-real";
 import { createD1Storage } from "@ae/storage";
+import { CompaniesHouseClient, defaultContext } from "@ae/verification";
 import { requireAccess } from "./access.ts";
 import { createApp } from "./app.ts";
 
-// Composition root for Cloudflare. Bindings and vars are declared in wrangler.jsonc.
-const app = createApp({
-  runtime: "worker",
-  storage: (env) => createD1Storage((env as Env).DB),
-  auth: async (c, next) => {
-    const env = c.env as Env;
-    return requireAccess({ teamDomain: env.ACCESS_TEAM_DOMAIN, policyAud: env.ACCESS_POLICY_AUD })(
-      c,
-      next,
-    );
-  },
-});
+// Composition root for Cloudflare. Bindings and vars are declared in wrangler.jsonc; secrets
+// (CH_API_KEY) are Worker secrets. x402 switches on only when a REAL facilitator URL and a pay-to
+// wallet are configured, and payments are refused while the kill switch is on.
+let x402App: ReturnType<typeof createApp> | null = null;
+let plainApp: ReturnType<typeof createApp> | null = null;
 
-export default app satisfies ExportedHandler<Env>;
+function build(env: Env) {
+  const vars = env as unknown as Record<string, string | undefined>;
+  const storage = createD1Storage(env.DB);
+  const auth = requireAccess({
+    teamDomain: env.ACCESS_TEAM_DOMAIN,
+    policyAud: env.ACCESS_POLICY_AUD,
+  });
+  const facilitatorUrl = vars.X402_FACILITATOR_URL;
+  const payTo = vars.X402_PAY_TO;
+  if (!facilitatorUrl || !payTo) {
+    plainApp ??= createApp({
+      runtime: "worker",
+      storage: (e) => createD1Storage((e as Env).DB),
+      auth,
+    });
+    return plainApp;
+  }
+  const infra = loadInfraConfig();
+  const ch = loadCompaniesHouseConfig();
+  x402App ??= createApp({
+    runtime: "worker",
+    storage: (e) => createD1Storage((e as Env).DB),
+    auth,
+    x402: {
+      facilitator: guardedFacilitator(new HttpX402Facilitator(facilitatorUrl), () =>
+        externalActionsAllowed(storage, infra, "x402_check"),
+      ),
+      payTo,
+      refresh: async (n) =>
+        vars.CH_API_KEY
+          ? liveRefresh(
+              storage,
+              defaultContext(),
+              new CompaniesHouseClient({ apiKey: vars.CH_API_KEY, config: ch }),
+              ch,
+              n,
+            )
+          : false,
+    },
+  });
+  return x402App;
+}
+
+export default {
+  fetch(request, env, ctx) {
+    return build(env).fetch(request, env, ctx);
+  },
+} satisfies ExportedHandler<Env>;

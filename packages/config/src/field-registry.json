@@ -387,5 +387,16 @@
     },
     "shelf_life_days": 30,
     "half_life_days": 15.0
+  },
+  {
+    "field": "x402_checks_30d",
+    "description": "Distinct paying agents that checked this company via x402 in the last 30 days (our own request log)",
+    "value_type": "integer",
+    "unit": "payers",
+    "tolerance": {
+      "kind": "exact"
+    },
+    "shelf_life_days": 7,
+    "half_life_days": 3.5
   }
 ]

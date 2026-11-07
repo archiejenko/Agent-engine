@@ -29,7 +29,8 @@
     "weights": "tsx scripts/weights.ts",
     "digests": "tsx scripts/digests.ts",
     "nightly": "tsx scripts/nightly.ts",
-    "gate:phase3": "tsx scripts/gate-phase3.ts"
+    "gate:phase3": "tsx scripts/gate-phase3.ts",
+    "gate:phase4": "tsx scripts/gate-phase4.ts"
   },
   "devDependencies": {
     "@ae/storage": "workspace:*",
@@ -45,7 +46,9 @@
     "@ae/infra": "workspace:*",
     "@ae/opportunity": "workspace:*",
     "@ae/ports": "workspace:*",
-    "@ae/contracts": "workspace:*"
+    "@ae/contracts": "workspace:*",
+    "@ae/products": "workspace:*",
+    "@ae/api": "workspace:*"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

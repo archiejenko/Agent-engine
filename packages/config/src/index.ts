@@ -10,6 +10,7 @@ import confidenceJson from "./confidence.json" with { type: "json" };
 import registryJson from "./field-registry.json" with { type: "json" };
 import infraJson from "./infra.json" with { type: "json" };
 import modelsJson from "./models.json" with { type: "json" };
+import productsJson from "./products.json" with { type: "json" };
 import universeJson from "./universe.lead_gen.json" with { type: "json" };
 import verificationJson from "./verification.json" with { type: "json" };
 
@@ -189,7 +190,33 @@ export function loadInfraConfig(raw: unknown = infraJson): InfraConfig {
   return InfraConfig.parse(raw);
 }
 
+export const ProductsConfig = z.object({
+  x402: z.object({
+    x402_version: z.literal(2),
+    /** CAIP-2 network: eip155:84532 = Base Sepolia (testnet), eip155:8453 = Base mainnet. */
+    network: z.string().regex(/^eip155:\d+$/),
+    asset: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+    asset_decimals: z.number().int().positive(),
+    max_timeout_seconds: z.number().int().positive(),
+    prices_usd: z.object({ cached: z.number().positive(), premium: z.number().positive() }),
+    cost_per_call_gbp: z.object({ cached: z.number().min(0), premium: z.number().min(0) }),
+    facilitator_fee_gbp: z.number().min(0),
+  }),
+  blind_verifier: z.object({
+    base_rate: z.number().gt(0).max(1),
+    min_rate: z.number().gt(0).max(1),
+    max_rate: z.number().gt(0).max(1),
+    window: z.number().int().positive(),
+    sensitivity: z.number().positive(),
+  }),
+});
+export type ProductsConfig = z.infer<typeof ProductsConfig>;
+export function loadProductsConfig(raw: unknown = productsJson): ProductsConfig {
+  return ProductsConfig.parse(raw);
+}
+
 export const rawConfig = {
+  products: productsJson,
   infra: infraJson,
   models: modelsJson,
   companies_house: chJson,

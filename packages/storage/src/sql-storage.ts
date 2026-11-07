@@ -2,6 +2,7 @@ import { Claim, VerifiedFact, VerifiedFactVersion } from "@ae/contracts";
 import type { SqlDriver, SqlStatement, SqlValue } from "./driver.ts";
 import { phase2 } from "./phase2.ts";
 import { phase3 } from "./phase3.ts";
+import { phase4 } from "./phase4.ts";
 import type {
   EntityRow,
   FactListQuery,
@@ -132,7 +133,7 @@ const CLAIM_INSERT_COLS =
 /** Storage implemented over plain SQL. Works on any SqlDriver (SQLite file or D1). */
 export class SqlStorage implements Storage {
   constructor(private readonly db: SqlDriver) {
-    Object.assign(this, phase2(db), phase3(db));
+    Object.assign(this, phase2(db), phase3(db), phase4(db));
   }
   declare signals: Storage["signals"];
   declare moduleRuns: Storage["moduleRuns"];
@@ -151,6 +152,9 @@ export class SqlStorage implements Storage {
   declare backtests: Storage["backtests"];
   declare suggestions: Storage["suggestions"];
   declare margins: Storage["margins"];
+  declare x402: Storage["x402"];
+  declare ledger: Storage["ledger"];
+  declare blind: Storage["blind"];
 
   private async batchChunked(statements: SqlStatement[]) {
     for (const part of chunk(statements, BATCH)) await this.db.batch(part);

@@ -1,5 +1,6 @@
 // Verification engine. Engines use the Storage interface only, never a database.
 export * from "./agreement.ts";
+export * from "./blind.ts";
 export * from "./build.ts";
 export * from "./confidence.ts";
 export * from "./context.ts";
@@ -18,6 +19,7 @@ export * from "./sources/companies-house/client.ts";
 export * from "./sources/companies-house/ixbrl.ts";
 export * from "./sources/companies-house/mapper.ts";
 export * from "./sources/companies-house/rate-limit.ts";
+export * from "./sources/companies-house/stream.ts";
 export * from "./sources/ons/postcodes.ts";
 export * from "./sources/website/ingest.ts";
 export * from "./sources/website/pipeline.ts";

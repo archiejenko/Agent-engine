@@ -2,6 +2,34 @@
 
 Newest first. Each entry: what we decided, why, and who approved it.
 
+## 2026-11-08 — Phase 4 decisions (review at the end)
+
+- **⚠ Launch prices (yours to set): $0.05 cached, $0.25 premium** in USDC (`products.json`). Picked as
+  low enough for agents to call freely and well above our marginal cost (~£0.0002 / ~£0.001 per call).
+- **Our own small x402 v2 payment gate** over a facilitator port (shapes from `@x402/core` 2.30 types;
+  headers PAYMENT-REQUIRED / PAYMENT-SIGNATURE / PAYMENT-RESPONSE), instead of `@x402/hono`'s
+  middleware. Reason: we verify → do the work → settle only on success (a failed premium re-check or
+  missing data is never charged), plus our own logging and kill-switch guard. The real facilitator is
+  the official `HTTPFacilitatorClient`. Alternative: the library middleware (re-evaluate at cutover).
+- **Testnet first**: Base Sepolia (`eip155:84532`) with its USDC contract; mainnet (`eip155:8453`) is a
+  config change after the testnet gate.
+- **The live Worker only enables x402 with a REAL facilitator** (env `X402_FACILITATOR_URL` +
+  `X402_PAY_TO`), and refuses payments while the kill switch is on. The fake facilitator (which accepts
+  a known fake signature) is localhost-only.
+- **x402 is public; the dashboard is behind Access.** Cloudflare Access on workers.dev covers the whole
+  hostname, so the paid endpoint must be served on its own hostname without Access (suggest
+  `check.oast-ai.com` → same Worker, route `/x402/*` only).
+- **Unknown companies are free** (404 before any payment challenge).
+- **Premium = live re-check from Companies House before answering**; if it fails → 503, not charged.
+- **x402 request log → fact** `x402_checks_30d` (source `x402_requests`, our own log) → signal
+  `x402_interest` → module `x402_discovery` (approved leads go to `sme_outreach`, pilot rules apply).
+- **Blind verifier**: deterministic daily sample (hash of company/field/day), base 2%, adapting per
+  source+field (more disagreement → up to 50%; none → down to 1%); re-derives from Companies House with
+  only the company number and field name; disagreements → re-verification request + alert.
+- **Streaming API consumer runs in the Node agent runner** (long-lived connection; Workers can't hold
+  one). Events for companies in our anchor registry → re-verification requests; timepoint saved and
+  resumed.
+
 ## 2026-11-08 — Phase 3 decisions (review at the end)
 
 - **Modules start in "pilot", go "live" only with a backtest of the current note version at ≥ 3× lift.**

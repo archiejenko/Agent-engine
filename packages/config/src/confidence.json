@@ -63,6 +63,13 @@
       "continuous": false,
       "lane": "open",
       "description": "Values a model extracted from the company's website, each with an evidence span"
+    },
+    "x402_requests": {
+      "tier": 2,
+      "upstream": "x402_requests",
+      "continuous": false,
+      "lane": "open",
+      "description": "Our own x402 request log (who checked which company)"
     }
   }
 }

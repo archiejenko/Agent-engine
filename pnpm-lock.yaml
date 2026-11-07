@@ -11,6 +11,9 @@ importers:
       '@ae/agent-runner':
         specifier: workspace:*
         version: link:apps/agent-runner
+      '@ae/api':
+        specifier: workspace:*
+        version: link:apps/api
       '@ae/config':
         specifier: workspace:*
         version: link:packages/config
@@ -26,6 +29,9 @@ importers:
       '@ae/ports':
         specifier: workspace:*
         version: link:packages/ports
+      '@ae/products':
+        specifier: workspace:*
+        version: link:packages/products
       '@ae/storage':
         specifier: workspace:*
         version: link:packages/storage
@@ -86,12 +92,21 @@ importers:
       '@ae/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@ae/infra':
+        specifier: workspace:*
+        version: link:../../packages/infra
       '@ae/opportunity':
         specifier: workspace:*
         version: link:../../packages/opportunity
+      '@ae/products':
+        specifier: workspace:*
+        version: link:../../packages/products
       '@ae/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@ae/verification':
+        specifier: workspace:*
+        version: link:../../packages/verification
       '@hono/node-server':
         specifier: 2.1.6
         version: 2.1.6(hono@4.13.16)
@@ -202,6 +217,27 @@ importers:
       zod:
         specifier: 4.6.7
         version: 4.6.7
+
+  packages/products:
+    dependencies:
+      '@ae/config':
+        specifier: workspace:*
+        version: link:../config
+      '@ae/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@ae/ports':
+        specifier: workspace:*
+        version: link:../ports
+      '@ae/storage':
+        specifier: workspace:*
+        version: link:../storage
+      '@ae/verification':
+        specifier: workspace:*
+        version: link:../verification
+      '@x402/core':
+        specifier: 2.30.0
+        version: 2.30.0
 
   packages/storage:
     dependencies:
@@ -1068,6 +1104,9 @@ packages:
 
   '@vitest/utils@4.1.12':
     resolution: {integrity: sha512-Q3awXrwOfEV+qc3WmO5ONyE0yO7Q1gQ9/oyHxGLZ/pl7N3NO/ZztqQwKLuwMkV+CA1JYSIeO3gkHnRDIo4AVaA==}
+
+  '@x402/core@2.30.0':
+    resolution: {integrity: sha512-gvMxCum2QlNI6jI/3NL1jdrmOgtX9sWEWxSIOmeI67/5ndOJvYOtP7JZLSO8o8af+O+A+Vhhjza1NCda0yVppg==}
 
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
@@ -2088,6 +2127,10 @@ snapshots:
       '@vitest/pretty-format': 4.1.12
       convert-source-map: 2.0.0
       tinyrainbow: 3.2.0
+
+  '@x402/core@2.30.0':
+    dependencies:
+      zod: 4.6.7
 
   assertion-error@2.0.1: {}
 

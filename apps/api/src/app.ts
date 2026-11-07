@@ -1,6 +1,21 @@
-import { loadInfraConfig, loadUniverseConfig } from "@ae/config";
+import {
+  loadInfraConfig,
+  loadModelsConfig,
+  loadProductsConfig,
+  loadUniverseConfig,
+} from "@ae/config";
 import type { Claim } from "@ae/contracts";
 import { reviewQueue } from "@ae/opportunity";
+import {
+  b64,
+  companyCheck,
+  HEADERS,
+  matchesRequirements,
+  type PaymentPayload,
+  requirementsFor,
+  unb64,
+  type X402Facilitator,
+} from "@ae/products";
 import type { Storage } from "@ae/storage";
 import { accuracyReport, defaultContext, recordGolden, resolveConflict } from "@ae/verification";
 import { Hono, type MiddlewareHandler } from "hono";
@@ -21,6 +36,13 @@ export interface AppDeps {
     decision: "approve" | "edit" | "reject",
     editedText: string | null,
   ) => Promise<unknown>;
+  /** x402 company check. Absent = endpoint disabled. Public (agents can't log in): NOT behind Access. */
+  x402?: {
+    facilitator: X402Facilitator;
+    payTo: string;
+    /** Premium tier: re-verify the company live before answering. Returns false if it couldn't. */
+    refresh?: (companyNumber: string) => Promise<boolean>;
+  };
 }
 
 const Decision = z.object({ decision: z.enum(["approve", "reject"]) });
@@ -294,6 +316,118 @@ export function createApp(deps: AppDeps) {
     if (!body.success) return c.json({ error: "bad_request" }, 400);
     await deps.storage(c.env).pauses.resume(body.data.source, body.data.field);
     return c.json({ ok: true });
+  });
+
+  // ---- Phase 4: paid x402 company check (public; payment is the access control).
+  app.get("/x402/check/:number", async (c) => {
+    const started = Date.now();
+    if (!deps.x402) return c.json({ error: "x402_disabled" }, 404);
+    const x = deps.x402;
+    const cfg = loadProductsConfig().x402;
+    const usdToGbp = loadModelsConfig().usd_to_gbp;
+    const number = c.req.param("number").toUpperCase();
+    const tier = c.req.query("tier") === "premium" ? "premium" : "cached";
+    const s = deps.storage(c.env);
+    const reqs = requirementsFor(cfg, tier, x.payTo, new URL(c.req.url).pathname);
+    const log = (
+      status: Parameters<typeof s.x402.log>[0]["status"],
+      extra: { payer?: string | null; tx?: string | null; cost?: number } = {},
+    ) =>
+      s.x402.log({
+        id: crypto.randomUUID(),
+        company_number: number,
+        tier,
+        status,
+        price_usd: status === "served" ? cfg.prices_usd[tier] : 0,
+        price_gbp: status === "served" ? cfg.prices_usd[tier] * usdToGbp : 0,
+        cost_gbp: extra.cost ?? 0,
+        payer: extra.payer ?? null,
+        transaction_ref: extra.tx ?? null,
+        network: cfg.network,
+        latency_ms: Date.now() - started,
+        dry_run: x.facilitator.dryRun,
+        task_id: null,
+      });
+    if (!/^[A-Z0-9]{8}$/.test(number)) return c.json({ error: "bad_company_number" }, 400);
+    // Unknown companies are free to ask about: nothing to sell.
+    if (
+      !(await s.entities.get(number)) &&
+      (await s.facts.listCurrent({ entityId: number, limit: 1, offset: 0 })).total === 0
+    ) {
+      await log("not_found");
+      return c.json({ error: "not_found", company_number: number }, 404);
+    }
+    const header = c.req.header(HEADERS.signature);
+    if (!header) {
+      await log("challenge");
+      const body = {
+        x402Version: 2,
+        error: "payment required",
+        resource: {
+          url: c.req.url,
+          description: `UK company check (${tier})`,
+          mimeType: "application/json",
+        },
+        accepts: [reqs],
+      };
+      return c.json(body, 402, { [HEADERS.required]: b64(body) });
+    }
+    let payload: PaymentPayload;
+    try {
+      payload = unb64<PaymentPayload>(header);
+    } catch {
+      await log("invalid_payment");
+      return c.json({ error: "invalid payment header" }, 402);
+    }
+    const mismatch = matchesRequirements(payload, reqs);
+    const verified = mismatch
+      ? { isValid: false, invalidReason: mismatch }
+      : await x.facilitator.verify(payload, reqs);
+    if (!verified.isValid) {
+      await log("invalid_payment", { payer: verified.payer ?? null });
+      return c.json(
+        { x402Version: 2, error: verified.invalidReason ?? "invalid payment", accepts: [reqs] },
+        402,
+      );
+    }
+    // Do the work first; settle only if it succeeded.
+    let refreshed = false;
+    if (tier === "premium") {
+      refreshed = x.refresh ? await x.refresh(number).catch(() => false) : false;
+      if (!refreshed) {
+        await log("failed", { payer: verified.payer ?? null });
+        return c.json(
+          { error: "live re-verification failed; you have not been charged", retry: true },
+          503,
+        );
+      }
+    }
+    const result = await companyCheck(s, vctx, number, { tier, caller: "x402", refreshed });
+    if (!result) {
+      await log("failed", { payer: verified.payer ?? null });
+      return c.json({ error: "no verified facts; you have not been charged" }, 404);
+    }
+    const settled = await x.facilitator.settle(payload, reqs);
+    if (!settled.success) {
+      await log("settle_failed", { payer: verified.payer ?? null });
+      return c.json({ error: settled.errorReason ?? "settlement failed" }, 402);
+    }
+    const priceGbp = cfg.prices_usd[tier] * usdToGbp;
+    await s.ledger.record({
+      rail: "x402",
+      reference: settled.transaction,
+      payer: settled.payer ?? null,
+      amount_gbp: priceGbp,
+      currency_amount: `${reqs.amount} ${cfg.asset}@${cfg.network}`,
+      dry_run: x.facilitator.dryRun,
+      task_id: null,
+    });
+    await log("served", {
+      payer: settled.payer ?? null,
+      tx: settled.transaction,
+      cost: cfg.cost_per_call_gbp[tier] + cfg.facilitator_fee_gbp,
+    });
+    return c.json(result, 200, { [HEADERS.response]: b64(settled) });
   });
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));

@@ -1,0 +1,21 @@
+{
+  "name": "@ae/products",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./x402-real": "./src/x402-real.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ae/config": "workspace:*",
+    "@ae/contracts": "workspace:*",
+    "@ae/ports": "workspace:*",
+    "@ae/storage": "workspace:*",
+    "@ae/verification": "workspace:*",
+    "@x402/core": "2.30.0"
+  }
+}
