@@ -1,0 +1,26 @@
+{
+  "_note": "Spend caps in GBP. The global kill switch defaults to ON (external actions run in dry-run) until Archie turns it off.",
+  "caps": {
+    "global_per_day_gbp": 20,
+    "per_playbook_per_day_gbp": { "default": 5, "sme_outreach": 5 }
+  },
+  "kill_switch_default_on": true,
+  "task_timeout_minutes": 30,
+  "max_attempts": 3,
+  "priority_by_revenue_path": {
+    "x402_check": "customer",
+    "monitoring": "customer",
+    "human_check": "customer",
+    "sme_outreach": "outreach",
+    "agent_house": "outreach",
+    "ma_brief": "internal",
+    "internal": "internal"
+  },
+  "sender": {
+    "name": "Archie, EJTECH Ltd",
+    "company": "EJTECH Ltd",
+    "address": "Manchester, UK",
+    "from_email": "archie@example.invalid",
+    "opt_out_text": "If you'd rather not hear from me again, just reply 'no thanks' and I won't contact you again."
+  }
+}

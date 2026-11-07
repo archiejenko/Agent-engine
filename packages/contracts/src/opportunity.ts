@@ -55,6 +55,13 @@ export const ModuleConfig = z
       value_field: Slug,
     }),
     explore_share: z.number().min(0).max(0.5),
+    /** Expected value inputs (v1): P(win) = base_win_rate × score / 0.5, capped at 1. Calibrated in Phase 3. */
+    economics: z
+      .object({
+        deal_value_gbp: z.number().positive(),
+        base_win_rate: z.number().gt(0).max(1),
+      })
+      .optional(),
   })
   .superRefine((m, ctx) => {
     const weights = Object.values(m.signals).map((s) => s.weight);

@@ -11,6 +11,11 @@
   },
   "dependencies": {
     "@ae/contracts": "workspace:*",
-    "@ae/storage": "workspace:*"
-  }
+    "@ae/storage": "workspace:*",
+    "@ae/config": "workspace:*",
+    "@ae/verification": "workspace:*",
+    "@ae/ports": "workspace:*",
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {}
 }

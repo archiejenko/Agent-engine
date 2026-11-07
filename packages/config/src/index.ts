@@ -8,6 +8,7 @@ import { z } from "zod";
 import chJson from "./companies_house.json" with { type: "json" };
 import confidenceJson from "./confidence.json" with { type: "json" };
 import registryJson from "./field-registry.json" with { type: "json" };
+import infraJson from "./infra.json" with { type: "json" };
 import modelsJson from "./models.json" with { type: "json" };
 import universeJson from "./universe.lead_gen.json" with { type: "json" };
 import verificationJson from "./verification.json" with { type: "json" };
@@ -137,7 +138,30 @@ export function loadModelsConfig(raw: unknown = modelsJson): ModelsConfig {
   return ModelsConfig.parse(raw);
 }
 
+export const InfraConfig = z.object({
+  caps: z.object({
+    global_per_day_gbp: z.number().positive(),
+    per_playbook_per_day_gbp: z.record(z.string(), z.number().positive()),
+  }),
+  kill_switch_default_on: z.boolean(),
+  task_timeout_minutes: z.number().int().positive(),
+  max_attempts: z.number().int().positive(),
+  priority_by_revenue_path: z.record(z.string(), z.enum(["customer", "outreach", "internal"])),
+  sender: z.object({
+    name: z.string().min(1),
+    company: z.string().min(1),
+    address: z.string().min(1),
+    from_email: z.string().min(3),
+    opt_out_text: z.string().min(10),
+  }),
+});
+export type InfraConfig = z.infer<typeof InfraConfig>;
+export function loadInfraConfig(raw: unknown = infraJson): InfraConfig {
+  return InfraConfig.parse(raw);
+}
+
 export const rawConfig = {
+  infra: infraJson,
   models: modelsJson,
   companies_house: chJson,
   universe: universeJson,

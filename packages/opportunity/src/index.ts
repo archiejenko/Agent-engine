@@ -1,2 +1,7 @@
-// Opportunity engine. Built in Phase 2 (signals, module runner) and Phase 3 (backtests, calibration).
-export {};
+// Opportunity engine: signals, framework notes, module runner, explanations, review queue.
+export * from "./explain.ts";
+export * from "./facts.ts";
+export * from "./framework.ts";
+export * from "./queue.ts";
+export * from "./runner.ts";
+export * from "./signals.ts";
