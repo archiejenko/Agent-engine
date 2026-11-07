@@ -2,6 +2,30 @@
 
 Newest first. Each entry: what we decided, why, and who approved it.
 
+## 2026-11-08 — Phase 3 decisions (review at the end)
+
+- **Modules start in "pilot", go "live" only with a backtest of the current note version at ≥ 3× lift.**
+  Lift needs outcomes and outcomes need outreach, so pilot allows up to 50 approved leads a week
+  (`infra.json` → `modules.pilot_weekly_limit`). Promotion is `promoteModule` (refuses below 3×).
+  Alternative: block all outreach until a backtest exists (impossible without outcomes).
+- **Your verification settles a fact.** A "human" claim's cluster always wins and the fact is verified
+  (not a conflict); other sources become conflicting evidence. Resolving a conflict adds the company to
+  the golden set (reason "conflict").
+- **Calibration** is measured on the fact we'd have served without your claim, in confidence bands, plus
+  a Brier score. Accuracy is per source+field: each source's latest claim vs your value.
+- **Drift** compares each day's fetches per source+field with a 7-day baseline (volume ×0.5/×3, empty
+  values +20 points, match rate −10 points, average ±50%; all config). A breach pauses that
+  source+field: its facts become `quarantined` until you resume it (dashboard → Metrics).
+- **Weight suggestions** need ≥ 20 closed leads and ≥ 5 positives; they're revenue-weighted (deal value)
+  and blended 50/50 with the current weights (shrinkage), rounded to sum to 1. Written into the note as a
+  PENDING block; only `pnpm weights accept <id>` changes the front matter (and bumps the version).
+- **Nightly re-verification** priority = value (explicit request 3 > live lead 2 > other 1) × staleness ×
+  uncertainty, within 2,000 API calls a night (config).
+- **Backtests use today's universe membership** (known bias: companies that left the universe since
+  as_of are missing) — logged in known biases.
+- **Synthetic gate copies**: the Phase 3 gate writes its suggested change to a copy of the note in
+  `docs/gates/phase3-outputs/`, never to `brain/frameworks/`.
+
 ## 2026-11-08 — Phase 2 decisions (review at the end)
 
 - **⚠ Confidence floor 0.7 vs single-source website facts.** A tier-3 website fact starts at 0.75 and

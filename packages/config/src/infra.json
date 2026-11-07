@@ -28,5 +28,12 @@
   },
   "playbook_for_module": {
     "lead_gen_sme_web": "sme_outreach"
+  },
+  "modules": {
+    "pilot_weekly_limit": 50,
+    "min_live_lift": 3.0,
+    "calibration_min_closed": 20,
+    "calibration_min_positives": 5,
+    "calibration_blend": 0.5
   }
 }

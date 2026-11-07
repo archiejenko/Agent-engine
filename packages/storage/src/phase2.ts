@@ -7,6 +7,7 @@ const j = (v: unknown) => JSON.stringify(v);
 const pj = (v: unknown) => (v === null || v === undefined ? null : JSON.parse(v as string));
 
 export interface StoredOpportunity extends Opportunity {
+  decided_at: string | null;
   rank: number;
   rationale: string | null;
   run_id: string;
@@ -64,6 +65,7 @@ function rowToOpp(r: Row): StoredOpportunity {
   });
   return {
     ...o,
+    decided_at: (r.decided_at as string | null) ?? null,
     rank: Number(r.rank),
     rationale: (r.rationale as string | null) ?? null,
     run_id: r.run_id as string,

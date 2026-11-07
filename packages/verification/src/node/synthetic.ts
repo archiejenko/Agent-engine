@@ -54,6 +54,8 @@ export interface SyntheticCompany {
   category: string;
   sic: string[];
   employees: number | null; // null = no accounts filed in the archive
+  /** What's actually true (the golden oracle's answer); filed accounts are wrong for ~15%. */
+  true_employees: number | null;
   /** Passes region, status, dormant and SIC rules (staff decided later). */
   candidate: boolean;
   expected: "in_universe" | "in_universe_staff_unknown" | "excluded";
@@ -100,7 +102,14 @@ export async function generateSynthetic(
         : r() < 0.04
           ? ["68209"]
           : [pick(["62012", "43210", "56101", "68310", "70229", "47190", "86230"])];
-    const employees = r() < 0.75 ? Math.floor(r() * 150) + 1 : null;
+    const trueEmployees = Math.floor(r() * 150) + 1;
+    const filed = r() < 0.75;
+    const noisy = r() < 0.15;
+    const employees = filed
+      ? noisy
+        ? Math.max(1, Math.round(trueEmployees * (r() < 0.5 ? 0.6 : 1.4)))
+        : trueEmployees
+      : null;
     const candidate =
       inRegion &&
       status === "Active" &&
@@ -122,6 +131,7 @@ export async function generateSynthetic(
       category,
       sic,
       employees,
+      true_employees: trueEmployees,
       candidate,
       expected,
     });

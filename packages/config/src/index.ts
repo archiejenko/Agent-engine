@@ -73,6 +73,25 @@ export const VerificationConfig = z.object({
     auto_match: z.number().min(0).max(1),
     adjudicate: z.number().min(0).max(1),
   }),
+  drift: z.object({
+    baseline_days: z.number().int().positive(),
+    min_baseline_days: z.number().int().positive(),
+    volume_ratio_min: z.number().positive(),
+    volume_ratio_max: z.number().positive(),
+    null_rate_increase_max: z.number().positive(),
+    match_rate_drop_max: z.number().positive(),
+    mean_relative_change_max: z.number().positive(),
+  }),
+  golden: z.object({
+    target_companies: z.number().int().positive(),
+    fields: z.array(z.string()).min(1),
+  }),
+  reverify: z.object({
+    daily_call_budget: z.number().int().positive(),
+    calls_per_company: z.number().positive(),
+    request_weight: z.number().positive(),
+    opportunity_weight: z.number().positive(),
+  }),
 });
 export type VerificationConfig = z.infer<typeof VerificationConfig>;
 
@@ -149,6 +168,14 @@ export const InfraConfig = z.object({
   priority_by_revenue_path: z.record(z.string(), z.enum(["customer", "outreach", "internal"])),
   /** Which playbook an approved opportunity from each module runs. */
   playbook_for_module: z.record(z.string(), z.string()),
+  /** Modules start in pilot (limited weekly volume) and go live only with backtest lift ≥ min_live_lift. */
+  modules: z.object({
+    pilot_weekly_limit: z.number().int().positive(),
+    min_live_lift: z.number().positive(),
+    calibration_min_closed: z.number().int().positive(),
+    calibration_min_positives: z.number().int().positive(),
+    calibration_blend: z.number().min(0).max(1),
+  }),
   sender: z.object({
     name: z.string().min(1),
     company: z.string().min(1),

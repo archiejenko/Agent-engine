@@ -33,6 +33,11 @@ export async function rebuildFacts(
   meta: { run_id: string; now: string },
 ): Promise<RebuildStats> {
   const stats: RebuildStats = { versions_written: 0, touched: 0, removed: 0 };
+  if (!ctx.paused)
+    ctx = {
+      ...ctx,
+      paused: new Set((await storage.pauses.active()).map((x) => `${x.source}|${x.field}`)),
+    };
   const nowMs = Date.parse(meta.now);
   const byEntity = new Map<string, Set<string>>();
   for (const p of pairs)

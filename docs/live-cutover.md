@@ -40,3 +40,8 @@ Run each against ~20 real companies; check outputs by hand before relying on the
 - [ ] Website ingestion on the real universe (start with 100 companies; check quarantine and rejected extractions)
 - [ ] Run `lead_gen_sme_web` on the day of the data refresh; check the top 20 by hand
 - [ ] Approve 50 leads; read all 50 drafts; record cost per draft from the run log (`/api/tasks/:id`)
+### Phase 3
+- [ ] Hand-verify 150 companies in the dashboard (Golden set page); read Metrics → accuracy and calibration
+- [ ] Schedule `pnpm nightly` (laptop cron, or Cloudflare Cron Trigger once deployed) and `pnpm digests` weekly
+- [ ] After the pilot's first 30-day window closes: `pnpm weights suggest`, read the block in the note, accept or reject
+- [ ] Backtest `lead_gen_sme_web` on real outcomes; promote to live only if lift ≥ 3×

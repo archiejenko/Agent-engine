@@ -4,11 +4,43 @@
   },
   "sanity": {
     "max_employees": 500000,
-    "revenue_per_employee_gbp": { "min": 5000, "max": 5000000 }
+    "revenue_per_employee_gbp": {
+      "min": 5000,
+      "max": 5000000
+    }
   },
   "resolution": {
-    "weights": { "name": 0.6, "postcode": 0.3, "domain": 0.1 },
+    "weights": {
+      "name": 0.6,
+      "postcode": 0.3,
+      "domain": 0.1
+    },
     "auto_match": 0.9,
     "adjudicate": 0.6
+  },
+  "drift": {
+    "baseline_days": 7,
+    "min_baseline_days": 3,
+    "volume_ratio_min": 0.5,
+    "volume_ratio_max": 3.0,
+    "null_rate_increase_max": 0.2,
+    "match_rate_drop_max": 0.1,
+    "mean_relative_change_max": 0.5
+  },
+  "golden": {
+    "target_companies": 150,
+    "fields": [
+      "company_status",
+      "employees_average",
+      "registered_office_postcode",
+      "website_copyright_year",
+      "trading_address_postcode"
+    ]
+  },
+  "reverify": {
+    "daily_call_budget": 2000,
+    "calls_per_company": 4.2,
+    "request_weight": 3,
+    "opportunity_weight": 2
   }
 }

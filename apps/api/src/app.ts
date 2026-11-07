@@ -1,7 +1,8 @@
-import { loadUniverseConfig } from "@ae/config";
+import { loadInfraConfig, loadUniverseConfig } from "@ae/config";
 import type { Claim } from "@ae/contracts";
 import { reviewQueue } from "@ae/opportunity";
 import type { Storage } from "@ae/storage";
+import { accuracyReport, defaultContext, recordGolden, resolveConflict } from "@ae/verification";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 
@@ -31,6 +32,18 @@ const TaskDecision = z
   .refine((d) => d.decision !== "edit" || d.edited_text, {
     message: "an edit needs the edited text",
   });
+const OutcomeBody = z.object({
+  event: z.string().regex(/^[a-z][a-z0-9_]*$/),
+  value_bool: z.boolean().nullable().default(null),
+  value_gbp: z.number().nonnegative().nullable().default(null),
+  observed_at: z.iso.datetime({ offset: true }).optional(),
+});
+const GoldenBody = z.object({ values: z.record(z.string().regex(/^[a-z][a-z0-9_]*$/), z.json()) });
+const ConflictBody = z.object({
+  entity_id: z.string().regex(/^[A-Z0-9]{8}$/),
+  field: z.string().regex(/^[a-z][a-z0-9_]*$/),
+  value: z.json(),
+});
 const Resolve = z.object({
   entity_id: z
     .string()
@@ -184,6 +197,102 @@ export function createApp(deps: AppDeps) {
     const body = Resolve.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "bad_request" }, 400);
     await deps.storage(c.env).quarantine.resolve(c.req.param("id"), body.data.entity_id);
+    return c.json({ ok: true });
+  });
+
+  // ---- Phase 3: measurement and outcomes.
+  const vctx = defaultContext();
+
+  app.get("/api/metrics", async (c) => {
+    const s = deps.storage(c.env);
+    const day = new Date().toISOString().slice(0, 10);
+    const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const backtests = [];
+    for (const m of Object.keys(loadInfraConfig().playbook_for_module))
+      backtests.push(await s.backtests.latest(m));
+    return c.json({
+      verification: await accuracyReport(s, vctx),
+      facts: await s.facts.countByStatus(),
+      pauses: await s.pauses.active(),
+      drift_today: await s.drift.forDay(day),
+      backtests: backtests.filter(Boolean),
+      margins_7d: await s.margins(since),
+      alerts: await s.alerts.list({ unacknowledged: true, limit: 20 }),
+    });
+  });
+
+  app.get("/api/golden/next", async (c) => {
+    const s = deps.storage(c.env);
+    const done = new Set((await s.golden.list()).map((g) => g.entity_id));
+    const members = (await s.universe.list(universe.name, { included: true, limit: 5000 })).map(
+      (m) => m.entity_id,
+    );
+    const next = members.find((id) => !done.has(id));
+    if (!next) return c.json({ entity: null, done: done.size });
+    const facts = (
+      await s.facts.listCurrent({ entityId: next, limit: 200, offset: 0 })
+    ).rows.filter((f) => vctx.verification.golden.fields.includes(f.field));
+    return c.json({
+      entity: await s.entities.get(next),
+      fields: vctx.verification.golden.fields,
+      facts,
+      done: done.size,
+      target: vctx.verification.golden.target_companies,
+    });
+  });
+
+  app.post("/api/golden/:id", async (c) => {
+    const body = GoldenBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "bad_request" }, 400);
+    const unknown = Object.keys(body.data.values).filter((f) => !vctx.registry.has(f));
+    if (unknown.length) return c.json({ error: "unknown_fields", fields: unknown }, 400);
+    await recordGolden(
+      deps.storage(c.env),
+      vctx,
+      c.req.param("id").toUpperCase(),
+      body.data.values as Record<string, never>,
+    );
+    return c.json({ ok: true });
+  });
+
+  app.post("/api/conflicts/resolve", async (c) => {
+    const body = ConflictBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "bad_request" }, 400);
+    await resolveConflict(
+      deps.storage(c.env),
+      vctx,
+      body.data.entity_id,
+      body.data.field,
+      body.data.value as never,
+    );
+    return c.json({ ok: true });
+  });
+
+  app.post("/api/opportunities/:id/outcome", async (c) => {
+    const body = OutcomeBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "bad_request", issues: body.error.issues }, 400);
+    const s = deps.storage(c.env);
+    const o = await s.opportunities.get(c.req.param("id"));
+    if (!o) return c.json({ error: "not_found" }, 404);
+    await s.outcomes.add({
+      opportunity_id: o.opportunity_id,
+      entity_id: o.entity_id,
+      module: o.module,
+      event: body.data.event,
+      value_bool: body.data.value_bool,
+      value_gbp: body.data.value_gbp,
+      observed_at: body.data.observed_at ?? new Date().toISOString(),
+      source: "human",
+    });
+    return c.json({ ok: true });
+  });
+
+  app.post("/api/pauses/resume", async (c) => {
+    const body = z
+      .object({ source: z.string().min(1), field: z.string().min(1) })
+      .safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "bad_request" }, 400);
+    await deps.storage(c.env).pauses.resume(body.data.source, body.data.field);
     return c.json({ ok: true });
   });
 

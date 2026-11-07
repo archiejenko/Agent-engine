@@ -66,6 +66,11 @@ export async function getVerifiedFacts(
   input: GetVerifiedFactsParams,
 ): Promise<VerifiedFact[]> {
   const p = parseGetVerifiedFactsParams(input);
+  if (!ctx.paused)
+    ctx = {
+      ...ctx,
+      paused: new Set((await storage.pauses.active()).map((x) => `${x.source}|${x.field}`)),
+    };
   const asOfMs = toMillis(p.asOf.length === 10 ? `${p.asOf}T23:59:59.999Z` : p.asOf);
   const mode: PointInTimeMode = p.mode;
 

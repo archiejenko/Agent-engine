@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Company } from "./Company.tsx";
 import { Facts } from "./Facts.tsx";
+import { Golden } from "./Golden.tsx";
+import { Metrics } from "./Metrics.tsx";
 import { Overview } from "./Overview.tsx";
 import { Review } from "./Review.tsx";
 
@@ -40,11 +42,17 @@ export function App() {
         <a href="#/">Overview</a>
         <a href="#/review">Review</a>
         <a href="#/facts">Facts</a>
+        <a href="#/metrics">Metrics</a>
+        <a href="#/golden">Golden set</a>
       </header>
       {company ? (
         <Company id={company} />
       ) : route.startsWith("/review") ? (
         <Review />
+      ) : route.startsWith("/metrics") ? (
+        <Metrics />
+      ) : route.startsWith("/golden") ? (
+        <Golden />
       ) : route.startsWith("/facts") ? (
         <Facts />
       ) : (

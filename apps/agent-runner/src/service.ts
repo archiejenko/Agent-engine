@@ -13,7 +13,7 @@ import {
   SME_OUTREACH,
   ToolRegistry,
 } from "@ae/infra";
-import { fakeExplainer } from "@ae/opportunity";
+import { fakeExplainer, moduleStatus } from "@ae/opportunity";
 import {
   FakeModel,
   FakeWebFetcher,
@@ -108,7 +108,31 @@ export class AgentService {
   async intakeApproved(): Promise<number> {
     const approved = await this.storage.opportunities.list({ status: "approved", limit: 500 });
     let created = 0;
+    const pilotUsed = new Map<string, number>();
     for (const o of approved) {
+      // Pilot modules (no backtest ≥ 3× lift yet) are capped per week; live modules aren't.
+      if ((await moduleStatus(this.storage, o.module)) === "pilot") {
+        if (!pilotUsed.has(o.module)) {
+          const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+          const recent = (
+            await this.storage.opportunities.list({
+              module: o.module,
+              status: "actioned",
+              limit: 100_000,
+            })
+          ).filter((x) => (x.decided_at ?? "") >= weekAgo);
+          pilotUsed.set(o.module, recent.length);
+        }
+        if ((pilotUsed.get(o.module) as number) >= this.infra.modules.pilot_weekly_limit) {
+          await this.storage.alerts.raise(
+            "pilot_limit",
+            `${o.module} is in pilot: weekly limit of ${this.infra.modules.pilot_weekly_limit} reached; ${o.opportunity_id} waits`,
+            {},
+          );
+          continue;
+        }
+        pilotUsed.set(o.module, (pilotUsed.get(o.module) as number) + 1);
+      }
       const playbook = this.infra.playbook_for_module[o.module];
       if (!playbook) continue;
       const pb = this.playbooks.get(playbook);

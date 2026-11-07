@@ -394,6 +394,82 @@ export function storageSuite(adapter: string, makeHarness: () => Promise<Harness
       expect(await s.quarantine.listOpen(5)).toEqual([]);
     });
 
+    it("phase 3: golden set, outcomes, drift, pauses, backtests, suggestions, margins", async () => {
+      await s.golden.add("01234567", "sample");
+      await s.golden.add("01234567", "conflict"); // idempotent
+      expect((await s.golden.list()).map((g) => g.reason)).toEqual(["sample"]);
+      await s.outcomes.add({
+        opportunity_id: null,
+        entity_id: "01234567",
+        module: "m",
+        event: "positive_reply",
+        value_bool: true,
+        value_gbp: 1500,
+        observed_at: "2026-10-10T00:00:00Z",
+        source: "system",
+      });
+      expect(
+        await s.outcomes.forEntities(
+          "positive_reply",
+          "2026-10-01T00:00:00Z",
+          "2026-11-01T00:00:00Z",
+        ),
+      ).toHaveLength(1);
+      expect(
+        await s.outcomes.forEntities(
+          "positive_reply",
+          "2026-10-11T00:00:00Z",
+          "2026-11-01T00:00:00Z",
+        ),
+      ).toHaveLength(0);
+      await s.drift.put([
+        {
+          day: "2026-11-01",
+          source: "a",
+          field: "f",
+          volume: 10,
+          null_rate: 0,
+          mean: 5,
+          top_share: null,
+          match_rate: 1,
+        },
+      ]);
+      expect((await s.drift.history("a", "f", "2026-11-02", 7))[0]?.volume).toBe(10);
+      await s.pauses.pause("a", "f", "volume dropped");
+      await s.pauses.pause("a", "f", "again"); // one open pause per source+field
+      expect(await s.pauses.active()).toHaveLength(1);
+      await s.pauses.resume("a", "f");
+      expect(await s.pauses.active()).toEqual([]);
+      await s.backtests.put({
+        id: "b1",
+        module: "m",
+        module_version: 1,
+        note_hash: "h",
+        as_of: "2026-10-01",
+        mode: "reconstructed",
+        window_days: 30,
+        candidates: 100,
+        precision_at_20: 0.3,
+        base_rate: 0.05,
+        lift: 6,
+        revenue_lift: 5.5,
+        calibration: [],
+      });
+      expect((await s.backtests.latest("m"))?.lift).toBe(6);
+      await s.suggestions.add({
+        id: "s1",
+        module: "m",
+        module_version: 1,
+        current_weights: { a: 1 },
+        suggested_weights: { a: 1 },
+        evidence: {},
+      });
+      expect(await s.suggestions.pending("m")).toEqual(["s1"]);
+      await s.suggestions.decide("s1", "rejected");
+      expect((await s.suggestions.get("s1"))?.status).toBe("rejected");
+      expect(await s.margins("2000-01-01")).toEqual([]);
+    });
+
     it("returns null for unknown rows", async () => {
       expect(await s.claims.get(crypto.randomUUID())).toBeNull();
       expect(await s.facts.getCurrent("99999999", "company_status")).toBeNull();

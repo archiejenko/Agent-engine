@@ -11,6 +11,8 @@ export interface VerificationContext {
   registry: Map<string, FieldDefinition>;
   confidence: ConfidenceConfig;
   verification: VerificationConfig;
+  /** "source|field" pairs paused by drift monitoring: they can't make facts verified. */
+  paused?: Set<string>;
 }
 
 export function defaultContext(): VerificationContext {

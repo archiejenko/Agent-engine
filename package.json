@@ -25,7 +25,11 @@
     "rehearse": "tsx scripts/rehearse.ts",
     "rollback": "tsx scripts/rollback.ts",
     "gate:phase2": "tsx scripts/gate-phase2.ts",
-    "runner:tick": "pnpm --filter @ae/agent-runner tick"
+    "runner:tick": "pnpm --filter @ae/agent-runner tick",
+    "weights": "tsx scripts/weights.ts",
+    "digests": "tsx scripts/digests.ts",
+    "nightly": "tsx scripts/nightly.ts",
+    "gate:phase3": "tsx scripts/gate-phase3.ts"
   },
   "devDependencies": {
     "@ae/storage": "workspace:*",

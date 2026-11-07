@@ -93,7 +93,29 @@ export function buildFactAt(
       byUpstream.set(v.current.upstream, v);
     }
   }
-  const freshest = [...byUpstream.values()];
+  const allFreshest = [...byUpstream.values()];
+  // Drift-paused sources can't make a fact verified. If only paused sources speak, it's quarantined.
+  const isPaused = (v: (typeof views)[0]) =>
+    ctx.paused?.has(`${v.current.claim.source}|${field}`) ?? false;
+  const freshest = allFreshest.filter((v) => !isPaused(v));
+  if (freshest.length === 0) {
+    const v = allFreshest[0] as (typeof views)[0];
+    const pub = Math.min(...v.run.map((k) => toMillis(k.claim.published_at)));
+    return VerifiedFact.parse({
+      entity_id: entityId,
+      field,
+      value: v.current.claim.value,
+      confidence: 0,
+      supporting_claims: v.run.map((k) => k.claim.claim_id),
+      conflicting_claims: [],
+      lane: combineLanes(v.run.map((k) => k.claim.lane)),
+      valid_from: iso(pub),
+      first_observed_at: iso(Math.min(...v.run.map((k) => toMillis(k.claim.observed_at)))),
+      last_verified_at: iso(Math.max(pub, v.lastObs)),
+      expires_at: null,
+      status: "quarantined",
+    });
+  }
 
   // Cluster agreeing views across sources, then score each cluster by independent reliability.
   const clusters: (typeof views)[] = [];
@@ -116,10 +138,15 @@ export function buildFactAt(
   const ranked = clusters
     .map((c) => ({ c, s: score(c) }))
     .sort((a, b) => b.s - a.s || newest(b.c) - newest(a.c));
+  // Archie's own verification (source "human") settles the question: his cluster wins outright.
+  const humanIdx = ranked.findIndex((r) => r.c.some((v) => v.current.claim.source === "human"));
+  if (humanIdx > 0) ranked.unshift(...ranked.splice(humanIdx, 1));
   const winner = ranked[0] as { c: typeof views; s: number };
   const runnerUp = ranked[1];
   const isConflict =
-    runnerUp !== undefined && winner.s - runnerUp.s < ctx.verification.triangulation.clear_margin;
+    humanIdx < 0 &&
+    runnerUp !== undefined &&
+    winner.s - runnerUp.s < ctx.verification.triangulation.clear_margin;
 
   const supporting = winner.c.flatMap((v) => v.run);
   const conflictingViews = ranked.slice(1).flatMap((r) => r.c);
