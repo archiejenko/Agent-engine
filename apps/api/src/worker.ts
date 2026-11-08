@@ -1,5 +1,6 @@
 import { loadCompaniesHouseConfig, loadInfraConfig } from "@ae/config";
 import { externalActionsAllowed } from "@ae/infra";
+import { guardedPayments, StripeCheckout } from "@ae/ports";
 import { guardedFacilitator, liveRefresh } from "@ae/products";
 import { HttpX402Facilitator } from "@ae/products/x402-real";
 import { createD1Storage } from "@ae/storage";
@@ -9,7 +10,8 @@ import { createApp } from "./app.ts";
 
 // Composition root for Cloudflare. Bindings and vars are declared in wrangler.jsonc; secrets
 // (CH_API_KEY) are Worker secrets. x402 switches on only when a REAL facilitator URL and a pay-to
-// wallet are configured, and payments are refused while the kill switch is on.
+// wallet are configured, and payments are refused while the kill switch is on. Card payments switch on
+// only when STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET (Worker secrets) and PUBLIC_BASE_URL are set.
 let x402App: ReturnType<typeof createApp> | null = null;
 let plainApp: ReturnType<typeof createApp> | null = null;
 
@@ -20,6 +22,21 @@ function build(env: Env) {
     teamDomain: env.ACCESS_TEAM_DOMAIN,
     policyAud: env.ACCESS_POLICY_AUD,
   });
+  const payments =
+    vars.STRIPE_SECRET_KEY && vars.STRIPE_WEBHOOK_SECRET && vars.PUBLIC_BASE_URL
+      ? {
+          // No checkout while the product can't be delivered (kill switch on).
+          provider: guardedPayments(new StripeCheckout(vars.STRIPE_SECRET_KEY), (product) =>
+            externalActionsAllowed(
+              storage,
+              loadInfraConfig(),
+              product === "human_report" ? "human_report" : "monitoring_subscription",
+            ),
+          ),
+          webhookSecret: vars.STRIPE_WEBHOOK_SECRET,
+          publicBaseUrl: vars.PUBLIC_BASE_URL,
+        }
+      : undefined;
   const facilitatorUrl = vars.X402_FACILITATOR_URL;
   const payTo = vars.X402_PAY_TO;
   if (!facilitatorUrl || !payTo) {
@@ -27,6 +44,7 @@ function build(env: Env) {
       runtime: "worker",
       storage: (e) => createD1Storage((e as Env).DB),
       auth,
+      ...(payments ? { payments } : {}),
     });
     return plainApp;
   }
@@ -36,6 +54,7 @@ function build(env: Env) {
     runtime: "worker",
     storage: (e) => createD1Storage((e as Env).DB),
     auth,
+    ...(payments ? { payments } : {}),
     x402: {
       facilitator: guardedFacilitator(new HttpX402Facilitator(facilitatorUrl), () =>
         externalActionsAllowed(storage, infra, "x402_check"),

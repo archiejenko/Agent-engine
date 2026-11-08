@@ -2,6 +2,8 @@
 
 Read `CLAUDE.md`, then this file, then `docs/live-cutover.md`.
 
+**Status:** keyless build of Phases 0–5 COMPLETE. Next: live cutover (`docs/live-cutover.md`), led by Archie.
+
 **Mode:** keyless build of Phases 2–5 (approved 2026-11-08). No gate stops; synthetic gate report per
 phase; commit + push per phase with CI green. Branch: `claude/nifty-curie-91l1nq`.
 
@@ -13,7 +15,7 @@ phase; commit + push per phase with CI green. Branch: `claude/nifty-curie-91l1nq
 | 2 Lead gen to drafts | built; synthetic gate passed (`docs/gates/phase2.md`); live pending |
 | 3 Measurement | built; synthetic gate passed (`docs/gates/phase3.md`); live pending |
 | 4 x402 check | built; synthetic gate passed (`docs/gates/phase4.md`); live pending |
-| 5 Alerts, human check, autonomy | next |
+| 5 Alerts, human check, autonomy | built; synthetic gate passed (`docs/gates/phase5.md`); live pending |
 
 ## Log
 - 2026-11-08: period-dated facts (no decay), header-driven rate limiter, Phases 2–5 plan written.
@@ -21,3 +23,4 @@ phase; commit + push per phase with CI green. Branch: `claude/nifty-curie-91l1nq
 - 2026-11-08: Phase 2 complete — signals, framework note, module runner, explanations, review queue (API + dashboard), tasks/tool registry/controls/runner, sme_outreach L0, agent runner service, real web adapters; gate passed on synthetic data.
 - 2026-11-08: Phase 3 complete — golden set + accuracy/calibration, drift monitoring with source pause, human override, outcomes API, backtester with look-ahead guard, pilot→live promotion, weight suggestions (accept/reject), digests + margin report, nightly re-verification, Metrics + Golden dashboard pages; gate passed on synthetic data.
 - 2026-11-08: Phase 4 complete — company check product (open lane only, per-field confidence, risk flags), x402 v2 gate (verify → work → settle), fake + real facilitators, premium live re-check, request log + payments ledger, x402_discovery module, blind verifier with adaptive sampling, Streaming API consumer (fake + real); gate passed on synthetic data.
+- 2026-11-08: Phase 5 complete — watches + change alerts (webhook/email, idempotent), human report via Stripe Checkout (webhook signature check, idempotent), sme_outreach at L1 with send under guardrails (role address on own domain, company-type rule, suppression list incl. domain, sender identity + opt-out, follow-ups), inbox processing (replies stop follow-ups, opt-outs suppress), autonomy stats/suggestions + demotion on breach, Controls dashboard page, bundled playbooks for the Worker, Stripe wired in the Worker behind secrets + kill switch; gate passed on synthetic data.

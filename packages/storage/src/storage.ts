@@ -2,6 +2,7 @@ import type { Claim, VerifiedFact, VerifiedFactVersion } from "@ae/contracts";
 import type { Phase2Storage } from "./phase2.ts";
 import type { Phase3Storage } from "./phase3.ts";
 import type { Phase4Storage } from "./phase4.ts";
+import type { Phase5Storage } from "./phase5.ts";
 
 export type RunStatus = "running" | "succeeded" | "failed" | "rolled_back";
 
@@ -60,7 +61,7 @@ export interface FactListQuery {
  * The Storage interface. Engines, apps and scripts talk to this, never to a database.
  * Every value is validated against its contract on the way in and on the way out.
  */
-export interface Storage extends Phase2Storage, Phase3Storage, Phase4Storage {
+export interface Storage extends Phase2Storage, Phase3Storage, Phase4Storage, Phase5Storage {
   runs: {
     start(input: { kind: string; config_versions?: Record<string, string> }): Promise<Run>;
     finish(runId: string, status: Exclude<RunStatus, "running">): Promise<void>;

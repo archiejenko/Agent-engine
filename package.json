@@ -30,7 +30,9 @@
     "digests": "tsx scripts/digests.ts",
     "nightly": "tsx scripts/nightly.ts",
     "gate:phase3": "tsx scripts/gate-phase3.ts",
-    "gate:phase4": "tsx scripts/gate-phase4.ts"
+    "gate:phase4": "tsx scripts/gate-phase4.ts",
+    "gen:playbooks": "tsx scripts/gen-playbooks.ts",
+    "gate:phase5": "tsx scripts/gate-phase5.ts"
   },
   "devDependencies": {
     "@ae/storage": "workspace:*",

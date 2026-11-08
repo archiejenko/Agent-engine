@@ -4,12 +4,21 @@ import {
   loadProductsConfig,
   loadUniverseConfig,
 } from "@ae/config";
-import type { Claim } from "@ae/contracts";
+import type { Autonomy, Claim } from "@ae/contracts";
+import { K, loadBundledPlaybooks, playbookStats, promotePlaybook, setKillSwitch } from "@ae/infra";
 import { reviewQueue } from "@ae/opportunity";
+import {
+  InMemoryQueue,
+  type PaymentProvider,
+  PaymentsPausedError,
+  verifyStripeWebhook,
+  WebhookSignatureError,
+} from "@ae/ports";
 import {
   b64,
   companyCheck,
   HEADERS,
+  handleCheckoutCompleted,
   matchesRequirements,
   type PaymentPayload,
   requirementsFor,
@@ -43,6 +52,8 @@ export interface AppDeps {
     /** Premium tier: re-verify the company live before answering. Returns false if it couldn't. */
     refresh?: (companyNumber: string) => Promise<boolean>;
   };
+  /** Card payments for the human report and monitoring. Public endpoints; absent = disabled. */
+  payments?: { provider: PaymentProvider; webhookSecret: string; publicBaseUrl: string };
 }
 
 const Decision = z.object({ decision: z.enum(["approve", "reject"]) });
@@ -428,6 +439,146 @@ export function createApp(deps: AppDeps) {
       cost: cfg.cost_per_call_gbp[tier] + cfg.facilitator_fee_gbp,
     });
     return c.json(result, 200, { [HEADERS.response]: b64(settled) });
+  });
+
+  // ---- Phase 5: card payments (public), controls and autonomy (dashboard, behind Access).
+  const CheckoutBody = z.object({
+    product: z.enum(["human_report", "monitoring_monthly"]),
+    company_number: z
+      .string()
+      .regex(/^[A-Z0-9]{8}$/i)
+      .optional(),
+    company_numbers: z
+      .array(z.string().regex(/^[A-Z0-9]{8}$/i))
+      .max(50)
+      .optional(),
+    email: z.email().optional(),
+    webhook_url: z.url().optional(),
+  });
+
+  app.post("/public/checkout", async (c) => {
+    if (!deps.payments) return c.json({ error: "payments_disabled" }, 404);
+    const b = CheckoutBody.safeParse(await c.req.json().catch(() => null));
+    if (!b.success) return c.json({ error: "bad_request", issues: b.error.issues }, 400);
+    const prices = loadProductsConfig();
+    const human = b.data.product === "human_report";
+    if (human && !b.data.company_number) return c.json({ error: "company_number required" }, 400);
+    if (!human && !b.data.company_numbers?.length)
+      return c.json({ error: "company_numbers required" }, 400);
+    let session: { id: string; url: string };
+    try {
+      session = await deps.payments.provider.createCheckout({
+        product: b.data.product,
+        amount_gbp: human ? prices.human_check.price_gbp : prices.monitoring.monthly_gbp,
+        description: human
+          ? `UK company check: ${b.data.company_number?.toUpperCase()}`
+          : `Company monitoring (${b.data.company_numbers?.length} companies, 1 month)`,
+        success_url: `${deps.payments.publicBaseUrl}/thanks`,
+        cancel_url: `${deps.payments.publicBaseUrl}/`,
+        ...(b.data.email ? { customer_email: b.data.email } : {}),
+        metadata: {
+          ...(b.data.company_number ? { company_number: b.data.company_number.toUpperCase() } : {}),
+          ...(b.data.company_numbers
+            ? { company_numbers: b.data.company_numbers.map((x) => x.toUpperCase()).join(",") }
+            : {}),
+          ...(b.data.webhook_url ? { webhook_url: b.data.webhook_url } : {}),
+        },
+      });
+    } catch (e) {
+      if (e instanceof PaymentsPausedError) return c.json({ error: "service_paused" }, 503);
+      throw e;
+    }
+    return c.json({ checkout_url: session.url, session_id: session.id });
+  });
+
+  app.post("/webhooks/stripe", async (c) => {
+    if (!deps.payments) return c.json({ error: "payments_disabled" }, 404);
+    const raw = await c.req.text();
+    try {
+      const ev = await verifyStripeWebhook(
+        raw,
+        c.req.header("stripe-signature") ?? null,
+        deps.payments.webhookSecret,
+      );
+      if (!ev) return c.json({ received: true, ignored: true });
+      const r = await handleCheckoutCompleted(
+        deps.storage(c.env),
+        loadInfraConfig(),
+        loadProductsConfig(),
+        await loadBundledPlaybooks(),
+        new InMemoryQueue(),
+        ev,
+      );
+      return c.json({ received: true, ...r });
+    } catch (e) {
+      if (e instanceof WebhookSignatureError) return c.json({ error: "bad_signature" }, 400);
+      throw e;
+    }
+  });
+
+  app.get("/api/controls", async (c) => {
+    const s = deps.storage(c.env);
+    const infra = loadInfraConfig();
+    const playbooks = await loadBundledPlaybooks();
+    const stats = [];
+    for (const [name, pb] of playbooks) {
+      stats.push({
+        ...(await playbookStats(s, name, infra)),
+        autonomy: (await s.controls.get<Autonomy>(K.autonomy(name))) ?? pb.spec.autonomy,
+        killed: (await s.controls.get<boolean>(K.playbook(name))) ?? false,
+      });
+    }
+    return c.json({
+      kill_global: (await s.controls.get<boolean>(K.global)) ?? infra.kill_switch_default_on,
+      queue_paused: (await s.controls.get<boolean>(K.queuePaused)) ?? false,
+      caps: infra.caps,
+      playbooks: stats,
+      alerts: await s.alerts.list({ unacknowledged: true, limit: 50 }),
+      outbox: await s.outbox.list(20),
+    });
+  });
+
+  app.post("/api/controls/kill", async (c) => {
+    const b = z
+      .object({
+        scope: z.union([z.literal("global"), z.object({ playbook: z.string().min(1) })]),
+        on: z.boolean(),
+      })
+      .safeParse(await c.req.json().catch(() => null));
+    if (!b.success) return c.json({ error: "bad_request" }, 400);
+    await setKillSwitch(deps.storage(c.env), b.data.scope, b.data.on, "archie (dashboard)");
+    return c.json({ ok: true });
+  });
+
+  app.post("/api/controls/queue", async (c) => {
+    const b = z.object({ paused: z.boolean() }).safeParse(await c.req.json().catch(() => null));
+    if (!b.success) return c.json({ error: "bad_request" }, 400);
+    await deps.storage(c.env).controls.set(K.queuePaused, b.data.paused, "archie (dashboard)");
+    return c.json({ ok: true });
+  });
+
+  app.post("/api/playbooks/:name/promote", async (c) => {
+    const pb = (await loadBundledPlaybooks()).get(c.req.param("name"));
+    if (!pb) return c.json({ error: "not_found" }, 404);
+    try {
+      return c.json({
+        ok: true,
+        autonomy: await promotePlaybook(
+          deps.storage(c.env),
+          pb.spec.playbook,
+          pb.spec.autonomy,
+          loadInfraConfig(),
+          "archie (dashboard)",
+        ),
+      });
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, 409);
+    }
+  });
+
+  app.post("/api/alerts/:id/ack", async (c) => {
+    await deps.storage(c.env).alerts.acknowledge(Number(c.req.param("id")));
+    return c.json({ ok: true });
   });
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));

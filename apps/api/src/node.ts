@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { AgentService, loadPlaybooks } from "@ae/agent-runner";
+import { FakeStripe } from "@ae/ports";
 import { FakeFacilitator } from "@ae/products";
 import { openSqliteStorage } from "@ae/storage/sqlite";
 import { serve } from "@hono/node-server";
@@ -22,6 +23,12 @@ const app = createApp({
   storage: () => storage,
   decide: (taskId, decision, editedText) => service.decide(taskId, decision, editedText),
   // Locally x402 uses the FAKE facilitator (no money moves; localhost only).
+  // Locally card payments use FAKE Stripe (no money moves).
+  payments: {
+    provider: new FakeStripe("whsec_local"),
+    webhookSecret: "whsec_local",
+    publicBaseUrl: `http://127.0.0.1:${port}`,
+  },
   x402: {
     facilitator: new FakeFacilitator(),
     payTo: process.env.X402_PAY_TO ?? "0x0000000000000000000000000000000000000001",

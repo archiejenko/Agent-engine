@@ -19,3 +19,14 @@ export async function parsePlaybook(skillMd: string): Promise<LoadedPlaybook> {
     hash: [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, "0")).join(""),
   };
 }
+
+/** All playbooks from the generated bundle (works in a Worker; no filesystem needed). */
+export async function loadBundledPlaybooks(): Promise<Map<string, LoadedPlaybook>> {
+  const { BUNDLED_PLAYBOOKS } = await import("./playbooks.generated.ts");
+  const out = new Map<string, LoadedPlaybook>();
+  for (const text of Object.values(BUNDLED_PLAYBOOKS)) {
+    const pb = await parsePlaybook(text);
+    out.set(pb.spec.playbook, pb);
+  }
+  return out;
+}

@@ -20,7 +20,7 @@ describe("GET /api/health", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.status).toBe("ok");
-    expect(body.storage).toEqual({ ok: true, migrations: 5 });
+    expect(body.storage).toEqual({ ok: true, migrations: 6 });
   });
 
   it("returns 503 when storage is unhealthy", async () => {

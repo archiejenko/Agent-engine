@@ -20,6 +20,13 @@ export interface CompanyBrief {
   entity_id: string;
   company_name: string;
   facts: BriefFact[];
+  /** Who we'd write to (not a claim): role-based website address, company type, website domain. */
+  contact: {
+    email: string | null;
+    company_type: string | null;
+    domain: string | null;
+    source: "company_website";
+  };
 }
 
 export interface EmailDraft {
@@ -39,6 +46,8 @@ export const BRIEF_FIELDS = [
   "job_postings",
   "officer_appointments",
   "employees_average",
+  "contact_email",
+  "company_type",
 ];
 
 const fid = (f: VerifiedFact) => `${f.entity_id}/${f.field}/${f.valid_from}`;
@@ -99,17 +108,31 @@ export function statementFor(
   }
 }
 
+/** Facts the email may state must be at least this confident. Routing fields (contact) only need to be verified. */
+export const STATEMENT_MIN_CONFIDENCE = 0.5;
+
 export function buildBrief(entityId: string, facts: VerifiedFact[], asOf: Date): CompanyBrief {
   const name = facts.find((f) => f.field === "company_name")?.value;
   const out: BriefFact[] = [];
   for (const f of facts) {
+    if (f.confidence < STATEMENT_MIN_CONFIDENCE) continue;
     const s = statementFor(f, asOf);
     if (s) out.push({ fact_id: fid(f), field: f.field, ...s, confidence: f.confidence });
   }
+  const str = (field: string) => {
+    const v = facts.find((f) => f.field === field)?.value;
+    return typeof v === "string" ? v : null;
+  };
   return {
     entity_id: entityId,
     company_name: typeof name === "string" ? name : entityId,
     facts: out,
+    contact: {
+      email: str("contact_email"),
+      company_type: str("company_type"),
+      domain: str("website_url"),
+      source: "company_website",
+    },
   };
 }
 
@@ -158,7 +181,7 @@ export const SME_OUTREACH: PlaybookImpl = {
       const r = await ctx.tools.call("verified_facts", {
         entities: [entityId],
         fields: BRIEF_FIELDS,
-        minConfidence: 0.5,
+        minConfidence: 0, // statements are filtered to ≥ 0.5 in buildBrief; contact needs only verified
       });
       const brief = buildBrief(entityId, r.result as VerifiedFact[], new Date());
       return { output: brief };
@@ -174,6 +197,12 @@ export const SME_OUTREACH: PlaybookImpl = {
         user: JSON.stringify({
           brief,
           examples_of_archies_edits: ctx.examples,
+          ...((ctx.task.state as { followup?: { attempt: number } }).followup
+            ? {
+                followup_attempt: (ctx.task.state as { followup: { attempt: number } }).followup
+                  .attempt,
+              }
+            : {}),
           ...(ctx.retryReason ? { previous_attempt_failed_because: ctx.retryReason } : {}),
         }),
         max_tokens: 1000,
@@ -195,7 +224,7 @@ export const SME_OUTREACH: PlaybookImpl = {
       const r = await ctx.tools.call("verified_facts", {
         entities: [brief.entity_id],
         fields: BRIEF_FIELDS,
-        minConfidence: 0.5,
+        minConfidence: 0, // statements are filtered to ≥ 0.5 in buildBrief; contact needs only verified
       });
       const current = buildBrief(brief.entity_id, r.result as VerifiedFact[], new Date());
       const reasons = checkDraft(draft, current);
@@ -203,6 +232,25 @@ export const SME_OUTREACH: PlaybookImpl = {
         output: { passed: reasons.length === 0, reasons },
         check: { passed: reasons.length === 0, reasons },
       };
+    }) satisfies RoleImpl,
+    send: (async (ctx) => {
+      const brief = ctx.inputs.company_brief as CompanyBrief;
+      const draft = ctx.inputs.email_draft as EmailDraft;
+      const followup = (ctx.task.state as { followup?: { thread_id: string; attempt: number } })
+        .followup;
+      const opp = ctx.task.source_ref.match(/^opportunity:([^:]+)/)?.[1];
+      const r = await ctx.tools.call("send_email", {
+        thread_id: followup?.thread_id ?? (opp ? `opportunity:${opp}` : `task:${ctx.task.task_id}`),
+        attempt: followup?.attempt ?? 1,
+        entity_id: brief.entity_id,
+        recipients: brief.contact.email ? [brief.contact.email] : [],
+        contact_source: brief.contact.source,
+        company_type: brief.contact.company_type,
+        company_domain: brief.contact.domain,
+        subject: draft.subject,
+        body: draft.body,
+      });
+      return { output: r.result };
     }) satisfies RoleImpl,
   },
   gateItem: (s: TaskState) => s.outputs.email_draft,
@@ -214,11 +262,16 @@ export const SME_OUTREACH: PlaybookImpl = {
 
 /** Deterministic fake writer: uses up to three brief statements verbatim. */
 export function fakeOutreachWriter(req: ModelRequest): string {
-  const { brief } = JSON.parse(req.user) as { brief: CompanyBrief };
-  const picked = brief.facts.slice(0, 3);
+  const { brief, followup_attempt } = JSON.parse(req.user) as {
+    brief: CompanyBrief;
+    followup_attempt?: number;
+  };
+  const picked = brief.facts.slice(0, followup_attempt ? 1 : 3);
   const name = brief.company_name.replace(/ LIMITED$| LTD$/i, "");
   const sentences = picked.map((f) => `I noticed that ${name} ${f.statement}.`);
-  const body = `Hi there,\n\n${sentences.join(" ")} I help Manchester businesses with fast, modern websites that bring in enquiries. Would a short call next week be useful?`;
+  const body = followup_attempt
+    ? `Hi again,\n\nJust following up on my note. ${sentences.join(" ")} Happy to share a few ideas if useful.`
+    : `Hi there,\n\n${sentences.join(" ")} I help Manchester businesses with fast, modern websites that bring in enquiries. Would a short call next week be useful?`;
   return JSON.stringify({
     subject: `A quick idea for ${name}`,
     body,

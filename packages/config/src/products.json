@@ -6,8 +6,14 @@
     "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
     "asset_decimals": 6,
     "max_timeout_seconds": 60,
-    "prices_usd": { "cached": 0.05, "premium": 0.25 },
-    "cost_per_call_gbp": { "cached": 0.0002, "premium": 0.001 },
+    "prices_usd": {
+      "cached": 0.05,
+      "premium": 0.25
+    },
+    "cost_per_call_gbp": {
+      "cached": 0.0002,
+      "premium": 0.001
+    },
     "facilitator_fee_gbp": 0
   },
   "blind_verifier": {
@@ -16,5 +22,12 @@
     "max_rate": 0.5,
     "window": 200,
     "sensitivity": 10
+  },
+  "monitoring": {
+    "monthly_gbp": 19,
+    "per_alert_gbp": 0.5
+  },
+  "human_check": {
+    "price_gbp": 9
   }
 }

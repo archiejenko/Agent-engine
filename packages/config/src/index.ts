@@ -169,6 +169,27 @@ export const InfraConfig = z.object({
   priority_by_revenue_path: z.record(z.string(), z.enum(["customer", "outreach", "internal"])),
   /** Which playbook an approved opportunity from each module runs. */
   playbook_for_module: z.record(z.string(), z.string()),
+  outreach: z.object({
+    followup_days: z.number().int().positive(),
+    corporate_company_types: z.array(z.string()).min(1),
+    opt_out_phrases: z.array(z.string()).min(1),
+    contact_policy: z.record(
+      z.string(),
+      z.object({
+        max_recipients_per_send: z.number().int().positive(),
+        max_attempts_without_reply: z.number().int().positive(),
+        min_days_between: z.number().min(0),
+      }),
+    ),
+  }),
+  autonomy: z.object({
+    window: z.number().int().positive(),
+    min_tasks: z.number().int().positive(),
+    min_success: z.number().min(0).max(1),
+    min_no_edit: z.number().min(0).max(1),
+    max_breaches: z.number().int().min(0),
+    l2_review_sample: z.number().min(0).max(1),
+  }),
   /** Modules start in pilot (limited weekly volume) and go live only with backtest lift ≥ min_live_lift. */
   modules: z.object({
     pilot_weekly_limit: z.number().int().positive(),
@@ -202,6 +223,11 @@ export const ProductsConfig = z.object({
     cost_per_call_gbp: z.object({ cached: z.number().min(0), premium: z.number().min(0) }),
     facilitator_fee_gbp: z.number().min(0),
   }),
+  monitoring: z.object({
+    monthly_gbp: z.number().positive(),
+    per_alert_gbp: z.number().positive(),
+  }),
+  human_check: z.object({ price_gbp: z.number().positive() }),
   blind_verifier: z.object({
     base_rate: z.number().gt(0).max(1),
     min_rate: z.number().gt(0).max(1),

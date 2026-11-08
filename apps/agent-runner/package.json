@@ -14,7 +14,8 @@
     "@ae/opportunity": "workspace:*",
     "@ae/ports": "workspace:*",
     "@ae/storage": "workspace:*",
-    "@ae/verification": "workspace:*"
+    "@ae/verification": "workspace:*",
+    "@ae/products": "workspace:*"
   },
   "exports": {
     ".": "./src/index.ts"

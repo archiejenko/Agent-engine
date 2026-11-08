@@ -2,6 +2,41 @@
 
 Newest first. Each entry: what we decided, why, and who approved it.
 
+## 2026-11-08 — Phase 5 decisions (review at the end)
+
+- **⚠ Prices (yours to set): monitoring £19/month per customer (+ £0.50 cost budget per alert), human
+  company check £9** (`products.json`).
+- **⚠ Monitoring is a one-month Stripe Checkout payment in v1, and watches don't expire yet.** Real
+  recurring billing should use Stripe Subscriptions (`mode=subscription`, then `invoice.paid` /
+  `customer.subscription.deleted` to keep or switch off watches). Not built on guessed event shapes —
+  it's on the live-cutover list. Alternative: build it now against the documented API.
+- **Outreach starts at L1** (each email approved by you, then sent). `human_report`, `watch_alert` and
+  `monitoring_subscription` run at **L3** (automatic) because they deliver something a customer has
+  already paid for; they still obey the kill switch, spend caps and lanes.
+- **Autonomy is earned, never automatic**: the Controls page shows each playbook's last 50 tasks
+  (≥ 20 needed; success ≥ 90%, approved without edits ≥ 80%, zero breaches) and only *suggests*
+  promotion; you click it. Any guardrail breach demotes the playbook one level immediately.
+- **Who we email**: only a role-based address (info@, hello@, enquiries@, contact@, sales@, office@)
+  found on the company's own website, on the company's own domain, for limited companies / LLPs /
+  PLCs only (sole traders and partnerships need prior consent → blocked). The contact address is used
+  at any verified confidence (it's routing, not a claim); statements in the email still need ≥ 0.5.
+  Alternative: require ≥ 0.5 for the address too (fewer, safer sends).
+- **Follow-ups**: up to two follow-ups, 5 days apart, if there's no reply (max 3 emails per company
+  without a reply, 1 recipient per send), each needing its own approval at L1. Any reply stops follow-ups; an opt-out reply ("no thanks", "remove me", …) adds the address
+  *and* its domain to the global suppression list.
+- **The paid report email is transactional** (the customer asked for it), so outreach rules
+  (suppression, company-type) don't apply to it; the kill switch still does.
+- **Stripe webhooks are idempotent on the event id and the Checkout Session id** (Stripe retries).
+- **No card checkout while delivery is switched off**: on Cloudflare, checkout returns 503
+  `service_paused` while the kill switch is on for that product, so nobody pays for something we
+  can't deliver. Locally (fake Stripe) checkout always works.
+- **Playbooks are bundled into the Worker** (`pnpm gen:playbooks` → `playbooks.generated.ts`, a test
+  fails if it's stale) because Workers can't read files.
+- **Phase 5 gate picks reachable leads**: the top-scoring leads are often companies with *no*
+  website (the strongest need), which correctly can't be emailed. The gate approves the top leads
+  with a verified contact address plus one without, to show the "no recipient" block. For live use
+  this means: **no-website leads need another channel (phone/post) — consider a separate playbook.**
+
 ## 2026-11-08 — Phase 4 decisions (review at the end)
 
 - **⚠ Launch prices (yours to set): $0.05 cached, $0.25 premium** in USDC (`products.json`). Picked as

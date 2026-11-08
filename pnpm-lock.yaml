@@ -74,6 +74,9 @@ importers:
       '@ae/ports':
         specifier: workspace:*
         version: link:../../packages/ports
+      '@ae/products':
+        specifier: workspace:*
+        version: link:../../packages/products
       '@ae/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -226,6 +229,9 @@ importers:
       '@ae/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@ae/infra':
+        specifier: workspace:*
+        version: link:../infra
       '@ae/ports':
         specifier: workspace:*
         version: link:../ports

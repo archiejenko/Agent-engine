@@ -12,7 +12,7 @@
     "directory": "../dashboard/dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/x402/*"]
+    "run_worker_first": ["/api/*", "/x402/*", "/public/*", "/webhooks/*"]
   },
   "d1_databases": [
     {

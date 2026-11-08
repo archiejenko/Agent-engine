@@ -67,21 +67,35 @@ export class ToolRegistry {
     return this.tools.get(name)?.reg ?? null;
   }
 
+  /** Called on a guardrail breach (a call outside the rules), before the call is refused. */
+  onBreach:
+    | ((d: { playbook: string; task_id: string; tool: string; reason: string }) => Promise<void>)
+    | null = null;
+
   async call(name: string, args: unknown, ctx: ToolContext): Promise<ToolResult> {
     const t = this.tools.get(name);
-    const block = (reason: string): never => {
+    const refuse = async (reason: string, breach: boolean): Promise<never> => {
       this.calls.push({ tool: name, args, result: null, blocked: true, error: reason });
+      if (breach && this.onBreach)
+        await this.onBreach({
+          playbook: ctx.task.playbook,
+          task_id: ctx.task.task_id,
+          tool: name,
+          reason,
+        });
       throw new ToolBlockedError(name, reason);
     };
-    if (!t) return block("not registered");
+    if (!t) return refuse("not registered", true);
     const { reg } = t;
-    if (!ctx.step_tools.includes(name)) block("not listed for this playbook step");
-    if (!reg.allowed_roles.includes(ctx.role)) block(`role ${ctx.role} may not call it`);
-    if (!reg.allowed_lanes.includes(ctx.task.lane)) block(`lane ${ctx.task.lane} not allowed`);
+    if (!ctx.step_tools.includes(name)) await refuse("not listed for this playbook step", true);
+    if (!reg.allowed_roles.includes(ctx.role))
+      await refuse(`role ${ctx.role} may not call it`, true);
+    if (!reg.allowed_lanes.includes(ctx.task.lane))
+      await refuse(`lane ${ctx.task.lane} not allowed`, true);
     if (ctx.task.lane === "licensed" && (reg.external || reg.serves_customer))
-      block("licensed tasks can't act externally or serve customers");
+      await refuse("licensed tasks can't act externally or serve customers", true);
     const window = (this.recent.get(name) ?? []).filter((x) => this.now() - x < 60_000);
-    if (window.length >= reg.rate_limit_per_min) block("rate limit");
+    if (window.length >= reg.rate_limit_per_min) await refuse("rate limit", false);
     window.push(this.now());
     this.recent.set(name, window);
 

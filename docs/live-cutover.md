@@ -19,6 +19,13 @@ needed to go live, in order. Tick items as you go. **Nothing external happens un
 | 10 | DNS: `check.oast-ai.com` (or similar) routed to the Worker for `/x402/*`, WITHOUT Access | Cloudflare | 4 | free |
 | 11 | Companies House Streaming API key (separate from the REST key) | runner secret `CH_STREAM_KEY` | 4 | free |
 | 12 | Set your real launch prices | `packages/config/src/products.json` | 4 | — |
+| 13 | Stripe account (live + test mode); test-mode secret key first | Worker secret `STRIPE_SECRET_KEY` | 5 | per payment |
+| 14 | Stripe webhook endpoint `https://<public host>/webhooks/stripe` for `checkout.session.completed`; copy its signing secret | Worker secret `STRIPE_WEBHOOK_SECRET`; var `PUBLIC_BASE_URL` | 5 | free |
+| 15 | A sending domain you own (e.g. mail.ejtech.co.uk) with SPF, DKIM and DMARC set | DNS | 5 | domain |
+| 16 | An email provider account + API key (e.g. Postmark/SES/Resend) — needs a real `EmailSender` adapter (≈1 hour) | runner secret | 5 | usage |
+| 17 | Inbox access for replies (provider inbound webhook or IMAP) — needs a real `Inbox` adapter | runner secret | 5 | usage |
+| 18 | Your real sender details: from address, company name, postal address | `infra.json` → `sender` | 5 | — |
+| 19 | Your monitoring and report prices | `products.json` → `monitoring`, `human_check` | 5 | — |
 
 ## B. Assumptions to verify against live docs
 
@@ -36,6 +43,12 @@ needed to go live, in order. Tick items as you go. **Nothing external happens un
 - [ ] Facilitator API: does `HTTPFacilitatorClient` need auth headers for your facilitator? (`packages/products/src/x402-real.ts`)
 - [ ] Consider `@x402/hono` middleware vs our gate (see decisions)
 - [ ] Streaming API: host, paths, auth, event JSON shape and `timepoint` resume (`packages/verification/src/sources/companies-house/stream.ts`)
+
+### Phase 5 — Stripe and email
+- [ ] Stripe Checkout Session params (`packages/ports/src/payments.ts` `StripeCheckout`) and the `checkout.session.completed` event shape (`verifyStripeWebhook`); signature scheme `t=…,v1=…` with 5-minute tolerance
+- [ ] Build monitoring renewals on Stripe Subscriptions (`mode=subscription`, `invoice.paid`, `customer.subscription.deleted`) — v1 watches never expire (see decisions)
+- [ ] UK outreach rules (PECR/GDPR, ICO guidance on B2B email to corporate subscribers) — confirm the company-type rule and opt-out wording with current ICO guidance
+- [ ] Email provider API + inbound reply format for the real `EmailSender` / `Inbox` adapters
 
 ## C. Prompts to test on the real model
 Run each against ~20 real companies; check outputs by hand before relying on them.
@@ -62,3 +75,9 @@ Run each against ~20 real companies; check outputs by hand before relying on the
 - [ ] Measure median latency (cached, premium) from `x402_requests` and margin per call
 - [ ] Switch to mainnet (`network` + `asset` in `products.json`) only after the testnet run
 - [ ] Start the stream consumer in the runner with `CH_STREAM_KEY`; check re-verification requests appear
+### Phase 5
+- [ ] Stripe test mode: buy a £9 report with a test card; check one `human_report` task, the report email in the outbox, and that replaying the webhook creates no second task
+- [ ] Buy monitoring for 5 companies (test mode); trigger a change (or wait for one); check one alert is delivered
+- [ ] Send your first 5 real outreach emails: turn the global kill switch off, approve each by hand, check each arrives with sender details + opt-out, reply "no thanks" from a test inbox and confirm suppression
+- [ ] Zero guardrail breaches over the first 50 tasks (Controls page); only then consider L2
+- [ ] Switch Stripe to live mode

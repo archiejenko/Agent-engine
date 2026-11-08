@@ -2,12 +2,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadInfraConfig, loadModelsConfig } from "@ae/config";
 import type { Claim } from "@ae/contracts";
-import { FakeModel, FakeWebFetcher, InMemoryQueue } from "@ae/ports";
+import { FakeEmailSender, FakeInbox, FakeModel, FakeWebFetcher, InMemoryQueue } from "@ae/ports";
 import type { Storage } from "@ae/storage";
 import { openSqliteStorage } from "@ae/storage/sqlite";
 import { defaultContext, ingestClaims, stableUuid } from "@ae/verification";
 import { beforeEach, describe, expect, it } from "vitest";
+import { playbookStats, promotePlaybook, recordBreach } from "../autonomy.ts";
 import { externalActionsAllowed, K, SpendCapError, setKillSwitch } from "../controls.ts";
+import { checkSend, composeEmail, processInbox, registerOutreachTools } from "../outreach.ts";
 import { type LoadedPlaybook, parsePlaybook } from "../playbook.ts";
 import {
   type CompanyBrief,
@@ -80,6 +82,7 @@ beforeEach(async () => {
   playbooks = new Map([["sme_outreach", await parsePlaybook(SKILL)]]);
   queue = new InMemoryQueue();
   tools = new ToolRegistry(storage, infra);
+  registerOutreachTools(tools, { storage, cfg: infra, email: new FakeEmailSender() });
   registerStandardTools(tools, {
     storage,
     ctx,
@@ -108,7 +111,7 @@ describe("task intake and routing", () => {
     expect(b.created).toBe(false);
     expect(b.task.task_id).toBe(a.task.task_id);
     expect(a.task).toMatchObject({
-      autonomy: "L0",
+      autonomy: "L1",
       budget_gbp: 0.4,
       priority: "outreach",
       status: "queued",
@@ -307,6 +310,7 @@ describe("sme_outreach at L0", () => {
           confidence: 0.95,
         },
       ],
+      contact: { email: null, company_type: null, domain: null, source: "company_website" },
     };
     expect(
       checkDraft(
@@ -436,5 +440,175 @@ done_when: done
     });
     expect(await runner.timeoutStuck()).toBe(1);
     expect((await storage.tasks.get(task.task_id))?.error).toMatch(/timed out/);
+  });
+});
+
+describe("Phase 5: sending under guardrails, follow-ups, replies, autonomy", () => {
+  async function seedContact(o: { email?: string; type?: string; domain?: string } = {}) {
+    const ctx = defaultContext();
+    const run = (await storage.runs.start({ kind: "contact" })).run_id;
+    const now = new Date().toISOString();
+    const c = async (
+      field: string,
+      value: Claim["value"],
+      source = "companies_house",
+      tier = 1,
+      method: Claim["method"] = "api",
+    ): Promise<Claim> => ({
+      claim_id: await stableUuid([source, ENTITY, field, JSON.stringify(value)]),
+      entity_id: ENTITY,
+      raw_entity_ref: { source_id: ENTITY, name: null },
+      field,
+      value,
+      source,
+      source_tier: tier,
+      lane: "open",
+      method,
+      evidence:
+        method === "llm_extract"
+          ? { kind: "span", ref: "x", text: String(value) }
+          : { kind: "record", ref: "test" },
+      observed_at: now,
+      published_at: now,
+      fetched_at: now,
+      run_id: run,
+    });
+    await ingestClaims(storage, ctx, { run_id: run, fetched_at: now }, [
+      await c("company_type", o.type ?? "ltd"),
+      await c("website_url", o.domain ?? "acme.example", "company_website", 3, "scrape"),
+      await c(
+        "contact_email",
+        o.email ?? "info@acme.example",
+        "company_website_llm",
+        5,
+        "llm_extract",
+      ),
+    ]);
+  }
+  const run = async (model = new FakeModel({ sme_outreach_draft: fakeOutreachWriter })) => {
+    const { task } = await newTask(`t:${crypto.randomUUID()}`);
+    const runner = makeRunner(model);
+    await runner.run(task.task_id);
+    return runner.decide(task.task_id, "approve");
+  };
+
+  it("L1: after approval the operator sends (dry run while the kill switch is on), with sender + opt-out added by code", async () => {
+    await seedContact();
+    const t = await run();
+    expect(t.status).toBe("done");
+    const [m] = await storage.outbox.list(5);
+    expect(m).toMatchObject({ status: "dry_run", recipient: "info@acme.example", attempt: 1 });
+    expect(m?.body).toContain(infra.sender.opt_out_text);
+    expect(m?.body).toContain(infra.sender.company);
+    expect(
+      await storage.followups.due(new Date(Date.now() + 30 * 86_400_000).toISOString()),
+    ).toHaveLength(1);
+  });
+
+  it("GUARDRAIL: unknown recipient type, suppression, wrong domain, personal address and contact limits all block", async () => {
+    const base = {
+      thread_id: "t",
+      attempt: 1,
+      entity_id: ENTITY,
+      recipients: ["info@acme.example"],
+      contact_source: "company_website",
+      company_type: "ltd",
+      company_domain: "acme.example",
+      subject: "s",
+      body: "b",
+    };
+    expect(await checkSend(storage, infra, base)).toBeNull();
+    expect(await checkSend(storage, infra, { ...base, company_type: null })).toMatch(
+      /recipient type unknown/,
+    );
+    expect(
+      await checkSend(storage, infra, { ...base, company_type: "limited-partnership" }),
+    ).toMatch(/not a corporate subscriber/);
+    expect(
+      await checkSend(storage, infra, { ...base, recipients: ["jo.smith@acme.example"] }),
+    ).toMatch(/role-based/);
+    expect(
+      await checkSend(storage, infra, { ...base, recipients: ["info@other.example"] }),
+    ).toMatch(/own domain/);
+    expect(
+      await checkSend(storage, infra, {
+        ...base,
+        recipients: ["info@acme.example", "sales@acme.example"],
+      }),
+    ).toMatch(/too many recipients/);
+    await storage.suppressions.add("acme.example", "domain opted out");
+    expect(await checkSend(storage, infra, base)).toMatch(/suppression list/);
+  });
+
+  it("GUARDRAIL: a blocked send is recorded with its reason and nothing goes out", async () => {
+    await seedContact({ type: "limited-partnership" });
+    const t = await run();
+    expect(t.status).toBe("done");
+    const [m] = await storage.outbox.list(5);
+    expect(m?.status).toBe("blocked");
+    expect(m?.reason).toMatch(/not a corporate subscriber/);
+  });
+
+  it("min days between emails and max attempts are enforced", async () => {
+    await seedContact();
+    await run();
+    const second = await run(); // same recipient, minutes later
+    expect(second.status).toBe("done");
+    expect((await storage.outbox.list(5))[0]?.reason).toMatch(/less than 4 days ago/);
+  });
+
+  it("an opt-out reply suppresses the sender, records the outcome and cancels follow-ups", async () => {
+    await seedContact();
+    await run();
+    const [m] = await storage.outbox.list(1);
+    const inbox = new FakeInbox([
+      {
+        id: "r1",
+        from: "info@acme.example",
+        to: infra.sender.from_email,
+        subject: "Re: idea",
+        body: "No thanks, please remove me.",
+        received_at: new Date().toISOString(),
+        in_reply_to: m?.id ?? null,
+      },
+    ]);
+    expect(await processInbox(storage, infra, inbox, "2000-01-01")).toEqual({
+      replies: 1,
+      opt_outs: 1,
+    });
+    expect(await storage.suppressions.isSuppressed("info@acme.example")).toBe(true);
+    expect(
+      await storage.followups.due(new Date(Date.now() + 30 * 86_400_000).toISOString()),
+    ).toEqual([]);
+  });
+
+  it("L0 never sends; autonomy promotion needs the targets; a breach auto-demotes one level", async () => {
+    await seedContact();
+    await storage.controls.set("autonomy:sme_outreach", "L0", "test");
+    const t = await run();
+    expect((t.state as { outputs: { delivery: unknown } }).outputs.delivery).toEqual({
+      skipped: "L0: draft only",
+    });
+    expect(await storage.outbox.list(5)).toEqual([]);
+    await expect(promotePlaybook(storage, "sme_outreach", "L1", infra, "archie")).rejects.toThrow(
+      /only 1 tasks/,
+    );
+    await storage.controls.set("autonomy:sme_outreach", "L2", "test");
+    await recordBreach(storage, {
+      playbook: "sme_outreach",
+      task_id: t.task_id,
+      tool: "send_email",
+      reason: "test",
+      base: "L1",
+    });
+    expect(await storage.controls.get("autonomy:sme_outreach")).toBe("L1");
+    expect((await playbookStats(storage, "sme_outreach", infra)).breaches).toBe(1);
+  });
+
+  it("composeEmail always appends sender identity and opt-out", () => {
+    const e = composeEmail("Hello.", infra);
+    expect(e.startsWith("Hello.")).toBe(true);
+    expect(e).toContain(infra.sender.name);
+    expect(e.endsWith(infra.sender.opt_out_text)).toBe(true);
   });
 });

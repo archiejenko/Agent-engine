@@ -36,5 +36,46 @@
     "calibration_min_closed": 20,
     "calibration_min_positives": 5,
     "calibration_blend": 0.5
+  },
+  "outreach": {
+    "followup_days": 5,
+    "corporate_company_types": [
+      "ltd",
+      "plc",
+      "llp",
+      "private-limited-guarant-nsc",
+      "private-limited-guarant-nsc-limited-exemption",
+      "private-unlimited",
+      "private-unlimited-nsc",
+      "old-public-company"
+    ],
+    "opt_out_phrases": [
+      "no thanks",
+      "unsubscribe",
+      "remove me",
+      "stop emailing",
+      "not interested",
+      "stop"
+    ],
+    "contact_policy": {
+      "company_website": {
+        "max_recipients_per_send": 1,
+        "max_attempts_without_reply": 3,
+        "min_days_between": 4
+      },
+      "beauhurst": {
+        "max_recipients_per_send": 5,
+        "max_attempts_without_reply": 4,
+        "min_days_between": 4
+      }
+    }
+  },
+  "autonomy": {
+    "window": 50,
+    "min_tasks": 20,
+    "min_success": 0.9,
+    "min_no_edit": 0.8,
+    "max_breaches": 0,
+    "l2_review_sample": 0.2
   }
 }

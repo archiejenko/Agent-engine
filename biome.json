@@ -6,6 +6,7 @@
     "includes": [
       "**",
       "!**/worker-configuration.d.ts",
+      "!**/playbooks.generated.ts",
       "!**/dist",
       "!data",
       "!**/.wrangler",

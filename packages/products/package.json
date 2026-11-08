@@ -16,6 +16,7 @@
     "@ae/ports": "workspace:*",
     "@ae/storage": "workspace:*",
     "@ae/verification": "workspace:*",
-    "@x402/core": "2.30.0"
+    "@x402/core": "2.30.0",
+    "@ae/infra": "workspace:*"
   }
 }

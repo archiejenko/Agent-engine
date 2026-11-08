@@ -60,6 +60,11 @@ export interface RunnerDeps {
   now?: () => Date;
 }
 
+async function hash01(text: string): Promise<number> {
+  const h = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
+  return ((h[0] as number) * 256 + (h[1] as number)) / 65536;
+}
+
 const initialState = (): TaskState => ({ next_step: 0, outputs: {}, retried: [], attempts: 0 });
 
 export class PlaybookRunner {
@@ -101,12 +106,28 @@ export class PlaybookRunner {
       while (state.next_step < steps.length) {
         const step = steps[state.next_step] as (typeof steps)[number];
         if ("gate" in step) {
+          // Autonomy is set per playbook (never per run): L3 skips the gate; L2 gates a sample only.
+          const sampled = (await hash01(task.task_id)) < this.d.infra.autonomy.l2_review_sample;
+          if (
+            state.outputs.approved === true ||
+            task.autonomy === "L3" ||
+            (task.autonomy === "L2" && !sampled)
+          ) {
+            state.next_step++;
+            continue;
+          }
           state.awaiting = { step_id: step.id, item: impl.gateItem(state), kind: "gate" };
           await this.d.storage.tasks.update(task.task_id, {
             status: "awaiting_approval",
             state: state as unknown as Record<string, unknown>,
           });
           return (await this.d.storage.tasks.get(task.task_id)) as StoredTask;
+        }
+        if (step.role === "operator" && task.autonomy === "L0") {
+          // L0 = draft only: operator (acting) steps never run.
+          state.outputs[step.output] = { skipped: "L0: draft only" };
+          state.next_step++;
+          continue;
         }
         const res = await this.execStep(task, pb, impl, state, state.next_step, null);
         if (res.check && !res.check.passed) {

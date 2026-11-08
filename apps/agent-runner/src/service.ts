@@ -1,6 +1,12 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type InfraConfig, loadInfraConfig, loadModelsConfig, type ModelsConfig } from "@ae/config";
+import {
+  type InfraConfig,
+  loadInfraConfig,
+  loadModelsConfig,
+  loadProductsConfig,
+  type ModelsConfig,
+} from "@ae/config";
 import {
   createTask,
   fakeOutreachWriter,
@@ -8,20 +14,36 @@ import {
   type PlaybookImpl,
   PlaybookRunner,
   parsePlaybook,
+  processInbox,
   QUEUE_ORDER,
+  recordBreach,
+  registerOutreachTools,
   registerStandardTools,
   SME_OUTREACH,
   ToolRegistry,
 } from "@ae/infra";
 import { fakeExplainer, moduleStatus } from "@ae/opportunity";
 import {
+  type AlertChannel,
+  type EmailSender,
+  FakeAlertChannel,
+  FakeEmailSender,
+  FakeInbox,
   FakeModel,
   FakeWebFetcher,
+  type Inbox,
   InMemoryQueue,
   type ModelClient,
   type QueueBus,
   type WebFetcher,
 } from "@ae/ports";
+import {
+  HUMAN_REPORT,
+  MONITORING_SUBSCRIPTION,
+  queueAlerts,
+  registerProductTools,
+  WATCH_ALERT,
+} from "@ae/products";
 import type { Storage, StoredTask } from "@ae/storage";
 import { defaultContext, fakeWebsiteExtractor, type VerificationContext } from "@ae/verification";
 
@@ -43,7 +65,12 @@ export async function loadPlaybooks(dir: string): Promise<Map<string, LoadedPlay
   return out;
 }
 
-export const PLAYBOOK_IMPLS = new Map<string, PlaybookImpl>([["sme_outreach", SME_OUTREACH]]);
+export const PLAYBOOK_IMPLS = new Map<string, PlaybookImpl>([
+  ["sme_outreach", SME_OUTREACH],
+  ["human_report", HUMAN_REPORT],
+  ["watch_alert", WATCH_ALERT],
+  ["monitoring_subscription", MONITORING_SUBSCRIPTION],
+]);
 
 /** The deterministic fake model used everywhere until cutover. */
 export function fakeModel(): FakeModel {
@@ -64,6 +91,9 @@ export interface ServiceDeps {
   infra?: InfraConfig;
   models?: ModelsConfig;
   impls?: Map<string, PlaybookImpl>;
+  email?: EmailSender;
+  alerts?: AlertChannel;
+  inbox?: Inbox;
   now?: () => Date;
 }
 
@@ -79,6 +109,9 @@ export class AgentService {
   readonly playbooks: Map<string, LoadedPlaybook>;
   readonly tools: ToolRegistry;
   readonly model: ModelClient;
+  readonly email: EmailSender;
+  readonly alerts: AlertChannel;
+  readonly inbox: Inbox;
 
   constructor(d: ServiceDeps) {
     this.storage = d.storage;
@@ -87,11 +120,27 @@ export class AgentService {
     this.playbooks = d.playbooks;
     this.model = d.model ?? fakeModel();
     this.tools = new ToolRegistry(d.storage, this.infra);
+    const ctx = d.ctx ?? defaultContext();
+    this.email = d.email ?? new FakeEmailSender();
+    this.alerts = d.alerts ?? new FakeAlertChannel();
+    this.inbox = d.inbox ?? new FakeInbox();
     registerStandardTools(this.tools, {
       storage: d.storage,
-      ctx: d.ctx ?? defaultContext(),
+      ctx,
       fetcher: d.fetcher ?? new FakeWebFetcher(new Map()),
     });
+    registerOutreachTools(this.tools, { storage: d.storage, cfg: this.infra, email: this.email });
+    registerProductTools(this.tools, {
+      storage: d.storage,
+      ctx,
+      email: this.email,
+      alerts: this.alerts,
+      infra: this.infra,
+      products: loadProductsConfig(),
+    });
+    // Any guardrail breach is recorded and auto-demotes the playbook one level.
+    this.tools.onBreach = (b) =>
+      recordBreach(d.storage, { ...b, base: d.playbooks.get(b.playbook)?.spec.autonomy ?? "L0" });
     this.runner = new PlaybookRunner({
       storage: d.storage,
       infra: this.infra,
@@ -189,11 +238,48 @@ export class AgentService {
     return done;
   }
 
+  /** Due follow-ups → new outreach tasks (each still needs its own approval at L1). */
+  async processFollowups(now = new Date()): Promise<number> {
+    let created = 0;
+    for (const f of await this.storage.followups.due(now.toISOString())) {
+      const opp = f.opportunity_id;
+      const r = await createTask(this.storage, this.infra, this.playbooks, this.queue, {
+        idempotency_key: `followup:${f.thread_id}:${f.attempt}`,
+        playbook: "sme_outreach",
+        revenue_path: "sme_outreach",
+        source_ref: opp
+          ? `opportunity:${opp}:entity:${f.entity_id}`
+          : `followup:${f.thread_id}:entity:${f.entity_id}`,
+        lane: "open",
+        state: { followup: { thread_id: f.thread_id, attempt: f.attempt } },
+      });
+      await this.storage.followups.mark(f.thread_id, f.attempt, "created");
+      if (r.created) created++;
+    }
+    return created;
+  }
+
   async tick(max = 50) {
+    const now = new Date();
+    const lastCheck =
+      (await this.storage.controls.get<string>("watch:last_check")) ?? "1970-01-01T00:00:00Z";
+    const alerts = await queueAlerts(
+      this.storage,
+      this.infra,
+      this.playbooks,
+      this.queue,
+      lastCheck,
+    );
+    await this.storage.controls.set("watch:last_check", now.toISOString(), "runner");
+    const lastInbox =
+      (await this.storage.controls.get<string>("inbox:last_poll")) ?? "1970-01-01T00:00:00Z";
+    const inbox = await processInbox(this.storage, this.infra, this.inbox, lastInbox);
+    await this.storage.controls.set("inbox:last_poll", now.toISOString(), "runner");
+    const followups = await this.processFollowups(now);
     const intake = await this.intakeApproved();
     const decisions = await this.applyPendingDecisions();
     const ran = await this.runQueued(max);
     const timedOut = await this.runner.timeoutStuck();
-    return { intake, decisions, ran: ran.length, timed_out: timedOut };
+    return { intake, decisions, ran: ran.length, timed_out: timedOut, alerts, inbox, followups };
   }
 }
