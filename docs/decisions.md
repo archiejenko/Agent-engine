@@ -2,6 +2,24 @@
 
 Newest first. Each entry: what we decided, why, and who approved it.
 
+## 2026-11-09 — sme_letter: demo banner, expiry, letter opt-out
+
+- **Demo banner** (fixed to the top of the screen): "Sample prepared by EJTECH Ltd, not affiliated with
+  <registered company name>". The full registered name is used so there's no doubt which company.
+- **No third-party logos or imagery**: the template has none, a test fails if any image, SVG, CSS
+  `url()` or outside link appears, and the page is served with a Content-Security-Policy that blocks
+  every outside resource (`default-src 'none'`), so it stays that way even if the template changes.
+- **Demo pages expire 30 days after their batch is approved** (`letters.demo_expiry_days`): the page
+  then answers 410 "This sample has expired." The letter's QR caption says how long the demo stays up.
+- **One-line opt-out on every letter**: "Don't want letters from me? Email <from address> quoting
+  <code>, or visit <demo host>/stop/<code>". The code is "L" + 6 unambiguous characters, unique per
+  letter. The short URL shows a confirm button and records the opt-out on POST, so link previews can't
+  opt anyone out by accident (alternative: one-click GET). An email quoting the code (any wording) is
+  picked up by inbox processing. Both add `entity:<company number>` to the shared suppression list (the
+  email route also adds the sender's address). Opting out works even while the kill switch is on.
+- The line's wording lives in `infra.json` → `sender.letter_opt_out_text`; config refuses it if it
+  drops the email, the code or the URL.
+
 ## 2026-11-09 — Changes before cutover (Archie's three changes)
 
 - **x402 now uses the official flow**: `@x402/hono` `paymentMiddleware` + `x402ResourceServer` +

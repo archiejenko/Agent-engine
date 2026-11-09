@@ -87,7 +87,7 @@ Keys and accounts
 - [ ] Email provider account + API key (e.g. Postmark, SES, Resend) → runner secret. Needs a real `EmailSender` adapter (about an hour)
 - [ ] Inbox access for replies (provider inbound webhook or IMAP) → needs a real `Inbox` adapter
 - [ ] Your real sender details in `packages/config/src/infra.json` → `sender`: from address, company name, **postal address** (letters must identify you; it's printed on every letter)
-- [ ] Demo host for letters: e.g. `demo.ejtech.co.uk` routed to the Worker for `/demo/*`, **without** Access; set `letters.demo_base_url` in `infra.json` (the QR codes point there)
+- [ ] Demo host for letters: e.g. `demo.ejtech.co.uk` routed to the Worker for `/demo/*` **and** `/stop/*` (the short opt-out URL printed on every letter), **without** Access; set `letters.demo_base_url` in `infra.json` (QR codes and opt-out URLs point there). Keep it short: it's typed by hand
 
 Verify against current guidance
 - [ ] UK outreach rules (PECR/GDPR, ICO guidance on B2B email to corporate subscribers): the company-type rule and the opt-out wording
@@ -96,6 +96,7 @@ Verify against current guidance
 
 Live run
 - [ ] First 5 real emails: turn the global kill switch off, approve each by hand, check each arrives with sender details + opt-out; reply "no thanks" from a test inbox and confirm suppression
+- [ ] Before the first batch: print one letter and check the opt-out line is readable, type its short URL on a phone and opt out (check `entity:<number>` appears in suppressions), and email the code to your inbox address and check the same. Then remove the test suppression
 - [ ] First print batch: open Letters, read the flagged letters (registered office looks like an accountant's: see `docs/known-biases.md`), leave out any you don't want, approve, download the PDF, print and post. Turn the kill switch off for `sme_letter` so the demo links work; scan one QR from the printed page
 - [ ] Zero guardrail breaches over the first 50 tasks (Controls page); only then consider L2
 

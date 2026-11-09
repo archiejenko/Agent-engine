@@ -181,7 +181,13 @@ export async function runPhase5Gate(
       id: string;
       letter_count: number;
       flagged_count: number;
-      letters: { task_id: string; demo_slug: string; flags: { flag: string; detail: string }[] }[];
+      letters: {
+        task_id: string;
+        entity_id: string;
+        demo_slug: string;
+        opt_out_code: string;
+        flags: { flag: string; detail: string }[];
+      }[];
     }[];
   };
   const batch = queue.batches[0];
@@ -208,6 +214,22 @@ export async function runPhase5Gate(
   const live = clean[0] ? await app.request(`/demo/${clean[0].demo_slug}`) : null;
   const liveHtml = live ? await live.text() : "";
   const excludedLive = await demoStatus(flagged[0]?.demo_slug);
+  // 30 days after approval the sample expires.
+  const expiryDays = loadInfraConfig().letters.demo_expiry_days;
+  if (clean[0])
+    await storage.demoPages.setPublished(
+      [clean[0].demo_slug],
+      true,
+      new Date(Date.now() - (expiryDays + 1) * 86_400_000).toISOString(),
+    );
+  const expired = clean[0] ? await app.request(`/demo/${clean[0].demo_slug}`) : null;
+  const expiredText = expired ? await expired.text() : "";
+  // The short opt-out URL printed on the letter feeds the shared suppression list.
+  const stopper = clean[1];
+  if (stopper) await app.request(`/stop/${stopper.opt_out_code}`, { method: "POST" });
+  const stopped = stopper
+    ? await storage.suppressions.isSuppressed(`entity:${stopper.entity_id}`)
+    : false;
   await storage.controls.set(K.global, true, "gate"); // back to the default: external actions off
   const lettersDone = (await storage.tasks.list({ playbook: "sme_letter", limit: 500 })).filter(
     (t) => t.status === "done",
@@ -279,17 +301,28 @@ export async function runPhase5Gate(
       evidence: `batch ${batch?.id}: ${batch?.letter_count} letters, ${pages}-page PDF; ${flagged.length} flagged (${[...new Set(flagged.flatMap((l) => l.flags.map((f) => f.detail)))].join("; ") || "none in this batch"}); Archie approved it leaving out ${decision?.rejected ?? 0} flagged letter(s); ${lettersDone} tasks done (L0: Archie prints and posts)`,
     },
     {
-      criterion: "Demo pages: noindex, live only after approval and with the kill switch off",
+      criterion:
+        "Demo pages: noindex, 'not affiliated' banner, live only after approval with the kill switch off, expire after 30 days",
       status:
         beforeApproval === 404 &&
         killOn === 404 &&
         live?.status === 200 &&
         live.headers.get("x-robots-tag")?.includes("noindex") &&
         liveHtml.includes('content="noindex') &&
+        liveHtml.includes("not affiliated with") &&
+        !/<img|<svg|url\(|https?:\/\//i.test(liveHtml) &&
+        expired?.status === 410 &&
+        expiredText.includes("This sample has expired.") &&
         (flagged.length === 0 || excludedLive === 404)
           ? "passed (synthetic)"
           : "failed",
-      evidence: `before approval ${beforeApproval}; approved but kill switch on ${killOn}; kill switch off ${live?.status} with X-Robots-Tag "${live?.headers.get("x-robots-tag")}"; left-out letter's demo ${excludedLive || "n/a"}`,
+      evidence: `before approval ${beforeApproval}; approved but kill switch on ${killOn}; kill switch off ${live?.status} with X-Robots-Tag "${live?.headers.get("x-robots-tag")}"; left-out letter's demo ${excludedLive || "n/a"}; ${expiryDays + 1} days after approval ${expired?.status} ("This sample has expired.")`,
+    },
+    {
+      criterion:
+        "Every letter's one-line opt-out (reply email + short URL) feeds the suppression list",
+      status: stopped ? "passed (synthetic)" : "failed",
+      evidence: `letter ${stopper?.opt_out_code}: POST /stop/${stopper?.opt_out_code} → entity:${stopper?.entity_id} suppressed (emailed codes are tested separately)`,
     },
     {
       criterion: "Opt-out reply → suppression list",

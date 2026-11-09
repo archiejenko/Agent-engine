@@ -25,7 +25,7 @@
     "address": "Manchester, UK",
     "from_email": "archie@example.invalid",
     "opt_out_text": "If you'd rather not hear from me again, just reply 'no thanks' and I won't contact you again.",
-    "letter_opt_out_text": "If you'd rather I didn't write again, email me or write to the address above with \"no more letters\" and I won't contact you again."
+    "letter_opt_out_text": "Don't want letters from me? Email {email} quoting {code}, or visit {url}"
   },
   "playbook_for_module": {
     "lead_gen_sme_web": "sme_outreach",
@@ -97,6 +97,7 @@
       "registered office service",
       "virtual office",
       "c/o"
-    ]
+    ],
+    "demo_expiry_days": 30
   }
 }

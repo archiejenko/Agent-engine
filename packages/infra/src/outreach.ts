@@ -146,6 +146,9 @@ export function registerOutreachTools(
  * Replies (Phase 3 outcomes + Phase 5 sending): a reply to one of our emails becomes an outcome; an
  * opt-out reply adds the sender to the suppression list; either way pending follow-ups are cancelled.
  */
+/** Letter opt-out codes as printed: "L" + 6 unambiguous characters (see sme_letter). */
+export const LETTER_CODE = /\bL[A-HJ-NP-Z2-9]{6}\b/g;
+
 export async function processInbox(
   storage: Storage,
   cfg: InfraConfig,
@@ -156,6 +159,22 @@ export async function processInbox(
   let replies = 0;
   let optOuts = 0;
   for (const m of await inbox.poll(since)) {
+    // A reply to a LETTER quotes its printed opt-out code (letters aren't email threads).
+    let letterOptOut = false;
+    for (const code of `${m.subject}\n${m.body}`.toUpperCase().match(LETTER_CODE) ?? []) {
+      const letter = await storage.letters.byOptOutCode(code);
+      if (!letter) continue;
+      await storage.suppressions.add(
+        `entity:${letter.entity_id}`,
+        `letter opt-out by email (${code})`,
+      );
+      await storage.suppressions.add(m.from, `letter opt-out by email (${code})`);
+      letterOptOut = true;
+    }
+    if (letterOptOut) {
+      optOuts++;
+      continue;
+    }
     const original = m.in_reply_to ? await storage.outbox.get(m.in_reply_to) : null;
     if (!original) continue;
     const text = `${m.subject}\n${m.body}`.toLowerCase();

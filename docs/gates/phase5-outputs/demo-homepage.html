@@ -9,7 +9,8 @@
   :root { --ink: #1b1f24; --muted: #5b6470; --accent: #1f5fbf; --bg: #ffffff; --soft: #f3f5f8; }
   * { box-sizing: border-box; }
   body { margin: 0; font: 17px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
-  .demo { background: #fff7d6; color: #5a4500; font-size: 14px; padding: 10px 16px; text-align: center; }
+  .demo { position: fixed; top: 0; left: 0; right: 0; z-index: 10; background: #fff7d6; color: #5a4500; font-size: 14px; line-height: 1.4; padding: 10px 16px; text-align: center; border-bottom: 1px solid #e8d9a0; }
+  body { padding-top: 64px; }
   header, section, footer { padding: 0 16px; }
   .wrap { max-width: 960px; margin: 0 auto; }
   header .wrap { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; }
@@ -28,7 +29,7 @@
 </style>
 </head>
 <body>
-<div class="demo">Demo homepage made for SYNTHETIC TRADING 68 by Archie, EJTECH Ltd. It's a private sample, not your live website, and isn't listed on search engines.</div>
+<div class="demo" role="note">Sample prepared by EJTECH Ltd, not affiliated with SYNTHETIC TRADING 68 LIMITED</div>
 <header><div class="wrap"><div class="logo">SYNTHETIC TRADING 68</div><nav><a href="#services">Services</a><a href="#about">About</a><a href="#contact">Contact</a></nav></div></header>
 <section class="hero"><div class="wrap">
   <h1>SYNTHETIC TRADING 68</h1>

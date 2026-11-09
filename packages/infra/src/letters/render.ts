@@ -65,6 +65,9 @@ export interface LetterContent {
   body: string;
   demoUrl: string;
   companyName: string;
+  /** How long the demo stays up after the batch is approved. */
+  demoDays: number;
+  /** One line: how to opt out by email (quoting the code) or via the short URL. */
   optOut: string;
 }
 
@@ -122,7 +125,7 @@ export async function renderLetterPdf(l: LetterContent): Promise<Uint8Array> {
   const qrY = 30 * MM;
   drawQr(page, l.demoUrl, left, qrY, qrSize);
   const cap = wrap(
-    `Scan to see a free demo homepage I made for ${l.companyName}. It's private (not on Google) and there's nothing to pay or sign up for.`,
+    `Scan to see a free demo homepage I made for ${l.companyName}. It's private (not on Google), stays up for ${l.demoDays} days, and there's nothing to pay or sign up for.`,
     font,
     9.5,
     width - qrSize - 8 * MM,
@@ -134,7 +137,11 @@ export async function renderLetterPdf(l: LetterContent): Promise<Uint8Array> {
   }
   text(l.demoUrl, left + qrSize + 6 * MM, cy - 4, 8.5);
   // Footer: who's writing and how to opt out.
-  const foot = wrap(`${l.sender.company}, ${l.sender.address}. ${l.optOut}`, font, 7.5, width);
+  // The opt-out line, on its own, above the footer.
+  // One line, shrunk to fit the printable width (never wrapped), however long the email/URL.
+  const optSize = Math.min(8.5, (8.5 * width) / bold.widthOfTextAtSize(toWinAnsi(l.optOut), 8.5));
+  text(l.optOut, left, 24 * MM, optSize, bold);
+  const foot = wrap(`${l.sender.company}, ${l.sender.address}.`, font, 7.5, width);
   let fy = 18 * MM;
   for (const s of foot) {
     text(s, left, fy, 7.5);
@@ -191,7 +198,8 @@ export function renderDemoHtml(d: DemoContent): string {
   :root { --ink: #1b1f24; --muted: #5b6470; --accent: #1f5fbf; --bg: #ffffff; --soft: #f3f5f8; }
   * { box-sizing: border-box; }
   body { margin: 0; font: 17px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
-  .demo { background: #fff7d6; color: #5a4500; font-size: 14px; padding: 10px 16px; text-align: center; }
+  .demo { position: fixed; top: 0; left: 0; right: 0; z-index: 10; background: #fff7d6; color: #5a4500; font-size: 14px; line-height: 1.4; padding: 10px 16px; text-align: center; border-bottom: 1px solid #e8d9a0; }
+  body { padding-top: 64px; }
   header, section, footer { padding: 0 16px; }
   .wrap { max-width: 960px; margin: 0 auto; }
   header .wrap { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; }
@@ -210,7 +218,7 @@ export function renderDemoHtml(d: DemoContent): string {
 </style>
 </head>
 <body>
-<div class="demo">Demo homepage made for ${name} by ${esc(d.senderName)}${d.senderName.includes(d.senderCompany) ? "" : ` (${esc(d.senderCompany)})`}. It's a private sample, not your live website, and isn't listed on search engines.</div>
+<div class="demo" role="note">Sample prepared by ${esc(d.senderCompany)}, not affiliated with ${esc(d.companyName)}</div>
 <header><div class="wrap"><div class="logo">${name}</div><nav><a href="#services">Services</a><a href="#about">About</a><a href="#contact">Contact</a></nav></div></header>
 <section class="hero"><div class="wrap">
   <h1>${name}</h1>

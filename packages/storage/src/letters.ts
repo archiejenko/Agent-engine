@@ -15,6 +15,8 @@ export interface LetterRow {
   company_name: string;
   address: string[];
   demo_slug: string;
+  /** Printed on the letter: quote it by email or use the short URL to opt out. */
+  opt_out_code: string;
   pdf_b64: string;
   flags: LetterFlag[];
   status: "waiting" | "batched" | "approved" | "rejected";
@@ -36,6 +38,8 @@ export interface DemoPageRow {
   task_id: string;
   html: string;
   published: boolean;
+  /** When its batch was approved; the page expires a fixed time after this. */
+  published_at: string | null;
   created_at: string;
 }
 
@@ -45,6 +49,7 @@ const letter = (r: Row, withPdf = true): LetterRow => ({
   company_name: r.company_name as string,
   address: JSON.parse(r.address as string) as string[],
   demo_slug: r.demo_slug as string,
+  opt_out_code: (r.opt_out_code as string | null) ?? "",
   pdf_b64: withPdf ? (r.pdf_b64 as string) : "",
   flags: JSON.parse(r.flags as string) as LetterFlag[],
   status: r.status as LetterRow["status"],
@@ -64,7 +69,7 @@ const batch = (r: Row): PrintBatchRow => ({
 export function lettersStorage(db: SqlDriver) {
   return {
     demoPages: {
-      put: async (p: Omit<DemoPageRow, "published" | "created_at">) => {
+      put: async (p: Omit<DemoPageRow, "published" | "published_at" | "created_at">) => {
         await db.run(
           "INSERT INTO demo_pages (slug, entity_id, task_id, html, published, created_at) VALUES (?, ?, ?, ?, 0, ?) ON CONFLICT (slug) DO UPDATE SET html = excluded.html",
           [p.slug, p.entity_id, p.task_id, p.html, nowIso()],
@@ -79,14 +84,16 @@ export function lettersStorage(db: SqlDriver) {
               task_id: r.task_id as string,
               html: r.html as string,
               published: Number(r.published) === 1,
+              published_at: (r.published_at as string | null) ?? null,
               created_at: r.created_at as string,
             }
           : null;
       },
-      setPublished: async (slugs: string[], published: boolean) => {
+      setPublished: async (slugs: string[], published: boolean, at: string = nowIso()) => {
         for (const s of slugs)
-          await db.run("UPDATE demo_pages SET published = ? WHERE slug = ?", [
+          await db.run("UPDATE demo_pages SET published = ?, published_at = ? WHERE slug = ?", [
             published ? 1 : 0,
+            published ? at : null,
             s,
           ]);
       },
@@ -94,13 +101,14 @@ export function lettersStorage(db: SqlDriver) {
     letters: {
       put: async (l: Omit<LetterRow, "status" | "batch_id" | "created_at">) => {
         await db.run(
-          "INSERT INTO letters (task_id, entity_id, company_name, address, demo_slug, pdf_b64, flags, status, batch_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', NULL, ?) ON CONFLICT (task_id) DO UPDATE SET pdf_b64 = excluded.pdf_b64, flags = excluded.flags",
+          "INSERT INTO letters (task_id, entity_id, company_name, address, demo_slug, opt_out_code, pdf_b64, flags, status, batch_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'waiting', NULL, ?) ON CONFLICT (task_id) DO UPDATE SET pdf_b64 = excluded.pdf_b64, flags = excluded.flags",
           [
             l.task_id,
             l.entity_id,
             l.company_name,
             JSON.stringify(l.address),
             l.demo_slug,
+            l.opt_out_code,
             l.pdf_b64,
             JSON.stringify(l.flags),
             nowIso(),
@@ -124,10 +132,16 @@ export function lettersStorage(db: SqlDriver) {
           args.push(o.batchId);
         }
         const rows = await db.all<Row>(
-          `SELECT task_id, entity_id, company_name, address, demo_slug, '' AS pdf_b64, flags, status, batch_id, created_at FROM letters ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY created_at, task_id LIMIT ?`,
+          `SELECT task_id, entity_id, company_name, address, demo_slug, opt_out_code, '' AS pdf_b64, flags, status, batch_id, created_at FROM letters ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY created_at, task_id LIMIT ?`,
           [...args, o.limit ?? 1000],
         );
         return rows.map((r) => letter(r, false));
+      },
+      byOptOutCode: async (code: string): Promise<LetterRow | null> => {
+        const r = await first(db, "SELECT * FROM letters WHERE opt_out_code = ?", [
+          code.toUpperCase(),
+        ]);
+        return r ? letter(r, false) : null;
       },
       pdfsForBatch: async (batchId: string): Promise<{ task_id: string; pdf_b64: string }[]> =>
         (

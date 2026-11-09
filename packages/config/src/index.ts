@@ -205,7 +205,12 @@ export const InfraConfig = z.object({
     from_email: z.string().min(3),
     opt_out_text: z.string().min(10),
     /** Printed at the foot of every letter (post isn't covered by PECR, but GDPR's right to object is). */
-    letter_opt_out_text: z.string().min(10),
+    letter_opt_out_text: z
+      .string()
+      .min(10)
+      .refine((t) => ["{email}", "{code}", "{url}"].every((k) => t.includes(k)), {
+        message: "the letter opt-out line must include {email}, {code} and {url}",
+      }),
   }),
   /** sme_letter: postal letters + demo homepage for leads we can't email. */
   letters: z.object({
@@ -216,6 +221,8 @@ export const InfraConfig = z.object({
     demo_base_url: z.url(),
     /** A new print batch is assembled at most this often. */
     batch_every_days: z.number().int().positive(),
+    /** Demo pages stop working this many days after their batch is approved. */
+    demo_expiry_days: z.number().int().positive(),
     /** Accountant/formation-agent registered offices: shared by ≥ this many companies → flag. */
     shared_address_threshold: z.number().int().min(2),
     accountant_keywords: z.array(z.string().min(2)).min(1),

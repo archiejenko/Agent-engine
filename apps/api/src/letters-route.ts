@@ -5,11 +5,16 @@ import {
   decidePrintBatch,
   demoUrl,
   letterSuppressionKey,
+  optOutByCode,
   servableDemo,
 } from "@ae/infra";
 import type { Storage } from "@ae/storage";
 import type { Hono } from "hono";
 import { z } from "zod";
+
+const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+const SIMPLE = (title: string, extra = "") =>
+  `<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${title}</title></head><body style="font:17px/1.5 system-ui,sans-serif;max-width:560px;margin:15vh auto;padding:0 16px"><p>${title}</p>${extra}</body></html>`;
 
 const BatchDecision = z.object({
   decision: z.enum(["approve", "reject"]),
@@ -111,11 +116,45 @@ export function mountLetters(
     return c.json({ ok: true, suppressed: letterSuppressionKey(entity) });
   });
 
-  // Public demo homepage. Not indexed; only for approved letters while external actions are allowed.
+  // Public demo homepage. Not indexed; only for approved letters while external actions are allowed;
+  // expires a fixed time after approval. CSP: no external resources at all (no third-party imagery).
   app.get("/demo/:slug", async (c) => {
     const page = await servableDemo(storageFor(c.env), loadInfraConfig(), c.req.param("slug"));
-    const headers = { "X-Robots-Tag": "noindex, nofollow, noarchive", "Cache-Control": "no-store" };
+    const headers = {
+      "X-Robots-Tag": "noindex, nofollow, noarchive",
+      "Cache-Control": "no-store",
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'none'",
+    };
     if (!page) return c.text("Not found", 404, headers);
+    if (page.state === "expired") return c.html(SIMPLE("This sample has expired."), 410, headers);
     return c.html(page.html, 200, headers);
+  });
+
+  // Short opt-out URL printed on every letter. GET shows a confirm button (so link previews and
+  // prefetchers can't opt anyone out by accident); POST records it. Works even with the kill switch on.
+  app.get("/stop/:code", async (c) => {
+    const code = c.req.param("code").toUpperCase();
+    const letter = await storageFor(c.env).letters.byOptOutCode(code);
+    const headers = { "X-Robots-Tag": "noindex", "Cache-Control": "no-store" };
+    if (!letter) return c.html(SIMPLE("We couldn't find that code."), 404, headers);
+    return c.html(
+      SIMPLE(
+        `Stop letters to ${esc(letter.company_name)}?`,
+        `<form method="post"><button type="submit">Yes, no more letters</button></form>`,
+      ),
+      200,
+      headers,
+    );
+  });
+  app.post("/stop/:code", async (c) => {
+    const letter = await optOutByCode(
+      storageFor(c.env),
+      c.req.param("code").toUpperCase(),
+      "short URL",
+    );
+    if (!letter) return c.html(SIMPLE("We couldn't find that code."), 404);
+    return c.html(SIMPLE("Done: you won't receive any more letters from us."), 200, {
+      "X-Robots-Tag": "noindex",
+    });
   });
 }

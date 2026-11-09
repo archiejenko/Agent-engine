@@ -186,6 +186,24 @@ export function fakeLetterWriter(req: ModelRequest): string {
   });
 }
 
+/** Printed opt-out code: "L" + 6 unambiguous characters (matches LETTER_CODE in outreach.ts). */
+export const optOutCodeFor = () =>
+  `L${[...crypto.getRandomValues(new Uint8Array(6))]
+    .map((b) => "ABCDEFGHJKMNPQRSTUVWXYZ23456789"[b % 31])
+    .join("")}`;
+
+/** The one-line opt-out printed on every letter. */
+export function letterOptOutLine(cfg: InfraConfig, code: string) {
+  return cfg.sender.letter_opt_out_text
+    .replace("{email}", cfg.sender.from_email)
+    .replace("{code}", code)
+    .replace("{url}", optOutUrl(cfg, code).replace(/^https?:\/\//, ""));
+}
+
+export function optOutUrl(cfg: InfraConfig, code: string) {
+  return `${cfg.letters.demo_base_url.replace(/\/$/, "")}/stop/${code}`;
+}
+
 const slugFor = () =>
   [...crypto.getRandomValues(new Uint8Array(12))]
     .map((b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31])
@@ -238,6 +256,7 @@ export function registerLetterTools(
       const s = deps.cfg.sender;
       const existing = await deps.storage.letters.get(task.task_id);
       const slug = existing?.demo_slug ?? slugFor();
+      const code = existing?.opt_out_code || optOutCodeFor();
       await deps.storage.demoPages.put({
         slug,
         entity_id: a.entity_id,
@@ -261,7 +280,8 @@ export function registerLetterTools(
         body: a.body,
         demoUrl: demoUrl(deps.cfg, slug),
         companyName: a.company_name.replace(/\s+(LIMITED|LTD\.?|PLC|LLP)$/i, ""),
-        optOut: s.letter_opt_out_text,
+        optOut: letterOptOutLine(deps.cfg, code),
+        demoDays: deps.cfg.letters.demo_expiry_days,
       });
       await deps.storage.letters.put({
         task_id: task.task_id,
@@ -269,10 +289,11 @@ export function registerLetterTools(
         company_name: a.company_name,
         address: recipient,
         demo_slug: slug,
+        opt_out_code: code,
         pdf_b64: b64(pdf),
         flags,
       });
-      return { result: { demo_slug: slug, pages: 1, flags } };
+      return { result: { demo_slug: slug, opt_out_code: code, pages: 1, flags } };
     },
   );
 }
@@ -379,10 +400,28 @@ export async function batchPdf(storage: Storage, batchId: string): Promise<Uint8
   return mergePdfs(rows.map((r) => unb64(r.pdf_b64)));
 }
 
-/** A demo page is served only if its letter was approved AND external actions are allowed. */
-export async function servableDemo(storage: Storage, cfg: InfraConfig, slug: string) {
+/**
+ * A demo page is served only if its letter was approved AND external actions are allowed, and only
+ * for `demo_expiry_days` after its batch was approved; after that it says the sample has expired.
+ */
+export async function servableDemo(
+  storage: Storage,
+  cfg: InfraConfig,
+  slug: string,
+  now: Date = new Date(),
+): Promise<{ state: "live"; html: string } | { state: "expired" } | null> {
   const page = await storage.demoPages.get(slug);
-  if (!page?.published) return null;
+  if (!page?.published || !page.published_at) return null;
   if (!(await externalActionsAllowed(storage, cfg, "sme_letter"))) return null;
-  return page;
+  const ageDays = (now.getTime() - Date.parse(page.published_at)) / 86_400_000;
+  if (ageDays >= cfg.letters.demo_expiry_days) return { state: "expired" };
+  return { state: "live", html: page.html };
+}
+
+/** "No more letters" via the short URL or an emailed code: the shared suppression list. */
+export async function optOutByCode(storage: Storage, code: string, via: string) {
+  const letter = await storage.letters.byOptOutCode(code);
+  if (!letter) return null;
+  await storage.suppressions.add(letterSuppressionKey(letter.entity_id), `letter opt-out (${via})`);
+  return letter;
 }

@@ -1,8 +1,15 @@
-import { loadInfraConfig } from "@ae/config";
+import { InfraConfig, loadInfraConfig } from "@ae/config";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { mergePdfs, renderDemoHtml, renderLetterPdf, toWinAnsi } from "../letters/render.ts";
-import { accountantFlags, addressLines, fakeLetterWriter } from "../playbooks/sme_letter.ts";
+import { LETTER_CODE } from "../outreach.ts";
+import {
+  accountantFlags,
+  addressLines,
+  fakeLetterWriter,
+  letterOptOutLine,
+  optOutCodeFor,
+} from "../playbooks/sme_letter.ts";
 import { checkDraft } from "../playbooks/sme_outreach.ts";
 
 const cfg = loadInfraConfig();
@@ -18,7 +25,8 @@ const content = {
   body: "I noticed that ACME WIDGETS doesn't seem to have a website yet. I've made a free demo homepage.",
   demoUrl: "https://demo.example.invalid/demo/abc123",
   companyName: "ACME WIDGETS",
-  optOut: cfg.sender.letter_opt_out_text,
+  optOut: letterOptOutLine(cfg, "LABC234"),
+  demoDays: cfg.letters.demo_expiry_days,
 };
 
 describe("letter PDF", () => {
@@ -31,6 +39,14 @@ describe("letter PDF", () => {
     expect(Math.round(height)).toBe(842);
     expect(Buffer.from(bytes).subarray(0, 5).toString()).toBe("%PDF-");
     expect(Buffer.from(await renderLetterPdf(content)).equals(Buffer.from(bytes))).toBe(true);
+  });
+
+  it("still renders when the opt-out line is long (it shrinks to fit on one line)", async () => {
+    const long = await renderLetterPdf({
+      ...content,
+      optOut: `${content.optOut} ${"x".repeat(80)}`,
+    });
+    expect((await PDFDocument.load(long)).getPageCount()).toBe(1);
   });
 
   it("merges letters into one batch PDF, one page each", async () => {
@@ -53,10 +69,17 @@ describe("demo homepage", () => {
     senderCompany: "EJTECH Ltd",
     senderEmail: "a@x.invalid",
   });
-  it("is noindex and says plainly it's a demo", () => {
+  it("is noindex, with the fixed 'not affiliated' banner", () => {
     expect(html).toContain('<meta name="robots" content="noindex, nofollow, noarchive">');
-    expect(html).toMatch(/Demo homepage made for/);
-    expect(html).toMatch(/isn't listed on search engines/);
+    expect(html).toContain(
+      '<div class="demo" role="note">Sample prepared by EJTECH Ltd, not affiliated with ACME &lt;WIDGETS&gt; LTD</div>',
+    );
+    expect(html).toMatch(/\.demo \{ position: fixed; top: 0;/);
+  });
+  it("has no logos or imagery and loads nothing from anywhere else", () => {
+    expect(html).not.toMatch(
+      /<img|<svg|<picture|<video|<iframe|<object|<link |url\(|https?:\/\/|src=/i,
+    );
   });
   it("escapes company data and states only verified facts (no invented phone numbers)", () => {
     expect(html).toContain("ACME &lt;WIDGETS&gt;");
@@ -137,5 +160,25 @@ describe("letter draft truth check", () => {
     expect(checkDraft({ ...draft, body: `${draft.body} Since 1999.` }, brief)).toContain(
       'unsupported number or date "1999"',
     );
+  });
+});
+
+describe("letter opt-out line", () => {
+  it("names the reply email, the code and a short URL; codes are recognisable in replies", () => {
+    const code = optOutCodeFor();
+    expect(code).toMatch(/^L[A-HJ-NP-Z2-9]{6}$/);
+    const line = letterOptOutLine(cfg, code);
+    expect(line).toContain(cfg.sender.from_email);
+    expect(line).toContain(code);
+    expect(line).toContain(`demo.example.invalid/stop/${code}`);
+    expect(line).not.toMatch(/[{}]/);
+    expect(
+      `Re: your letter\nplease stop, ref ${code.toLowerCase()}`.toUpperCase().match(LETTER_CODE),
+    ).toEqual([code]);
+  });
+  it("config refuses an opt-out line missing the email, code or URL", () => {
+    const bad = structuredClone(cfg);
+    bad.sender.letter_opt_out_text = "Email me to stop letters, thanks.";
+    expect(InfraConfig.safeParse(bad).success).toBe(false);
   });
 });
