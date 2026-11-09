@@ -11,7 +11,8 @@
       "!data",
       "!**/.wrangler",
       "!**/*.md",
-      "!docs/gates/*-outputs"
+      "!docs/gates/*-outputs",
+      "!docs/screens"
     ]
   },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },

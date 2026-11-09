@@ -1,0 +1,608 @@
+[
+  {
+    "area": "dashboard",
+    "page": "overview",
+    "route": "/#/",
+    "about": "Universe membership (who is in and why), verified facts by status, claim counts and sanity-rule rejections.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-overview-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "overview",
+    "route": "/#/",
+    "about": "Universe membership (who is in and why), verified facts by status, claim counts and sanity-rule rejections.",
+    "width": 1440,
+    "theme": "dark",
+    "file": "dashboard-overview-1440-dark.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "overview",
+    "route": "/#/",
+    "about": "Universe membership (who is in and why), verified facts by status, claim counts and sanity-rule rejections.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-overview-390-light.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "overview",
+    "route": "/#/",
+    "about": "Universe membership (who is in and why), verified facts by status, claim counts and sanity-rule rejections.",
+    "width": 390,
+    "theme": "dark",
+    "file": "dashboard-overview-390-dark.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "facts",
+    "route": "/#/facts",
+    "about": "Every verified fact, filterable by company, field and status.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-facts-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "facts",
+    "route": "/#/facts",
+    "about": "Every verified fact, filterable by company, field and status.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-facts-390-light.png",
+    "overflow_px": 774
+  },
+  {
+    "area": "dashboard",
+    "page": "facts-search",
+    "route": "/#/facts (search)",
+    "about": "Searching by company name narrows the facts list.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-facts-search-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "facts-search",
+    "route": "/#/facts (search)",
+    "about": "Searching by company name narrows the facts list.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-facts-search-390-light.png",
+    "overflow_px": 772
+  },
+  {
+    "area": "dashboard",
+    "page": "facts-search-empty",
+    "route": "/#/facts (no match)",
+    "about": "Empty state: a search that matches nothing.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-facts-search-empty-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "facts-search-empty",
+    "route": "/#/facts (no match)",
+    "about": "Empty state: a search that matches nothing.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-facts-search-empty-390-light.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "company",
+    "route": "/#/company/10000001",
+    "about": "One company's facts; the conflicting website_url fact is expanded to show each claim, its source and evidence.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-company-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "company",
+    "route": "/#/company/10000001",
+    "about": "One company's facts; the conflicting website_url fact is expanded to show each claim, its source and evidence.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-company-390-light.png",
+    "overflow_px": 766
+  },
+  {
+    "area": "dashboard",
+    "page": "company-not-found",
+    "route": "/#/company/99999999",
+    "about": "Empty state: a company number we hold nothing for.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-company-not-found-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "company-not-found",
+    "route": "/#/company/99999999",
+    "about": "Empty state: a company number we hold nothing for.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-company-not-found-390-light.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "review",
+    "route": "/#/review",
+    "about": "Your queue: email drafts to approve, ranked leads with their signals, conflicts and quarantined matches.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-review-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "review",
+    "route": "/#/review",
+    "about": "Your queue: email drafts to approve, ranked leads with their signals, conflicts and quarantined matches.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-review-390-light.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "review-draft",
+    "route": "/#/review (first draft)",
+    "about": "Close-up: one email draft with its brief, claims and approve/edit/reject.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-review-draft-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "review-draft",
+    "route": "/#/review (first draft)",
+    "about": "Close-up: one email draft with its brief, claims and approve/edit/reject.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-review-draft-390-light.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "review-conflict",
+    "route": "/#/review (conflicts)",
+    "about": "Close-up: the conflicts list (each links to the company page above).",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-review-conflict-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "review-conflict",
+    "route": "/#/review (conflicts)",
+    "about": "Close-up: the conflicts list (each links to the company page above).",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-review-conflict-390-light.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "letters",
+    "route": "/#/letters",
+    "about": "Print queue: this week's batch awaiting approval, flags, leave-out boxes, PDF download.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-letters-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "letters",
+    "route": "/#/letters",
+    "about": "Print queue: this week's batch awaiting approval, flags, leave-out boxes, PDF download.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-letters-390-light.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "metrics",
+    "route": "/#/metrics",
+    "about": "Accuracy and calibration per source/field, drift, backtests, margins.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-metrics-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "metrics",
+    "route": "/#/metrics",
+    "about": "Accuracy and calibration per source/field, drift, backtests, margins.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-metrics-390-light.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "golden",
+    "route": "/#/golden",
+    "about": "Golden set: companies you've hand-verified, and the next ones to check.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-golden-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "golden",
+    "route": "/#/golden",
+    "about": "Golden set: companies you've hand-verified, and the next ones to check.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-golden-390-light.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "controls",
+    "route": "/#/controls",
+    "about": "Kill switches, spend caps, autonomy per playbook, alerts and the outbox.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-controls-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "controls",
+    "route": "/#/controls",
+    "about": "Kill switches, spend caps, autonomy per playbook, alerts and the outbox.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-controls-390-light.png",
+    "overflow_px": 380
+  },
+  {
+    "area": "dashboard",
+    "page": "overview-empty",
+    "route": "/#/ (empty database)",
+    "about": "Empty state: Overview with no data yet.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-overview-empty-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "overview-empty",
+    "route": "/#/ (empty database)",
+    "about": "Empty state: Overview with no data yet.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-overview-empty-390-light.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "facts-empty",
+    "route": "/#/facts (empty database)",
+    "about": "Empty state: Facts with no data yet.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-facts-empty-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "facts-empty",
+    "route": "/#/facts (empty database)",
+    "about": "Empty state: Facts with no data yet.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-facts-empty-390-light.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "review-empty",
+    "route": "/#/review (empty database)",
+    "about": "Empty state: Review queue with nothing waiting.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-review-empty-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "review-empty",
+    "route": "/#/review (empty database)",
+    "about": "Empty state: Review queue with nothing waiting.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-review-empty-390-light.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "letters-empty",
+    "route": "/#/letters (empty database)",
+    "about": "Empty state: Letters with no letters or batches.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-letters-empty-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "letters-empty",
+    "route": "/#/letters (empty database)",
+    "about": "Empty state: Letters with no letters or batches.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-letters-empty-390-light.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "metrics-empty",
+    "route": "/#/metrics (empty database)",
+    "about": "Empty state: Metrics with no measurements yet.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-metrics-empty-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "metrics-empty",
+    "route": "/#/metrics (empty database)",
+    "about": "Empty state: Metrics with no measurements yet.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-metrics-empty-390-light.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "golden-empty",
+    "route": "/#/golden (empty database)",
+    "about": "Empty state: Golden set with nothing verified yet.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-golden-empty-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "golden-empty",
+    "route": "/#/golden (empty database)",
+    "about": "Empty state: Golden set with nothing verified yet.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-golden-empty-390-light.png",
+    "overflow_px": 264
+  },
+  {
+    "area": "dashboard",
+    "page": "controls-empty",
+    "route": "/#/controls (empty database)",
+    "about": "Empty state: Controls on a fresh install (kill switch ON by default).",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-controls-empty-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "controls-empty",
+    "route": "/#/controls (empty database)",
+    "about": "Empty state: Controls on a fresh install (kill switch ON by default).",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-controls-empty-390-light.png",
+    "overflow_px": 380
+  },
+  {
+    "area": "public",
+    "page": "demo",
+    "route": "/demo/74pxsbx4zmum",
+    "about": "The demo homepage a letter's QR code opens (noindex, fixed 'not affiliated' banner).",
+    "note": "Served from a copy of the database with external actions allowed: with the kill switch ON demo pages return 404 (next shot).",
+    "width": 1440,
+    "theme": "light",
+    "file": "public-demo-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "public",
+    "page": "demo",
+    "route": "/demo/74pxsbx4zmum",
+    "about": "The demo homepage a letter's QR code opens (noindex, fixed 'not affiliated' banner).",
+    "note": "Served from a copy of the database with external actions allowed: with the kill switch ON demo pages return 404 (next shot).",
+    "width": 1440,
+    "theme": "dark",
+    "file": "public-demo-1440-dark.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "public",
+    "page": "demo",
+    "route": "/demo/74pxsbx4zmum",
+    "about": "The demo homepage a letter's QR code opens (noindex, fixed 'not affiliated' banner).",
+    "note": "Served from a copy of the database with external actions allowed: with the kill switch ON demo pages return 404 (next shot).",
+    "width": 390,
+    "theme": "light",
+    "file": "public-demo-390-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "public",
+    "page": "demo",
+    "route": "/demo/74pxsbx4zmum",
+    "about": "The demo homepage a letter's QR code opens (noindex, fixed 'not affiliated' banner).",
+    "note": "Served from a copy of the database with external actions allowed: with the kill switch ON demo pages return 404 (next shot).",
+    "width": 390,
+    "theme": "dark",
+    "file": "public-demo-390-dark.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "public",
+    "page": "demo-kill-switch-on",
+    "route": "/demo/74pxsbx4zmum",
+    "about": "The same demo URL while the kill switch is ON: deliberately not found.",
+    "width": 1440,
+    "theme": "light",
+    "file": "public-demo-kill-switch-on-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "public",
+    "page": "demo-kill-switch-on",
+    "route": "/demo/74pxsbx4zmum",
+    "about": "The same demo URL while the kill switch is ON: deliberately not found.",
+    "width": 390,
+    "theme": "light",
+    "file": "public-demo-kill-switch-on-390-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "public",
+    "page": "demo-expired",
+    "route": "/demo/wz5z2j7hkq5c",
+    "about": "A demo more than 30 days after its batch was approved.",
+    "note": "Same database copy, with this demo aged 31 days.",
+    "width": 1440,
+    "theme": "light",
+    "file": "public-demo-expired-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "public",
+    "page": "demo-expired",
+    "route": "/demo/wz5z2j7hkq5c",
+    "about": "A demo more than 30 days after its batch was approved.",
+    "note": "Same database copy, with this demo aged 31 days.",
+    "width": 390,
+    "theme": "light",
+    "file": "public-demo-expired-390-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "public",
+    "page": "opt-out",
+    "route": "/stop/LQFSK74",
+    "about": "The short opt-out URL printed on each letter: asks before recording anything.",
+    "width": 1440,
+    "theme": "light",
+    "file": "public-opt-out-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "public",
+    "page": "opt-out",
+    "route": "/stop/LQFSK74",
+    "about": "The short opt-out URL printed on each letter: asks before recording anything.",
+    "width": 390,
+    "theme": "light",
+    "file": "public-opt-out-390-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "public",
+    "page": "opt-out-done",
+    "route": "/stop/LQFSK74 (after confirming)",
+    "about": "After pressing the button: the company is on the suppression list.",
+    "width": 1440,
+    "theme": "light",
+    "file": "public-opt-out-done-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "public",
+    "page": "opt-out-done",
+    "route": "/stop/LQFSK74 (after confirming)",
+    "about": "After pressing the button: the company is on the suppression list.",
+    "width": 390,
+    "theme": "light",
+    "file": "public-opt-out-done-390-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "public",
+    "page": "opt-out-unknown",
+    "route": "/stop/LZZZZZZ",
+    "about": "Empty state: an opt-out code we don't recognise.",
+    "width": 1440,
+    "theme": "light",
+    "file": "public-opt-out-unknown-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "public",
+    "page": "opt-out-unknown",
+    "route": "/stop/LZZZZZZ",
+    "about": "Empty state: an opt-out code we don't recognise.",
+    "width": 390,
+    "theme": "light",
+    "file": "public-opt-out-unknown-390-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "x402",
+    "page": "payment-required",
+    "route": "/x402/check/10000000",
+    "about": "The 402 challenge an AI agent receives: the decoded PAYMENT-REQUIRED body.",
+    "width": 1440,
+    "theme": "light",
+    "file": "x402-payment-required-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "x402",
+    "page": "payment-required",
+    "route": "/x402/check/10000000",
+    "about": "The 402 challenge an AI agent receives: the decoded PAYMENT-REQUIRED body.",
+    "width": 390,
+    "theme": "light",
+    "file": "x402-payment-required-390-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "letter",
+    "page": "print-batch-p1",
+    "route": "/api/letters/batches/2026-W46-mw9rlijw/pdf (page 1)",
+    "about": "Page 1 of the print batch PDF: the letter as it will be printed.",
+    "width": 1440,
+    "theme": "light",
+    "file": "letter-print-batch-p1-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "letter",
+    "page": "print-batch-p1",
+    "route": "/api/letters/batches/2026-W46-mw9rlijw/pdf (page 1)",
+    "about": "Page 1 of the print batch PDF: the letter as it will be printed.",
+    "width": 390,
+    "theme": "light",
+    "file": "letter-print-batch-p1-390-light.png",
+    "overflow_px": 0
+  }
+]
