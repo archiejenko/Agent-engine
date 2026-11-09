@@ -10,7 +10,8 @@
       "!**/dist",
       "!data",
       "!**/.wrangler",
-      "!**/*.md"
+      "!**/*.md",
+      "!docs/gates/*-outputs"
     ]
   },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },

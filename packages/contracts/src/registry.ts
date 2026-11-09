@@ -36,21 +36,28 @@ export const FieldDefinition = z
      * period's figure should exist.
      */
     period_dated: z.boolean().default(false),
+    /**
+     * Site-level facts (a website exists, when it was last updated, its tech, its contact routes) hold
+     * their confidence for the whole shelf life and then go stale, instead of decaying from day one.
+     * A website doesn't become gradually less likely to exist; it's either been re-checked or it hasn't.
+     */
+    hold_until_expiry: z.boolean().default(false),
   })
   .superRefine((f, ctx) => {
-    if (f.period_dated) {
+    if (f.period_dated || f.hold_until_expiry) {
+      const kind = f.period_dated ? "period-dated" : "hold-until-expiry";
       if (f.half_life_days !== null) {
         ctx.addIssue({
           code: "custom",
           path: ["half_life_days"],
-          message: "period-dated facts don't decay: half_life_days must be null",
+          message: `${kind} facts don't decay: half_life_days must be null`,
         });
       }
       if (f.shelf_life_days === null) {
         ctx.addIssue({
           code: "custom",
           path: ["shelf_life_days"],
-          message: "period-dated facts need a shelf life (when a newer period is due)",
+          message: `${kind} facts need a shelf life (when they go stale)`,
         });
       }
     } else if ((f.shelf_life_days === null) !== (f.half_life_days === null)) {

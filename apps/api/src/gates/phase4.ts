@@ -73,7 +73,7 @@ export async function runPhase4Gate(
       c.headers.get("PAYMENT-REQUIRED") as string,
     ).accepts[0] as PaymentRequirements;
     const r = await app.request(path, {
-      headers: { "PAYMENT-SIGNATURE": fakeAgentPayment(reqs, agent) },
+      headers: { "PAYMENT-SIGNATURE": fakeAgentPayment(reqs, { from: agent }) },
     });
     return {
       status: r.status,

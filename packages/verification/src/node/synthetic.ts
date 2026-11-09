@@ -248,11 +248,22 @@ export function syntheticChFetch(companies: SyntheticCompany[]): typeof fetch {
           company_status: c.status.toLowerCase(),
           type: "ltd",
           date_of_creation: "2015-03-02",
-          registered_office_address: {
-            address_line_1: `${seq} Synthetic Road`,
-            postal_code: c.postcode,
-            country: "England",
-          },
+          // About 1 in 11 use their accountant's address as the registered office (a real pattern).
+          registered_office_address:
+            seq % 11 === 0
+              ? {
+                  care_of: "Ledger & Co Chartered Accountants",
+                  address_line_1: "Ledger House, 10 Counting Street",
+                  locality: "Manchester",
+                  postal_code: c.postcode,
+                  country: "England",
+                }
+              : {
+                  address_line_1: `${seq} Synthetic Road`,
+                  locality: "Manchester",
+                  postal_code: c.postcode,
+                  country: "England",
+                },
           sic_codes: c.sic,
           accounts: {
             last_accounts: {

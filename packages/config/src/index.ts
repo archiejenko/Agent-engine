@@ -204,6 +204,21 @@ export const InfraConfig = z.object({
     address: z.string().min(1),
     from_email: z.string().min(3),
     opt_out_text: z.string().min(10),
+    /** Printed at the foot of every letter (post isn't covered by PECR, but GDPR's right to object is). */
+    letter_opt_out_text: z.string().min(10),
+  }),
+  /** sme_letter: postal letters + demo homepage for leads we can't email. */
+  letters: z.object({
+    /** Playbook to use instead of these when a lead has no emailable address. */
+    fallback_for: z.array(z.string()).min(1),
+    playbook: z.string().min(1),
+    /** Where demo pages are served (the QR code points here). Set a real host at cutover. */
+    demo_base_url: z.url(),
+    /** A new print batch is assembled at most this often. */
+    batch_every_days: z.number().int().positive(),
+    /** Accountant/formation-agent registered offices: shared by ≥ this many companies → flag. */
+    shared_address_threshold: z.number().int().min(2),
+    accountant_keywords: z.array(z.string().min(2)).min(1),
   }),
 });
 export type InfraConfig = z.infer<typeof InfraConfig>;
@@ -218,6 +233,8 @@ export const ProductsConfig = z.object({
     network: z.string().regex(/^eip155:\d+$/),
     asset: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
     asset_decimals: z.number().int().positive(),
+    /** The token's EIP-712 domain (USDC: Base Sepolia "USDC"/"2"; Base mainnet "USD Coin"/"2"). */
+    eip712: z.object({ name: z.string().min(1), version: z.string().min(1) }),
     max_timeout_seconds: z.number().int().positive(),
     prices_usd: z.object({ cached: z.number().positive(), premium: z.number().positive() }),
     cost_per_call_gbp: z.object({ cached: z.number().min(0), premium: z.number().min(0) }),

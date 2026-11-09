@@ -10,12 +10,17 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@ae/contracts": "workspace:*",
-    "@ae/storage": "workspace:*",
     "@ae/config": "workspace:*",
-    "@ae/verification": "workspace:*",
+    "@ae/contracts": "workspace:*",
     "@ae/opportunity": "workspace:*",
     "@ae/ports": "workspace:*",
+    "@ae/storage": "workspace:*",
+    "@ae/verification": "workspace:*",
+    "pdf-lib": "1.17.1",
+    "qrcode": "1.5.4",
     "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/qrcode": "1.5.6"
   }
 }

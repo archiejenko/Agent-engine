@@ -24,7 +24,8 @@
     "company": "EJTECH Ltd",
     "address": "Manchester, UK",
     "from_email": "archie@example.invalid",
-    "opt_out_text": "If you'd rather not hear from me again, just reply 'no thanks' and I won't contact you again."
+    "opt_out_text": "If you'd rather not hear from me again, just reply 'no thanks' and I won't contact you again.",
+    "letter_opt_out_text": "If you'd rather I didn't write again, email me or write to the address above with \"no more letters\" and I won't contact you again."
   },
   "playbook_for_module": {
     "lead_gen_sme_web": "sme_outreach",
@@ -77,5 +78,25 @@
     "min_no_edit": 0.8,
     "max_breaches": 0,
     "l2_review_sample": 0.2
+  },
+  "letters": {
+    "_note": "demo_base_url is a placeholder until a real demo host is set up (docs/live-cutover.md).",
+    "fallback_for": ["sme_outreach"],
+    "playbook": "sme_letter",
+    "demo_base_url": "https://demo.example.invalid",
+    "batch_every_days": 7,
+    "shared_address_threshold": 5,
+    "accountant_keywords": [
+      "accountant",
+      "accountancy",
+      "chartered",
+      "bookkeep",
+      "tax adviser",
+      "formation",
+      "company secretar",
+      "registered office service",
+      "virtual office",
+      "c/o"
+    ]
   }
 }

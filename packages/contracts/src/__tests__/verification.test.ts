@@ -242,6 +242,12 @@ describe("Field registry", () => {
       }).success,
     ).toBe(false);
   });
+  it("hold-until-expiry fields have no half-life but must have a shelf life", () => {
+    expect(
+      FieldDefinition.safeParse({ ...def, hold_until_expiry: true, half_life_days: null }).success,
+    ).toBe(true);
+    expect(FieldDefinition.safeParse({ ...def, hold_until_expiry: true }).success).toBe(false);
+  });
   it("rejects duplicate fields", () => {
     expect(FieldRegistry.safeParse([def, def]).success).toBe(false);
   });

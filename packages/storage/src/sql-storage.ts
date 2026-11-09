@@ -1,5 +1,6 @@
 import { Claim, VerifiedFact, VerifiedFactVersion } from "@ae/contracts";
 import type { SqlDriver, SqlStatement, SqlValue } from "./driver.ts";
+import { lettersStorage } from "./letters.ts";
 import { phase2 } from "./phase2.ts";
 import { phase3 } from "./phase3.ts";
 import { phase4 } from "./phase4.ts";
@@ -134,7 +135,7 @@ const CLAIM_INSERT_COLS =
 /** Storage implemented over plain SQL. Works on any SqlDriver (SQLite file or D1). */
 export class SqlStorage implements Storage {
   constructor(private readonly db: SqlDriver) {
-    Object.assign(this, phase2(db), phase3(db), phase4(db), phase5(db));
+    Object.assign(this, phase2(db), phase3(db), phase4(db), phase5(db), lettersStorage(db));
   }
   declare signals: Storage["signals"];
   declare moduleRuns: Storage["moduleRuns"];
@@ -161,6 +162,9 @@ export class SqlStorage implements Storage {
   declare suppressions: Storage["suppressions"];
   declare outbox: Storage["outbox"];
   declare followups: Storage["followups"];
+  declare demoPages: Storage["demoPages"];
+  declare letters: Storage["letters"];
+  declare printBatches: Storage["printBatches"];
 
   private async batchChunked(statements: SqlStatement[]) {
     for (const part of chunk(statements, BATCH)) await this.db.batch(part);

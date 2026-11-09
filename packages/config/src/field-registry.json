@@ -287,7 +287,8 @@
       "kind": "exact"
     },
     "shelf_life_days": 90,
-    "half_life_days": 45.0
+    "half_life_days": null,
+    "hold_until_expiry": true
   },
   {
     "field": "website_url",
@@ -297,8 +298,9 @@
     "tolerance": {
       "kind": "exact"
     },
-    "shelf_life_days": 180,
-    "half_life_days": 90.0
+    "shelf_life_days": 90,
+    "half_life_days": null,
+    "hold_until_expiry": true
   },
   {
     "field": "website_https",
@@ -309,7 +311,8 @@
       "kind": "exact"
     },
     "shelf_life_days": 90,
-    "half_life_days": 45.0
+    "half_life_days": null,
+    "hold_until_expiry": true
   },
   {
     "field": "website_mobile_ready",
@@ -320,7 +323,8 @@
       "kind": "exact"
     },
     "shelf_life_days": 90,
-    "half_life_days": 45.0
+    "half_life_days": null,
+    "hold_until_expiry": true
   },
   {
     "field": "website_copyright_year",
@@ -330,8 +334,9 @@
     "tolerance": {
       "kind": "exact"
     },
-    "shelf_life_days": 180,
-    "half_life_days": 90.0
+    "shelf_life_days": 90,
+    "half_life_days": null,
+    "hold_until_expiry": true
   },
   {
     "field": "website_last_modified",
@@ -342,7 +347,8 @@
       "kind": "exact"
     },
     "shelf_life_days": 90,
-    "half_life_days": 45.0
+    "half_life_days": null,
+    "hold_until_expiry": true
   },
   {
     "field": "website_company_number",
@@ -375,7 +381,8 @@
       "kind": "exact"
     },
     "shelf_life_days": 90,
-    "half_life_days": 45.0
+    "half_life_days": null,
+    "hold_until_expiry": true
   },
   {
     "field": "job_postings",

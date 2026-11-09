@@ -7,7 +7,6 @@ import {
   mapCompanyBundle,
   type VerificationContext,
 } from "@ae/verification";
-import type { X402Facilitator } from "./x402.ts";
 
 /** Premium tier: pull the company from Companies House right now and re-verify before answering. */
 export async function liveRefresh(
@@ -27,28 +26,4 @@ export async function liveRefresh(
   await ingestClaims(storage, ctx, { run_id: run.run_id, fetched_at: bundle.fetched_at }, claims);
   await storage.runs.finish(run.run_id, "succeeded");
   return true;
-}
-
-/** Wraps a facilitator so payments are refused while the kill switch is on (guardrail 7). */
-export function guardedFacilitator(
-  inner: X402Facilitator,
-  allowed: () => Promise<boolean>,
-): X402Facilitator {
-  return {
-    dryRun: inner.dryRun,
-    async verify(p, r) {
-      if (!(await allowed())) return { isValid: false, invalidReason: "service_paused" };
-      return inner.verify(p, r);
-    },
-    async settle(p, r) {
-      if (!(await allowed()))
-        return {
-          success: false,
-          errorReason: "service_paused",
-          transaction: "",
-          network: r.network,
-        };
-      return inner.settle(p, r);
-    },
-  };
 }

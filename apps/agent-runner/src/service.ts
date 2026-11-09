@@ -8,17 +8,22 @@ import {
   type ModelsConfig,
 } from "@ae/config";
 import {
+  createPrintBatch,
   createTask,
+  fakeLetterWriter,
   fakeOutreachWriter,
   type LoadedPlaybook,
+  letterSuppressionKey,
   type PlaybookImpl,
   PlaybookRunner,
   parsePlaybook,
   processInbox,
   QUEUE_ORDER,
   recordBreach,
+  registerLetterTools,
   registerOutreachTools,
   registerStandardTools,
+  SME_LETTER,
   SME_OUTREACH,
   ToolRegistry,
 } from "@ae/infra";
@@ -45,7 +50,12 @@ import {
   WATCH_ALERT,
 } from "@ae/products";
 import type { Storage, StoredTask } from "@ae/storage";
-import { defaultContext, fakeWebsiteExtractor, type VerificationContext } from "@ae/verification";
+import {
+  defaultContext,
+  fakeWebsiteExtractor,
+  getVerifiedFacts,
+  type VerificationContext,
+} from "@ae/verification";
 
 /** Load every playbooks/<name>/SKILL.md. */
 export async function loadPlaybooks(dir: string): Promise<Map<string, LoadedPlaybook>> {
@@ -67,6 +77,7 @@ export async function loadPlaybooks(dir: string): Promise<Map<string, LoadedPlay
 
 export const PLAYBOOK_IMPLS = new Map<string, PlaybookImpl>([
   ["sme_outreach", SME_OUTREACH],
+  ["sme_letter", SME_LETTER],
   ["human_report", HUMAN_REPORT],
   ["watch_alert", WATCH_ALERT],
   ["monitoring_subscription", MONITORING_SUBSCRIPTION],
@@ -78,6 +89,7 @@ export function fakeModel(): FakeModel {
     website_extract: fakeWebsiteExtractor,
     opportunity_explain: fakeExplainer,
     sme_outreach_draft: fakeOutreachWriter,
+    sme_letter_draft: fakeLetterWriter,
   });
 }
 
@@ -112,6 +124,7 @@ export class AgentService {
   readonly email: EmailSender;
   readonly alerts: AlertChannel;
   readonly inbox: Inbox;
+  readonly ctx: VerificationContext;
 
   constructor(d: ServiceDeps) {
     this.storage = d.storage;
@@ -121,6 +134,7 @@ export class AgentService {
     this.model = d.model ?? fakeModel();
     this.tools = new ToolRegistry(d.storage, this.infra);
     const ctx = d.ctx ?? defaultContext();
+    this.ctx = ctx;
     this.email = d.email ?? new FakeEmailSender();
     this.alerts = d.alerts ?? new FakeAlertChannel();
     this.inbox = d.inbox ?? new FakeInbox();
@@ -130,6 +144,7 @@ export class AgentService {
       fetcher: d.fetcher ?? new FakeWebFetcher(new Map()),
     });
     registerOutreachTools(this.tools, { storage: d.storage, cfg: this.infra, email: this.email });
+    registerLetterTools(this.tools, { storage: d.storage, cfg: this.infra });
     registerProductTools(this.tools, {
       storage: d.storage,
       ctx,
@@ -182,8 +197,21 @@ export class AgentService {
         }
         pilotUsed.set(o.module, (pilotUsed.get(o.module) as number) + 1);
       }
-      const playbook = this.infra.playbook_for_module[o.module];
+      let playbook = this.infra.playbook_for_module[o.module];
       if (!playbook) continue;
+      // Leads we can't email (no website, or no emailable address) get a letter instead.
+      if (
+        this.infra.letters.fallback_for.includes(playbook) &&
+        !(await this.emailable(o.entity_id))
+      )
+        playbook = this.infra.letters.playbook;
+      if (
+        playbook === this.infra.letters.playbook &&
+        (await this.storage.suppressions.isSuppressed(letterSuppressionKey(o.entity_id)))
+      ) {
+        await this.storage.opportunities.setStatus(o.opportunity_id, "actioned");
+        continue; // asked not to receive letters
+      }
       const pb = this.playbooks.get(playbook);
       if (!pb) continue;
       const r = await createTask(this.storage, this.infra, this.playbooks, this.queue, {
@@ -197,6 +225,28 @@ export class AgentService {
       await this.storage.opportunities.setStatus(o.opportunity_id, "actioned");
     }
     return created;
+  }
+
+  /**
+   * Can we email this company within the outreach rules? A verified role address from its own website
+   * and a corporate company type (anything else needs prior consent). Routing only, not a claim.
+   */
+  async emailable(entityId: string): Promise<boolean> {
+    const facts = await getVerifiedFacts(this.storage, this.ctx, {
+      entities: [entityId],
+      fields: ["contact_email", "company_type"],
+      minConfidence: 0,
+      asOf: new Date().toISOString(),
+      lanes: ["open"],
+      caller: "playbook",
+    });
+    const email = facts.find((f) => f.field === "contact_email" && f.status === "verified");
+    const type = facts.find((f) => f.field === "company_type")?.value;
+    return (
+      Boolean(email) &&
+      typeof type === "string" &&
+      this.infra.outreach.corporate_company_types.includes(type)
+    );
   }
 
   /** Decisions recorded by the dashboard API (which can't run playbooks itself). */
@@ -280,6 +330,17 @@ export class AgentService {
     const decisions = await this.applyPendingDecisions();
     const ran = await this.runQueued(max);
     const timedOut = await this.runner.timeoutStuck();
-    return { intake, decisions, ran: ran.length, timed_out: timedOut, alerts, inbox, followups };
+    // Weekly print batch of prepared letters (at most one per batch_every_days).
+    const batch = await createPrintBatch(this.storage, this.infra, { now });
+    return {
+      intake,
+      decisions,
+      ran: ran.length,
+      timed_out: timedOut,
+      alerts,
+      inbox,
+      followups,
+      print_batch: batch?.id ?? null,
+    };
   }
 }

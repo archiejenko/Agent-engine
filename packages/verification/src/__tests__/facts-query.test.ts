@@ -368,6 +368,35 @@ describe("period-dated facts (headcount from accounts)", () => {
   });
 });
 
+describe("site-level website facts (hold until expiry)", () => {
+  it("keep their confidence for the 90-day shelf life, then go stale (no extra crawls, same floor)", async () => {
+    await ingest([
+      await chClaim(runId, {
+        field: "website_found",
+        value: true,
+        published: "2026-09-01T00:00:00Z",
+        fetched: "2026-09-01T00:00:00Z",
+        source: "website_discovery",
+        tier: 3,
+      }),
+    ]);
+    const q2 = (asOf: string) =>
+      getVerifiedFacts(storage, ctx, {
+        entities: ["01234567"],
+        fields: ["website_found"],
+        minConfidence: 0,
+        asOf,
+        lanes: ["open"],
+        caller: "dashboard",
+      });
+    const [day60] = await q2("2026-10-31");
+    expect(day60?.confidence).toBeCloseTo(0.75, 12); // still above the 0.7 lead-gen floor
+    expect(day60?.status).toBe("verified");
+    const [day95] = await q2("2026-12-05");
+    expect(day95?.status).toBe("stale");
+  });
+});
+
 describe("ingest pipeline", () => {
   it("drops and logs unknown fields; never guesses", async () => {
     const stats = await ingest([

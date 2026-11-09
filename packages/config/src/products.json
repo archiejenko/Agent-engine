@@ -5,6 +5,7 @@
     "network": "eip155:84532",
     "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
     "asset_decimals": 6,
+    "eip712": { "name": "USDC", "version": "2" },
     "max_timeout_seconds": 60,
     "prices_usd": {
       "cached": 0.05,

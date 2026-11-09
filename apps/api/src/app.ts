@@ -1,9 +1,4 @@
-import {
-  loadInfraConfig,
-  loadModelsConfig,
-  loadProductsConfig,
-  loadUniverseConfig,
-} from "@ae/config";
+import { loadInfraConfig, loadProductsConfig, loadUniverseConfig } from "@ae/config";
 import type { Autonomy, Claim } from "@ae/contracts";
 import { K, loadBundledPlaybooks, playbookStats, promotePlaybook, setKillSwitch } from "@ae/infra";
 import { reviewQueue } from "@ae/opportunity";
@@ -14,21 +9,13 @@ import {
   verifyStripeWebhook,
   WebhookSignatureError,
 } from "@ae/ports";
-import {
-  b64,
-  companyCheck,
-  HEADERS,
-  handleCheckoutCompleted,
-  matchesRequirements,
-  type PaymentPayload,
-  requirementsFor,
-  unb64,
-  type X402Facilitator,
-} from "@ae/products";
+import { handleCheckoutCompleted } from "@ae/products";
 import type { Storage } from "@ae/storage";
 import { accuracyReport, defaultContext, recordGolden, resolveConflict } from "@ae/verification";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
+import { mountLetters } from "./letters-route.ts";
+import { mountX402, type X402Deps } from "./x402-route.ts";
 
 export const SERVICE_NAME = "agent-engine-api";
 export const API_VERSION = "0.2.0";
@@ -46,12 +33,7 @@ export interface AppDeps {
     editedText: string | null,
   ) => Promise<unknown>;
   /** x402 company check. Absent = endpoint disabled. Public (agents can't log in): NOT behind Access. */
-  x402?: {
-    facilitator: X402Facilitator;
-    payTo: string;
-    /** Premium tier: re-verify the company live before answering. Returns false if it couldn't. */
-    refresh?: (companyNumber: string) => Promise<boolean>;
-  };
+  x402?: X402Deps;
   /** Card payments for the human report and monitoring. Public endpoints; absent = disabled. */
   payments?: { provider: PaymentProvider; webhookSecret: string; publicBaseUrl: string };
 }
@@ -164,15 +146,19 @@ export function createApp(deps: AppDeps) {
     const names = new Map<string, string>();
     for (const q of queue)
       names.set(q.entity_id, (await s.entities.get(q.entity_id))?.name ?? q.entity_id);
-    const drafts = (await s.tasks.list({ status: "awaiting_approval", limit: 100 })).map((t) => ({
-      task_id: t.task_id,
-      playbook: t.playbook,
-      source_ref: t.source_ref,
-      cost_gbp: t.cost_gbp,
-      awaiting: (t.state as { awaiting?: unknown }).awaiting ?? null,
-      brief: (t.state as { outputs?: { company_brief?: unknown } }).outputs?.company_brief ?? null,
-      pending_decision: (t.state as { pending_decision?: unknown }).pending_decision ?? null,
-    }));
+    // Letters are approved in weekly print batches (Letters page), not one by one here.
+    const drafts = (await s.tasks.list({ status: "awaiting_approval", limit: 100 }))
+      .filter((t) => t.playbook !== "sme_letter")
+      .map((t) => ({
+        task_id: t.task_id,
+        playbook: t.playbook,
+        source_ref: t.source_ref,
+        cost_gbp: t.cost_gbp,
+        awaiting: (t.state as { awaiting?: unknown }).awaiting ?? null,
+        brief:
+          (t.state as { outputs?: { company_brief?: unknown } }).outputs?.company_brief ?? null,
+        pending_decision: (t.state as { pending_decision?: unknown }).pending_decision ?? null,
+      }));
     const conflicts = (await s.facts.listCurrent({ status: "conflict", limit: 50, offset: 0 }))
       .rows;
     const quarantine = await s.quarantine.listOpen(50);
@@ -330,116 +316,10 @@ export function createApp(deps: AppDeps) {
   });
 
   // ---- Phase 4: paid x402 company check (public; payment is the access control).
-  app.get("/x402/check/:number", async (c) => {
-    const started = Date.now();
-    if (!deps.x402) return c.json({ error: "x402_disabled" }, 404);
-    const x = deps.x402;
-    const cfg = loadProductsConfig().x402;
-    const usdToGbp = loadModelsConfig().usd_to_gbp;
-    const number = c.req.param("number").toUpperCase();
-    const tier = c.req.query("tier") === "premium" ? "premium" : "cached";
-    const s = deps.storage(c.env);
-    const reqs = requirementsFor(cfg, tier, x.payTo, new URL(c.req.url).pathname);
-    const log = (
-      status: Parameters<typeof s.x402.log>[0]["status"],
-      extra: { payer?: string | null; tx?: string | null; cost?: number } = {},
-    ) =>
-      s.x402.log({
-        id: crypto.randomUUID(),
-        company_number: number,
-        tier,
-        status,
-        price_usd: status === "served" ? cfg.prices_usd[tier] : 0,
-        price_gbp: status === "served" ? cfg.prices_usd[tier] * usdToGbp : 0,
-        cost_gbp: extra.cost ?? 0,
-        payer: extra.payer ?? null,
-        transaction_ref: extra.tx ?? null,
-        network: cfg.network,
-        latency_ms: Date.now() - started,
-        dry_run: x.facilitator.dryRun,
-        task_id: null,
-      });
-    if (!/^[A-Z0-9]{8}$/.test(number)) return c.json({ error: "bad_company_number" }, 400);
-    // Unknown companies are free to ask about: nothing to sell.
-    if (
-      !(await s.entities.get(number)) &&
-      (await s.facts.listCurrent({ entityId: number, limit: 1, offset: 0 })).total === 0
-    ) {
-      await log("not_found");
-      return c.json({ error: "not_found", company_number: number }, 404);
-    }
-    const header = c.req.header(HEADERS.signature);
-    if (!header) {
-      await log("challenge");
-      const body = {
-        x402Version: 2,
-        error: "payment required",
-        resource: {
-          url: c.req.url,
-          description: `UK company check (${tier})`,
-          mimeType: "application/json",
-        },
-        accepts: [reqs],
-      };
-      return c.json(body, 402, { [HEADERS.required]: b64(body) });
-    }
-    let payload: PaymentPayload;
-    try {
-      payload = unb64<PaymentPayload>(header);
-    } catch {
-      await log("invalid_payment");
-      return c.json({ error: "invalid payment header" }, 402);
-    }
-    const mismatch = matchesRequirements(payload, reqs);
-    const verified = mismatch
-      ? { isValid: false, invalidReason: mismatch }
-      : await x.facilitator.verify(payload, reqs);
-    if (!verified.isValid) {
-      await log("invalid_payment", { payer: verified.payer ?? null });
-      return c.json(
-        { x402Version: 2, error: verified.invalidReason ?? "invalid payment", accepts: [reqs] },
-        402,
-      );
-    }
-    // Do the work first; settle only if it succeeded.
-    let refreshed = false;
-    if (tier === "premium") {
-      refreshed = x.refresh ? await x.refresh(number).catch(() => false) : false;
-      if (!refreshed) {
-        await log("failed", { payer: verified.payer ?? null });
-        return c.json(
-          { error: "live re-verification failed; you have not been charged", retry: true },
-          503,
-        );
-      }
-    }
-    const result = await companyCheck(s, vctx, number, { tier, caller: "x402", refreshed });
-    if (!result) {
-      await log("failed", { payer: verified.payer ?? null });
-      return c.json({ error: "no verified facts; you have not been charged" }, 404);
-    }
-    const settled = await x.facilitator.settle(payload, reqs);
-    if (!settled.success) {
-      await log("settle_failed", { payer: verified.payer ?? null });
-      return c.json({ error: settled.errorReason ?? "settlement failed" }, 402);
-    }
-    const priceGbp = cfg.prices_usd[tier] * usdToGbp;
-    await s.ledger.record({
-      rail: "x402",
-      reference: settled.transaction,
-      payer: settled.payer ?? null,
-      amount_gbp: priceGbp,
-      currency_amount: `${reqs.amount} ${cfg.asset}@${cfg.network}`,
-      dry_run: x.facilitator.dryRun,
-      task_id: null,
-    });
-    await log("served", {
-      payer: settled.payer ?? null,
-      tx: settled.transaction,
-      cost: cfg.cost_per_call_gbp[tier] + cfg.facilitator_fee_gbp,
-    });
-    return c.json(result, 200, { [HEADERS.response]: b64(settled) });
-  });
+  mountX402(app, deps.x402, deps.storage, vctx);
+
+  // ---- sme_letter: print queue (dashboard) and demo pages (public, noindex).
+  mountLetters(app, deps.storage, deps.decide);
 
   // ---- Phase 5: card payments (public), controls and autonomy (dashboard, behind Access).
   const CheckoutBody = z.object({

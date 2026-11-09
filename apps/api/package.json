@@ -11,18 +11,22 @@
     "cf:deploy": "wrangler deploy && wrangler d1 migrations apply DB --remote"
   },
   "dependencies": {
+    "@ae/agent-runner": "workspace:*",
+    "@ae/config": "workspace:*",
     "@ae/contracts": "workspace:*",
+    "@ae/infra": "workspace:*",
+    "@ae/opportunity": "workspace:*",
+    "@ae/products": "workspace:*",
     "@ae/storage": "workspace:*",
+    "@ae/verification": "workspace:*",
     "@hono/node-server": "2.1.6",
+    "@x402/core": "2.30.0",
+    "@x402/evm": "2.30.0",
+    "@x402/hono": "2.30.0",
     "hono": "4.13.16",
     "jose": "6.2.15",
-    "@ae/config": "workspace:*",
-    "zod": "4.6.7",
-    "@ae/opportunity": "workspace:*",
-    "@ae/agent-runner": "workspace:*",
-    "@ae/products": "workspace:*",
-    "@ae/infra": "workspace:*",
-    "@ae/verification": "workspace:*"
+    "pdf-lib": "1.17.1",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "wrangler": "4.158.0"

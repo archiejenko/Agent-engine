@@ -2,6 +2,53 @@
 
 Newest first. Each entry: what we decided, why, and who approved it.
 
+## 2026-11-09 — Changes before cutover (Archie's three changes)
+
+- **x402 now uses the official flow**: `@x402/hono` `paymentMiddleware` + `x402ResourceServer` +
+  `ExactEvmScheme` (all 2.30.0), replacing our own gate. Verify → our handler → settle only if the
+  handler answered < 400 is the library's behaviour, so a failed premium re-check is still never
+  charged. Our code keeps: the pre-check (bad number 400, unknown company 404 and free), logging and the
+  ledger (on the way out), the kill-switch guard around the facilitator, and the fake facilitator.
+- **The fake facilitator now checks what a real one does for EIP-3009**: signature (fake), recipient,
+  amount, network/asset, validity window (`validAfter` ≤ now < `validBefore`, no longer than
+  `maxTimeoutSeconds`) and nonce replay. Tests cover each.
+- **EIP-712 domain is now explicit config** (`products.json` → `x402.eip712`), and a test checks it
+  against the library's USDC table. Reason: Base Sepolia USDC is named "USDC" but Base mainnet USDC is
+  "USD Coin"; a mainnet switch that changed only network and asset would produce signatures the
+  facilitator rejects.
+- **On Cloudflare the middleware is built per request** with the facilitator's `/supported` answer
+  cached as a value. Reason: the library syncs with the facilitator once and shares that promise across
+  requests, which Workers don't allow (the request hung; found by the Worker bundle test). Alternative:
+  `syncFacilitatorOnStart: false` plus our own sync (more custom code). Also: the Worker now needs
+  `nodejs_compat` (the middleware uses `Buffer`).
+- **Site-level website facts hold for 90 days, then go stale** (`hold_until_expiry` in the field
+  registry): website found, URL, copyright year, last modified, HTTPS, mobile-ready, contact email. Before,
+  a 45-day half-life pulled a single website source (0.75) below the 0.7 floor within about 5 days. The
+  floor and crawl frequency are unchanged, as asked. There's no separate "tech stack" field: HTTPS and
+  mobile-ready are the tech facts we collect. Job postings keep their 30-day decay.
+- **`sme_letter` (L0)** for approved leads with no emailable address (no verified contact email, or a
+  company type that needs prior consent). Routing is config (`infra.json` → `letters.fallback_for`).
+  Truth check identical to email. The demo homepage is a deterministic template using only verified
+  facts (name, town, trading since), not model-written: no invented services, reviews or phone numbers.
+  Alternative: model-written sector copy (needs its own checker). Letter: A4, "The Directors" in the
+  envelope window position, QR drawn as vector squares (prints sharply), sender identity and opt-out
+  added by code.
+- **Print batches**: letters wait at a gate; once every 7 days the waiting letters become one batch;
+  approving it decides every letter's gate (you can leave some out). Demo pages are served only for
+  approved letters **and** only while external actions are allowed for `sme_letter`, so the kill switch
+  also takes every demo offline. Alternative: publish demos at prepare time (rejected: nothing public
+  before you approve).
+- **Letter opt-outs use the shared suppression list** (`entity:<company number>`; API
+  `POST /api/letters/opt-out/:company`). Suppressed companies get no letter task.
+- **Accountant-address bias is flagged, not blocked**: care-of, accountancy/formation wording, or ≥ 5
+  companies sharing the registered office. You decide per letter.
+- **Claude adapter**: server-side refusal `fallbacks` are sent only to models that support them (Opus
+  5.5, Sonnet 5.5). Haiku 5.5 has none, so without this the Haiku extraction comparison would have
+  failed on its first call.
+- **Cutover order is now time to cash** (`docs/live-cutover.md`), with the Haiku 5.5 (extraction) and
+  Sonnet 5.5 (drafting) comparisons as a config switch in `models.json`. Phone outreach stays out of
+  scope; if added it must screen against CTPS/TPS first.
+
 ## 2026-11-08 — Phase 5 decisions (review at the end)
 
 - **⚠ Prices (yours to set): monitoring £19/month per customer (+ £0.50 cost budget per alert), human

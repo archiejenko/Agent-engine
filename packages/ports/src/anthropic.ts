@@ -16,15 +16,22 @@ export interface RoleModelConfig {
   effort: "low" | "medium" | "high" | "xhigh" | "max";
 }
 
+/** Models that accept the server-side `fallbacks` parameter (verify at cutover). */
+export const SERVER_FALLBACK_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-2"];
+export const supportsServerFallback = (model: string) => SERVER_FALLBACK_MODELS.includes(model);
+
 export class AnthropicModelClient implements ModelClient {
   readonly name = "anthropic";
   private readonly client: Anthropic;
 
   constructor(
     private readonly roles: Record<ModelRequest["role"], RoleModelConfig>,
-    opts: { apiKey?: string } = {},
+    opts: { apiKey?: string; fetch?: typeof fetch } = {},
   ) {
-    this.client = new Anthropic(opts.apiKey ? { apiKey: opts.apiKey } : {});
+    this.client = new Anthropic({
+      ...(opts.apiKey ? { apiKey: opts.apiKey } : {}),
+      ...(opts.fetch ? { fetch: opts.fetch } : {}),
+    });
   }
 
   async complete(req: ModelRequest): Promise<ModelResult> {
@@ -47,8 +54,10 @@ export class AnthropicModelClient implements ModelClient {
           ? { format: { type: "json_schema" as const, schema: req.json_schema } }
           : {}),
       },
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
+      // Server-side refusal fallbacks exist for Opus 5.5 / Sonnet 5.5 (and Fable); Haiku 5.5 has none.
+      ...(supportsServerFallback(role.model)
+        ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }
+        : {}),
     });
     const text = response.content
       .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")

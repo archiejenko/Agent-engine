@@ -78,7 +78,10 @@ export async function runPhase2Gate(
     model,
   });
   await service.tick(1000);
-  const tasks = await storage.tasks.list({ playbook: "sme_outreach", limit: 1000 });
+  // Leads we can email get an email draft (sme_outreach); the rest get a letter draft (sme_letter).
+  const emailTasks = await storage.tasks.list({ playbook: "sme_outreach", limit: 1000 });
+  const letterTasks = await storage.tasks.list({ playbook: "sme_letter", limit: 1000 });
+  const tasks = [...emailTasks, ...letterTasks];
   const drafts = tasks.filter((t) => t.status === "awaiting_approval");
   const gateDrafts = drafts.filter(
     (t) => (t.state as { awaiting?: { kind: string } }).awaiting?.kind === "gate",
@@ -88,8 +91,16 @@ export async function runPhase2Gate(
   const claimProblems: string[] = [];
   let claims = 0;
   for (const t of drafts) {
-    const s = t.state as { outputs: { company_brief: CompanyBrief; email_draft: EmailDraft } };
-    const brief = s.outputs.company_brief;
+    const s = t.state as {
+      outputs: {
+        company_brief?: CompanyBrief;
+        letter_brief?: { brief: CompanyBrief };
+        email_draft?: EmailDraft;
+        letter_draft?: EmailDraft;
+      };
+    };
+    const brief = (s.outputs.company_brief ?? s.outputs.letter_brief?.brief) as CompanyBrief;
+    const draft = (s.outputs.email_draft ?? s.outputs.letter_draft) as EmailDraft;
     const facts = await getVerifiedFacts(storage, world.ctx, {
       entities: [brief.entity_id],
       fields: [...new Set(brief.facts.map((f) => f.field))].concat("company_name"),
@@ -99,18 +110,43 @@ export async function runPhase2Gate(
       caller: "playbook",
     });
     const ids = new Set(facts.map(fid));
-    for (const c of s.outputs.email_draft.claims) {
+    for (const c of draft.claims) {
       claims++;
       if (!ids.has(c.fact_id))
         claimProblems.push(`${t.task_id}: "${c.text}" → ${c.fact_id} isn't a verified fact`);
-      if (!s.outputs.email_draft.body.includes(c.text))
-        claimProblems.push(`${t.task_id}: claim not in body`);
+      if (!draft.body.includes(c.text)) claimProblems.push(`${t.task_id}: claim not in body`);
     }
   }
   const totalCost = tasks.reduce((a, t) => a + t.cost_gbp, 0);
   const costPerDraft = tasks.length ? totalCost / tasks.length : 0;
 
+  // Site-level website facts hold their confidence for the 90-day shelf life (no extra crawls,
+  // same 0.7 floor): re-run the module 60 days on and check website signals are still usable.
+  const SITE = ["website_found", "website_https", "website_mobile_ready", "website_copyright_year"];
+  const plus = (days: number) =>
+    new Date(Date.parse(asOf) + days * 86_400_000).toISOString().slice(0, 10);
+  const siteFactsAt = async (at: string) =>
+    (
+      await getVerifiedFacts(storage, world.ctx, {
+        entities: top20.map((x) => x.entity_id),
+        fields: SITE,
+        minConfidence: fw.config.confidence_floor,
+        asOf: at,
+        lanes: ["open"],
+        caller: "opportunity",
+      })
+    ).filter((f) => f.status === "verified").length;
+  const siteNow = await siteFactsAt(asOf);
+  const site60 = await siteFactsAt(plus(60));
+  const site95 = await siteFactsAt(plus(95));
+
   const criteria: GateCriterion[] = [
+    {
+      criterion:
+        "Website facts stay usable for their 90-day shelf life (floor 0.7, no extra crawls)",
+      status: siteNow > 0 && site60 === siteNow && site95 === 0 ? "passed (synthetic)" : "failed",
+      evidence: `top-20 leads: ${siteNow} site-level facts ≥ ${fw.config.confidence_floor} today, ${site60} at +60 days, ${site95} at +95 days (stale → re-crawl due)`,
+    },
     {
       criterion: "Top 20 ranked, fully traced leads",
       status: top20.length >= 20 && traceProblems.length === 0 ? "passed (synthetic)" : "failed",
@@ -119,7 +155,7 @@ export async function runPhase2Gate(
     {
       criterion: `${o.drafts} drafts generated`,
       status: gateDrafts.length >= o.drafts ? "passed (synthetic)" : "failed",
-      evidence: `${tasks.length} tasks; ${gateDrafts.length} drafts waiting for approval; ${drafts.length - gateDrafts.length} stopped by the checker for review`,
+      evidence: `${tasks.length} tasks (${emailTasks.length} email, ${letterTasks.length} letter for leads with no emailable address); ${gateDrafts.length} drafts waiting for approval; ${drafts.length - gateDrafts.length} stopped by the checker for review`,
     },
     {
       criterion: "Every claim in every draft traces to a verified fact",

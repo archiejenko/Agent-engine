@@ -1,14 +1,17 @@
+import { loadProductsConfig } from "@ae/config";
 import type { Claim } from "@ae/contracts";
 import {
   b64,
   FakeFacilitator,
   fakeAgentPayment,
+  guardedFacilitator,
   type PaymentRequirements,
   unb64,
 } from "@ae/products";
 import type { Storage } from "@ae/storage";
 import { openSqliteStorage } from "@ae/storage/sqlite";
 import { defaultContext, ingestClaims, stableUuid } from "@ae/verification";
+import { DEFAULT_ASSETS } from "@x402/evm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "./app.ts";
 
@@ -155,46 +158,81 @@ describe("x402 company check", () => {
     expect(JSON.stringify(body)).not.toMatch(/secret-vendor/);
   });
 
-  it("refuses forged, underpaid, misdirected and replayed payments", async () => {
+  it("refuses forged, underpaid, misdirected, replayed, expired and over-long payments", async () => {
     const r = await challenge();
+    const pay = (h: string) =>
+      app().request("/x402/check/01234567", { headers: { "PAYMENT-SIGNATURE": h } });
     const forged = b64({
       x402Version: 2,
       accepted: r,
       payload: {
         signature: "made-up",
-        authorization: { from: "0x1", value: r.amount, nonce: "n" },
+        authorization: { from: "0x1", to: PAY_TO, value: r.amount, nonce: "0x01" },
       },
     });
+    expect((await pay(forged)).status).toBe(402);
+    expect((await pay(fakeAgentPayment({ ...r, amount: "1" }))).status).toBe(402);
     expect(
-      (await app().request("/x402/check/01234567", { headers: { "PAYMENT-SIGNATURE": forged } }))
+      (await pay(fakeAgentPayment({ ...r, payTo: "0x3333333333333333333333333333333333333333" })))
         .status,
     ).toBe(402);
-    const low = fakeAgentPayment({ ...r, amount: "1" });
-    expect(
-      (await app().request("/x402/check/01234567", { headers: { "PAYMENT-SIGNATURE": low } }))
-        .status,
-    ).toBe(402);
-    const wrongWallet = fakeAgentPayment({
-      ...r,
-      payTo: "0x3333333333333333333333333333333333333333",
-    });
-    expect(
-      (
-        await app().request("/x402/check/01234567", {
-          headers: { "PAYMENT-SIGNATURE": wrongWallet },
-        })
-      ).status,
-    ).toBe(402);
-    const once = fakeAgentPayment(r, undefined, "nonce-1");
-    expect(
-      (await app().request("/x402/check/01234567", { headers: { "PAYMENT-SIGNATURE": once } }))
-        .status,
-    ).toBe(200);
-    expect(
-      (await app().request("/x402/check/01234567", { headers: { "PAYMENT-SIGNATURE": once } }))
-        .status,
-    ).toBe(402);
+    const now = Math.floor(Date.now() / 1000);
+    // Validity window: expired, not yet valid, and longer than maxTimeoutSeconds allows.
+    expect((await pay(fakeAgentPayment(r, { validBefore: now - 1 }))).status).toBe(402);
+    expect((await pay(fakeAgentPayment(r, { validAfter: now + 600 }))).status).toBe(402);
+    expect((await pay(fakeAgentPayment(r, { validBefore: now + 86_400 }))).status).toBe(402);
+    // Nonce replay: the same signed authorization can't be spent twice.
+    const once = fakeAgentPayment(r, { nonce: "0xabc1" });
+    expect((await pay(once)).status).toBe(200);
+    expect((await pay(once)).status).toBe(402);
     expect(facilitator.settled).toHaveLength(1);
+    const statuses = (await storage.x402.since("2000-01-01")).map((l) => l.status);
+    expect(statuses.filter((x) => x === "invalid_payment").length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("a payment for the cached price can't buy the premium tier", async () => {
+    const cheap = await challenge();
+    const res = await app(async () => true).request("/x402/check/01234567?tier=premium", {
+      headers: { "PAYMENT-SIGNATURE": fakeAgentPayment(cheap) },
+    });
+    expect(res.status).toBe(402);
+    expect(facilitator.settled).toHaveLength(0);
+  });
+
+  it("kill switch on → payments refused, nothing settled", async () => {
+    const r = await challenge();
+    const guarded = createApp({
+      runtime: "node",
+      storage: () => storage,
+      x402: { facilitator: guardedFacilitator(facilitator, async () => false), payTo: PAY_TO },
+    });
+    const res = await guarded.request("/x402/check/01234567", {
+      headers: { "PAYMENT-SIGNATURE": fakeAgentPayment(r) },
+    });
+    expect(res.status).toBe(402);
+    expect(facilitator.settled).toHaveLength(0);
+  });
+
+  it("v2 wire format: PAYMENT-REQUIRED body, CAIP-2 network, USDC EIP-712 domain matches the scheme's table", async () => {
+    const res = await app().request("/x402/check/01234567");
+    const required = unb64<{
+      x402Version: number;
+      resource: { url: string };
+      accepts: PaymentRequirements[];
+    }>(res.headers.get("PAYMENT-REQUIRED") as string);
+    expect(required.x402Version).toBe(2);
+    expect(required.resource.url).toContain("/x402/check/01234567");
+    const r = required.accepts[0] as PaymentRequirements;
+    expect(r.network).toMatch(/^eip155:\d+$/);
+    const cfg = loadProductsConfig().x402;
+    const lib = DEFAULT_ASSETS[cfg.network as keyof typeof DEFAULT_ASSETS]?.[0] as
+      | { asset: string; name: string; version: string; decimals: number }
+      | undefined;
+    // Our config must agree with the official scheme's USDC table (asset, decimals, EIP-712 name/version).
+    expect(lib).toBeDefined();
+    expect(r.asset.toLowerCase()).toBe(lib?.asset.toLowerCase());
+    expect(cfg.asset_decimals).toBe(lib?.decimals);
+    expect(r.extra).toMatchObject({ name: lib?.name, version: lib?.version });
   });
 
   it("premium: if live re-verification fails, the agent isn't charged", async () => {

@@ -13,10 +13,12 @@
   "dependencies": {
     "@ae/config": "workspace:*",
     "@ae/contracts": "workspace:*",
+    "@ae/infra": "workspace:*",
     "@ae/ports": "workspace:*",
     "@ae/storage": "workspace:*",
     "@ae/verification": "workspace:*",
     "@x402/core": "2.30.0",
-    "@ae/infra": "workspace:*"
+    "@x402/evm": "2.30.0",
+    "@x402/hono": "2.30.0"
   }
 }
