@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { type Fact, getJson, short } from "./api.ts";
+import { type Fact, getJson } from "./api.ts";
+import { FactValue, label } from "./format.tsx";
 
 interface Next {
   entity: { entity_id: string; name: string; postcode: string | null } | null;
@@ -19,7 +20,23 @@ export function Golden() {
   }, []);
   useEffect(load, [load]);
   if (!n) return <p>Loading…</p>;
-  if (!n.entity) return <p>Golden set complete ({n.done} companies).</p>;
+  if (!n.entity)
+    return n.done === 0 ? (
+      <>
+        <h2>Golden set</h2>
+        <p className="empty">
+          No companies verified yet, and none to check: the golden set starts once companies have
+          been ingested.
+        </p>
+      </>
+    ) : (
+      <>
+        <h2>Golden set</h2>
+        <p>
+          Golden set complete: {n.done} of {n.target} companies verified by hand.
+        </p>
+      </>
+    );
   const save = async () => {
     const parsed: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(values))
@@ -36,26 +53,44 @@ export function Golden() {
       <h2>
         Golden set: {n.done} of {n.target}
       </h2>
+      {n.done === 0 && (
+        <p>
+          <b>No companies verified yet. Start with the first one</b> below: it takes a few minutes,
+          and every company you check makes the accuracy figures on Metrics real.
+        </p>
+      )}
       <p>
         <b>{n.entity.name}</b> {n.entity.entity_id} · {n.entity.postcode}. Check each value at the
         source and type the true value (leave blank to skip).
       </p>
-      <table cellPadding={4}>
+      <table>
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>What we hold</th>
+            <th>True value (blank to skip)</th>
+          </tr>
+        </thead>
         <tbody>
           {n.fields.map((f) => {
             const fact = n.facts.find((x) => x.field === f);
             return (
               <tr key={f}>
-                <td>{f}</td>
-                <td style={{ color: "#666" }}>
-                  {fact
-                    ? `${short(fact.value, 60)} (confidence ${fact.confidence.toFixed(2)})`
-                    : "no fact"}
+                <td>{label(f)}</td>
+                <td>
+                  {fact ? (
+                    <>
+                      <FactValue field={f} value={fact.value} />{" "}
+                      <span className="muted">(confidence {fact.confidence.toFixed(2)})</span>
+                    </>
+                  ) : (
+                    <span className="muted">nothing held</span>
+                  )}
                 </td>
                 <td>
                   <input
+                    aria-label={`True value for ${label(f)}`}
                     value={values[f] ?? ""}
-                    placeholder={fact ? String(fact.value) : ""}
                     onChange={(e) => setValues({ ...values, [f]: e.target.value })}
                   />
                 </td>
@@ -64,7 +99,7 @@ export function Golden() {
           })}
         </tbody>
       </table>
-      <button type="button" onClick={save}>
+      <button type="button" className="primary" onClick={save}>
         Save and next
       </button>{" "}
       <button type="button" onClick={load}>

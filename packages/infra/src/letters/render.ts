@@ -1,3 +1,4 @@
+import { sectorFor } from "@ae/config";
 import { PDFDocument, type PDFFont, type PDFPage, rgb, StandardFonts } from "pdf-lib";
 import QRCode from "qrcode";
 
@@ -60,6 +61,8 @@ function drawQr(page: PDFPage, url: string, x: number, y: number, size: number) 
 
 export interface LetterContent {
   sender: { name: string; company: string; address: string; email: string };
+  /** Trading disclosures (registered name, where registered, number, registered office). */
+  disclosure: string;
   recipient: string[];
   date: string;
   body: string;
@@ -141,7 +144,7 @@ export async function renderLetterPdf(l: LetterContent): Promise<Uint8Array> {
   // One line, shrunk to fit the printable width (never wrapped), however long the email/URL.
   const optSize = Math.min(8.5, (8.5 * width) / bold.widthOfTextAtSize(toWinAnsi(l.optOut), 8.5));
   text(l.optOut, left, 24 * MM, optSize, bold);
-  const foot = wrap(`${l.sender.company}, ${l.sender.address}.`, font, 7.5, width);
+  const foot = wrap(l.disclosure, font, 7.5, width);
   let fy = 18 * MM;
   for (const s of foot) {
     text(s, left, fy, 7.5);
@@ -171,9 +174,13 @@ export interface DemoContent {
   companyName: string;
   town: string | null;
   sinceYear: string | null;
+  /** Verified SIC codes: the service cards are written for the company's sector (no claims). */
+  sicCodes: string[];
   senderName: string;
   senderCompany: string;
   senderEmail: string;
+  /** Trading disclosures, shown in the footer. */
+  disclosure: string;
 }
 
 /**
@@ -181,6 +188,7 @@ export interface DemoContent {
  * reviews or phone numbers. noindex + a clear banner: it's a sample, not their live site.
  */
 export function renderDemoHtml(d: DemoContent): string {
+  const sector = sectorFor(d.sicCodes);
   const name = esc(d.companyName.replace(/\s+(LIMITED|LTD\.?|PLC|LLP)$/i, ""));
   const town = d.town ? esc(d.town) : null;
   const facts = [
@@ -214,6 +222,7 @@ export function renderDemoHtml(d: DemoContent): string {
   .card { border: 1px solid #e3e7ec; border-radius: 10px; padding: 22px; }
   .card h2 { font-size: 18px; margin: 0 0 8px; }
   .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .legal { font-size: 12.5px; margin: 12px 0 0; }
   footer .wrap { border-top: 1px solid #e3e7ec; padding: 24px 0 40px; color: var(--muted); font-size: 14px; }
 </style>
 </head>
@@ -226,12 +235,18 @@ export function renderDemoHtml(d: DemoContent): string {
   <a class="cta" href="#contact">Get in touch</a>
 </div></section>
 <section id="services"><div class="wrap grid">
-  <div class="card"><h2>Your services here</h2><p>A clear list of what you do, so visitors know straight away they're in the right place.</p></div>
-  <div class="card"><h2>Works on every phone</h2><p>Fast, readable and easy to tap: most visitors arrive on a mobile.</p></div>
-  <div class="card" id="about"><h2>Easy to contact</h2><p>One obvious button to call, email or ask for a quote.</p></div>
+  ${sector.cards.map(([title, text], i) => `<div class="card"${i === 2 ? ' id="about"' : ""}><h2>${esc(title)}</h2><p>${esc(text)}</p></div>`).join("\n  ")}
 </div></section>
-<footer id="contact"><div class="wrap">Like this? Email ${esc(d.senderEmail)} and I'll turn it into your real website. If you'd rather not hear from me, just say so and I won't get in touch again.</div></footer>
+<footer id="contact"><div class="wrap">Like this? Email ${esc(d.senderEmail)} and I'll turn it into your real website. If you'd rather not hear from me, just say so and I won't get in touch again.<p class="legal">${esc(d.disclosure)}</p></div></footer>
 </body>
 </html>
 `;
+}
+
+/**
+ * The small public pages around letters (expired demo, opt-out, not found). Same footer as the demo:
+ * who we are, with the trading disclosures. `extraHtml` must already be escaped.
+ */
+export function renderPublicPage(title: string, disclosure: string, extraHtml = ""): string {
+  return `<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${esc(title)}</title></head><body style="font:17px/1.5 system-ui,sans-serif;max-width:560px;margin:15vh auto 0;padding:0 16px;color:#1b1f24;background:#fff"><p>${esc(title)}</p>${extraHtml}<footer style="margin-top:3rem;padding-top:1rem;border-top:1px solid #e3e7ec;color:#5b6470;font-size:13px">${esc(disclosure)}</footer></body></html>`;
 }

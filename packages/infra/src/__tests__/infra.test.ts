@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadInfraConfig, loadModelsConfig } from "@ae/config";
+import { loadInfraConfig, loadModelsConfig, tradingDisclosure } from "@ae/config";
 import type { Claim } from "@ae/contracts";
 import { FakeEmailSender, FakeInbox, FakeModel, FakeWebFetcher, InMemoryQueue } from "@ae/ports";
 import type { Storage } from "@ae/storage";
@@ -12,6 +12,7 @@ import { externalActionsAllowed, K, SpendCapError, setKillSwitch } from "../cont
 import { checkSend, composeEmail, processInbox, registerOutreachTools } from "../outreach.ts";
 import { type LoadedPlaybook, parsePlaybook } from "../playbook.ts";
 import {
+  buildBrief,
   type CompanyBrief,
   checkDraft,
   fakeOutreachWriter,
@@ -316,7 +317,7 @@ describe("sme_outreach at L0", () => {
       checkDraft(
         {
           subject: "s",
-          body: "ACME has been trading since 2012.",
+          body: "ACME has been trading since 2012. That matters to customers. Would a short call be useful?",
           claims: [{ fact_id: "f1", text: "has been trading since 2012" }],
         },
         brief,
@@ -326,7 +327,7 @@ describe("sme_outreach at L0", () => {
       checkDraft(
         {
           subject: "s",
-          body: "ACME has been trading since 2012 with 40 staff.",
+          body: "ACME has been trading since 2012 with 40 staff. That matters to customers. Would a short call be useful?",
           claims: [{ fact_id: "f1", text: "has been trading since 2012" }],
         },
         brief,
@@ -340,11 +341,102 @@ describe("sme_outreach at L0", () => {
           claims: [{ fact_id: "f9", text: "won an award" }],
         },
         brief,
-      )[0],
+      ).join(" "),
     ).toMatch(/isn't in the brief/);
     expect(checkDraft({ subject: "s", body: "Hello [Name]", claims: [] }, brief)).toContain(
       "contains a placeholder",
     );
+  });
+
+  it("COPY RULES: one observation, name at most twice, no repeated 'I noticed', no director lead, observation → why → offer", () => {
+    const facts = [
+      {
+        fact_id: "f1",
+        field: "website_https",
+        statement: "has a website that isn't served securely (no HTTPS)",
+        key: "HTTPS",
+        confidence: 0.75,
+      },
+      {
+        fact_id: "f2",
+        field: "incorporation_date",
+        statement: "has been trading since 2012",
+        key: "2012",
+        confidence: 0.95,
+      },
+      {
+        fact_id: "f3",
+        field: "officer_appointments",
+        statement: "has recently appointed a new director",
+        key: "director",
+        confidence: 0.95,
+      },
+    ];
+    const brief: CompanyBrief = {
+      entity_id: ENTITY,
+      company_name: "ACME LTD",
+      facts,
+      contact: { email: null, company_type: null, domain: null, source: "company_website" },
+    };
+    const obs = "has a website that isn't served securely (no HTTPS)";
+    const why = "Browsers warn visitors about sites like that, which puts people off.";
+    const offer = "Would a short call next week be useful?";
+    const good = {
+      subject: "A quick idea for ACME",
+      body: `Hi there,\n\nACME ${obs}. ${why} ${offer}`,
+      claims: [{ fact_id: "f1", text: obs }],
+    };
+    expect(checkDraft(good, brief)).toEqual([]);
+    const two = {
+      ...good,
+      body: `Hi there,\n\nACME ${obs}. It has been trading since 2012. ${why} ${offer}`,
+      claims: [...good.claims, { fact_id: "f2", text: "has been trading since 2012" }],
+    };
+    expect(checkDraft(two, brief).join(" ")).toMatch(/2 factual observations/);
+    const names = {
+      ...good,
+      body: `Hi there,\n\nACME ${obs}. ${why} ACME deserves better. ${offer}`,
+    };
+    expect(checkDraft(names, brief).join(" ")).toMatch(/company name used 3 times/);
+    const noticed = {
+      ...good,
+      body: `Hi there,\n\nI noticed that ACME ${obs}. I noticed it today. ${why} ${offer}`,
+    };
+    expect(checkDraft(noticed, brief).join(" ")).toMatch(/"I noticed" used 2 times/);
+    const director = {
+      ...good,
+      body: `Hi there,\n\nACME has recently appointed a new director. ${why} ${offer}`,
+      claims: [{ fact_id: "f3", text: "has recently appointed a new director" }],
+    };
+    expect(checkDraft(director, brief).join(" ")).toMatch(/director\/officer change/);
+    const offerFirst = { ...good, body: `Hi there,\n\n${offer} ACME ${obs}. ${why}` };
+    expect(checkDraft(offerFirst, brief).join(" ")).toMatch(/open with the one observation/);
+    const noWhy = { ...good, body: `Hi there,\n\nACME ${obs}. ${offer}` };
+    expect(checkDraft(noWhy, brief).join(" ")).toMatch(/why it matters/);
+    const noOffer = { ...good, body: `Hi there,\n\nACME ${obs}. ${why}` };
+    expect(checkDraft(noOffer, brief).join(" ")).toMatch(/no offer/);
+  });
+
+  it("COPY RULES: director/officer changes are never offered to the writer", () => {
+    const at = "2026-11-01T00:00:00Z";
+    const f = (field: string, value: unknown) =>
+      ({
+        entity_id: ENTITY,
+        field,
+        value,
+        confidence: 0.95,
+        valid_from: at,
+        status: "verified",
+      }) as never;
+    const brief = buildBrief(
+      ENTITY,
+      [
+        f("officer_appointments", [{ appointed_on: "2026-10-20" }]),
+        f("incorporation_date", "2012-01-01"),
+      ],
+      new Date("2026-11-09"),
+    );
+    expect(brief.facts.map((x) => x.field)).toEqual(["incorporation_date"]);
   });
 
   it("spend caps: a task over its budget fails; a daily cap pauses the queue and alerts", async () => {
@@ -609,6 +701,7 @@ describe("Phase 5: sending under guardrails, follow-ups, replies, autonomy", () 
     const e = composeEmail("Hello.", infra);
     expect(e.startsWith("Hello.")).toBe(true);
     expect(e).toContain(infra.sender.name);
-    expect(e.endsWith(infra.sender.opt_out_text)).toBe(true);
+    expect(e).toContain(infra.sender.opt_out_text);
+    expect(e.endsWith(tradingDisclosure(infra.sender))).toBe(true);
   });
 });

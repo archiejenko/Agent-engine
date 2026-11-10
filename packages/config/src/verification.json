@@ -25,7 +25,8 @@
     "volume_ratio_max": 3.0,
     "null_rate_increase_max": 0.2,
     "match_rate_drop_max": 0.1,
-    "mean_relative_change_max": 0.5
+    "mean_relative_change_max": 0.5,
+    "min_complete_runs": 3
   },
   "golden": {
     "target_companies": 150,

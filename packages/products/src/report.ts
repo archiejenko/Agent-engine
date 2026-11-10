@@ -29,7 +29,8 @@ function show(v: unknown): string {
 }
 
 /** One-page HTML report, rendered deterministically from the check (no model involved). */
-export function renderReport(c: CompanyCheck): string {
+/** `disclosure`: the sender's trading details (tradingDisclosure), printed in the footer. */
+export function renderReport(c: CompanyCheck, disclosure: string): string {
   const name =
     typeof c.fields.company_name?.value === "string"
       ? c.fields.company_name.value
@@ -48,5 +49,6 @@ export function renderReport(c: CompanyCheck): string {
 <p>Checked ${esc(c.as_of.slice(0, 16).replace("T", " "))} UTC.</p>
 <h2>Things to know</h2>${flags}
 <h2>Details</h2><table cellpadding="4"><tr><th align="left">Item</th><th align="left">Value</th><th>Confidence</th><th>Last verified</th></tr>${rows}</table>
-<p style="color:#666;font-size:0.85em">${esc(c.disclaimer)}</p></body></html>`;
+<p style="color:#666;font-size:0.85em">${esc(c.disclaimer)}</p>
+<p style="color:#666;font-size:0.8em;border-top:1px solid #ddd;padding-top:0.5em">${esc(disclosure)}</p></body></html>`;
 }

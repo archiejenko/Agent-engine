@@ -8,18 +8,21 @@ import {
   type ModelsConfig,
 } from "@ae/config";
 import {
+  contactBlock,
   createPrintBatch,
   createTask,
   fakeLetterWriter,
   fakeOutreachWriter,
   type LoadedPlaybook,
   letterSuppressionKey,
+  outreachRoutes,
   type PlaybookImpl,
   PlaybookRunner,
   parsePlaybook,
   processInbox,
   QUEUE_ORDER,
   recordBreach,
+  recordContactBlocked,
   registerLetterTools,
   registerOutreachTools,
   registerStandardTools,
@@ -50,12 +53,7 @@ import {
   WATCH_ALERT,
 } from "@ae/products";
 import type { Storage, StoredTask } from "@ae/storage";
-import {
-  defaultContext,
-  fakeWebsiteExtractor,
-  getVerifiedFacts,
-  type VerificationContext,
-} from "@ae/verification";
+import { defaultContext, fakeWebsiteExtractor, type VerificationContext } from "@ae/verification";
 
 /** Load every playbooks/<name>/SKILL.md. */
 export async function loadPlaybooks(dir: string): Promise<Map<string, LoadedPlaybook>> {
@@ -214,6 +212,15 @@ export class AgentService {
       }
       const pb = this.playbooks.get(playbook);
       if (!pb) continue;
+      // One company, one contact per cooldown, whichever module or playbook found it.
+      if (this.infra.outreach.contact_playbooks.includes(playbook)) {
+        const blocked = await contactBlock(this.storage, this.infra, o.entity_id);
+        if (blocked) {
+          await recordContactBlocked(this.storage, o.entity_id, playbook, blocked);
+          await this.storage.opportunities.setStatus(o.opportunity_id, "actioned");
+          continue;
+        }
+      }
       const r = await createTask(this.storage, this.infra, this.playbooks, this.queue, {
         idempotency_key: `opportunity:${o.opportunity_id}`,
         playbook,
@@ -232,20 +239,9 @@ export class AgentService {
    * and a corporate company type (anything else needs prior consent). Routing only, not a claim.
    */
   async emailable(entityId: string): Promise<boolean> {
-    const facts = await getVerifiedFacts(this.storage, this.ctx, {
-      entities: [entityId],
-      fields: ["contact_email", "company_type"],
-      minConfidence: 0,
-      asOf: new Date().toISOString(),
-      lanes: ["open"],
-      caller: "playbook",
-    });
-    const email = facts.find((f) => f.field === "contact_email" && f.status === "verified");
-    const type = facts.find((f) => f.field === "company_type")?.value;
     return (
-      Boolean(email) &&
-      typeof type === "string" &&
-      this.infra.outreach.corporate_company_types.includes(type)
+      (await outreachRoutes(this.storage, this.ctx, this.infra, [entityId])).get(entityId) ===
+      "email"
     );
   }
 

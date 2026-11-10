@@ -19,6 +19,10 @@ interface Batch {
   letters: Letter[];
 }
 interface LettersData {
+  blocked_duplicates: { id: number; message: string; created_at: string }[];
+  cooldown_days: number;
+  legal_placeholders: boolean;
+  cost_per_letter_gbp: number;
   waiting: Letter[];
   batches: Batch[];
   known_bias: string;
@@ -62,8 +66,44 @@ export function Letters() {
         <strong>Known bias:</strong> {data.known_bias}
       </p>
       {msg && <p>{msg}</p>}
+      {data.legal_placeholders && (
+        <p
+          role="alert"
+          style={{ background: "#fdecea", border: "1px solid #f5c2c0", padding: "0.6rem" }}
+        >
+          <strong>Don't print yet:</strong> EJTECH's company number and registered office are still
+          placeholders in the settings, and every letter prints them in its footer.
+        </p>
+      )}
+      {data.blocked_duplicates.length > 0 && (
+        <div
+          role="alert"
+          style={{
+            background: "#fdecea",
+            border: "1px solid #f5c2c0",
+            padding: "0.6rem",
+            margin: "0.6rem 0",
+          }}
+        >
+          <strong>
+            {data.blocked_duplicates.length} duplicate
+            {data.blocked_duplicates.length === 1 ? "" : "s"} blocked
+          </strong>{" "}
+          (one contact per company every {data.cooldown_days} days, across email and letters):
+          <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1.2rem" }}>
+            {data.blocked_duplicates.slice(0, 10).map((b) => (
+              <li key={b.id}>{b.message}</li>
+            ))}
+          </ul>
+          {data.blocked_duplicates.length > 10 && (
+            <p>…and {data.blocked_duplicates.length - 10} more (see Controls → Alerts).</p>
+          )}
+        </div>
+      )}
       <p>
-        {data.waiting.length} letter(s) waiting for the next weekly batch.{" "}
+        {data.waiting.length === 0
+          ? "No letters waiting for the next weekly batch."
+          : `${data.waiting.length} ${data.waiting.length === 1 ? "letter" : "letters"} waiting for the next weekly batch.`}{" "}
         {data.waiting.length > 0 && (
           <button
             type="button"
@@ -73,10 +113,16 @@ export function Letters() {
           </button>
         )}
       </p>
+      {data.batches.length === 0 && (
+        <p className="empty">
+          No print batches yet: approved leads without an email address become letters here.
+        </p>
+      )}
       {data.batches.map((b) => (
         <div key={b.id} style={{ borderTop: "1px solid #ddd", marginTop: "1rem" }}>
           <h3>
-            {b.week}: {b.letter_count} letters, {b.flagged_count} flagged ({b.status}){" "}
+            {b.week}: {b.letter_count} letters, {b.flagged_count} flagged ({b.status}) · print and
+            post about £{(b.letter_count * data.cost_per_letter_gbp).toFixed(2)}{" "}
             <a href={`/api/letters/batches/${b.id}/pdf`}>Download PDF</a>
           </h3>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -86,7 +132,7 @@ export function Letters() {
                 <th align="left">Company</th>
                 <th align="left">Addressed to</th>
                 <th align="left">Flags</th>
-                <th align="left">Demo</th>
+                <th align="left">Demo (live once approved and sending is on)</th>
               </tr>
             </thead>
             <tbody>
@@ -122,7 +168,7 @@ export function Letters() {
           </table>
           {b === pending && (
             <p>
-              <button type="button" onClick={() => decide(b, "approve")}>
+              <button type="button" className="primary" onClick={() => decide(b, "approve")}>
                 Approve batch{exclude.size ? ` (leaving out ${exclude.size})` : ""}
               </button>{" "}
               <button type="button" onClick={() => decide(b, "reject")}>

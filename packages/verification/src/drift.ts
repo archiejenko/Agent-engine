@@ -85,11 +85,23 @@ export async function runDriftCheck(
   storage: Storage,
   ctx: VerificationContext,
   day: string,
-): Promise<{ metrics: DriftRow[]; breaches: DriftBreach[] }> {
+): Promise<{
+  metrics: DriftRow[];
+  breaches: DriftBreach[];
+  /** Sources not judged yet: fewer than min_complete_runs complete runs so far. */
+  not_evaluated: { source: string; complete_runs: number }[];
+}> {
   const metrics = await computeDrift(storage, day);
   await storage.drift.put(metrics);
   const breaches: DriftBreach[] = [];
+  const notEvaluated = new Map<string, number>();
   for (const m of metrics) {
+    if (!notEvaluated.has(m.source)) {
+      const n = await storage.drift.completeRuns(m.source, day);
+      if (n < ctx.verification.drift.min_complete_runs) notEvaluated.set(m.source, n);
+      else notEvaluated.set(m.source, -1);
+    }
+    if ((notEvaluated.get(m.source) as number) >= 0) continue;
     const history = await storage.drift.history(
       m.source,
       m.field,
@@ -102,5 +114,24 @@ export async function runDriftCheck(
     await storage.pauses.pause(m.source, m.field, reasons.join("; "));
     await storage.alerts.raise("drift", `${m.source}.${m.field} paused: ${reasons.join("; ")}`, m);
   }
-  return { metrics, breaches };
+  return {
+    metrics,
+    breaches,
+    not_evaluated: [...notEvaluated]
+      .filter(([, n]) => n >= 0)
+      .map(([source, complete_runs]) => ({ source, complete_runs })),
+  };
+}
+
+/**
+ * Resume a paused source+field, and close its drift alerts, so the dashboard never shows "paused" in
+ * Alerts while Paused sources says none.
+ */
+export async function resumeSource(storage: Storage, source: string, field: string) {
+  await storage.pauses.resume(source, field);
+  for (const a of await storage.alerts.list({ unacknowledged: true, limit: 1000 })) {
+    const d = a.details as { source?: string; field?: string } | null;
+    if (a.kind === "drift" && d?.source === source && d?.field === field)
+      await storage.alerts.acknowledge(a.id);
+  }
 }

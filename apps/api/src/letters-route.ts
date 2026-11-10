@@ -1,4 +1,4 @@
-import { loadInfraConfig } from "@ae/config";
+import { legalDetailsArePlaceholders, loadInfraConfig, tradingDisclosure } from "@ae/config";
 import {
   batchPdf,
   createPrintBatch,
@@ -6,15 +6,15 @@ import {
   demoUrl,
   letterSuppressionKey,
   optOutByCode,
+  renderPublicPage,
   servableDemo,
 } from "@ae/infra";
 import type { Storage } from "@ae/storage";
 import type { Hono } from "hono";
 import { z } from "zod";
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 const SIMPLE = (title: string, extra = "") =>
-  `<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${title}</title></head><body style="font:17px/1.5 system-ui,sans-serif;max-width:560px;margin:15vh auto;padding:0 16px"><p>${title}</p>${extra}</body></html>`;
+  renderPublicPage(title, tradingDisclosure(loadInfraConfig().sender), extra);
 
 const BatchDecision = z.object({
   decision: z.enum(["approve", "reject"]),
@@ -44,7 +44,18 @@ export function mountLetters(
           demo_url: demoUrl(cfg, l.demo_slug),
         })),
       });
+    const blocked = (await s.alerts.list({ unacknowledged: true, limit: 500 }))
+      .filter((a) => a.kind === "contact_blocked")
+      .slice(0, 50);
     return c.json({
+      blocked_duplicates: blocked.map((a) => ({
+        id: a.id,
+        message: a.message,
+        created_at: a.created_at,
+      })),
+      cooldown_days: cfg.outreach.contact_cooldown_days,
+      legal_placeholders: legalDetailsArePlaceholders(cfg.sender),
+      cost_per_letter_gbp: cfg.letters.print_cost_gbp + cfg.letters.postage_gbp,
       waiting: await s.letters.list({ status: "waiting" }),
       batches: withLetters,
       known_bias:
@@ -63,7 +74,7 @@ export function mountLetters(
     const b = await s.printBatches.get(c.req.param("id"));
     if (!b) return c.json({ error: "not_found" }, 404);
     const pdf = await batchPdf(s, b.id);
-    return new Response(pdf, {
+    return new Response(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="print-batch-${b.week}.pdf"`,
@@ -125,7 +136,7 @@ export function mountLetters(
       "Cache-Control": "no-store",
       "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'none'",
     };
-    if (!page) return c.text("Not found", 404, headers);
+    if (!page) return c.html(SIMPLE("This page isn't available."), 404, headers);
     if (page.state === "expired") return c.html(SIMPLE("This sample has expired."), 410, headers);
     return c.html(page.html, 200, headers);
   });
@@ -139,7 +150,7 @@ export function mountLetters(
     if (!letter) return c.html(SIMPLE("We couldn't find that code."), 404, headers);
     return c.html(
       SIMPLE(
-        `Stop letters to ${esc(letter.company_name)}?`,
+        `Stop letters to ${letter.company_name}?`,
         `<form method="post"><button type="submit">Yes, no more letters</button></form>`,
       ),
       200,

@@ -328,6 +328,14 @@ export function phase2(db: SqlDriver) {
         const r = (await db.all<Row>("SELECT * FROM tasks WHERE task_id = ?", [id]))[0];
         return r ? rowToTask(r) : null;
       },
+      /** Tasks about one company (source_ref ends ":entity:<number>"), newest first. */
+      forEntity: async (entityId: string) =>
+        (
+          await db.all<Row>(
+            "SELECT * FROM tasks WHERE source_ref LIKE ? ORDER BY created_at DESC LIMIT 200",
+            [`%:entity:${entityId}`],
+          )
+        ).map(rowToTask),
       update: async (
         id: string,
         patch: Partial<
@@ -415,13 +423,16 @@ export function phase2(db: SqlDriver) {
         (await db.all<Row>("SELECT * FROM run_log WHERE task_id = ? ORDER BY id", [taskId])).map(
           rowToRunLog,
         ),
-      /** Spend in GBP since `since`, optionally for one playbook. */
-      spendSince: async (since: string, playbook?: string) => {
+      /** Spend in GBP since `since`, optionally for one playbook, leaving out the given step ids. */
+      spendSince: async (since: string, playbook?: string, excludeSteps: string[] = []) => {
+        const ex = excludeSteps.length
+          ? ` AND r.step_id NOT IN (${excludeSteps.map(() => "?").join(", ")})`
+          : "";
         const rows = await db.all<{ s: number }>(
           playbook
-            ? "SELECT COALESCE(SUM(r.cost_gbp), 0) AS s FROM run_log r JOIN tasks t ON t.task_id = r.task_id WHERE r.timestamp >= ? AND t.playbook = ?"
-            : "SELECT COALESCE(SUM(cost_gbp), 0) AS s FROM run_log WHERE timestamp >= ?",
-          playbook ? [since, playbook] : [since],
+            ? `SELECT COALESCE(SUM(r.cost_gbp), 0) AS s FROM run_log r JOIN tasks t ON t.task_id = r.task_id WHERE r.timestamp >= ? AND t.playbook = ?${ex}`
+            : `SELECT COALESCE(SUM(r.cost_gbp), 0) AS s FROM run_log r WHERE r.timestamp >= ?${ex}`,
+          playbook ? [since, playbook, ...excludeSteps] : [since, ...excludeSteps],
         );
         return Number(rows[0]?.s ?? 0);
       },

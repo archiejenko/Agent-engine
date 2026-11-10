@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { type Claim, day, type Fact, getJson, short } from "./api.ts";
+import { type Claim, day, type Fact, getJson } from "./api.ts";
+import { EmptyRow, FactValue, label } from "./format.tsx";
 
 interface CompanyData {
   entity: {
@@ -23,7 +24,20 @@ export function Company({ id }: { id: string }) {
       .then(setData)
       .catch((e: Error) => setError(e.message));
   }, [id]);
-  if (error) return <p style={{ color: "crimson" }}>{error}</p>;
+  if (error === "not_found")
+    return (
+      <>
+        <h2>Company {id}</h2>
+        <p>
+          We don't hold any facts for company number <b>{id}</b>. It may be outside the Greater
+          Manchester universe, not ingested yet, or the number may be mistyped.
+        </p>
+        <p>
+          <a href="#/facts">Search the facts</a> or check the number on Companies House.
+        </p>
+      </>
+    );
+  if (error) return <p style={{ color: "crimson" }}>Couldn't load this company: {error}</p>;
   if (!data) return <p>Loading…</p>;
   return (
     <>
@@ -36,10 +50,7 @@ export function Company({ id }: { id: string }) {
           {data.entity.sic_codes.join(", ") || "none"}
         </p>
       )}
-      <table
-        cellPadding={4}
-        style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.9rem" }}
-      >
+      <table style={{ width: "100%", fontSize: "0.9rem" }}>
         <thead>
           <tr style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>
             <th>Field</th>
@@ -53,6 +64,9 @@ export function Company({ id }: { id: string }) {
           </tr>
         </thead>
         <tbody>
+          {data.facts.length === 0 && (
+            <EmptyRow cols={8}>No verified facts for this company yet.</EmptyRow>
+          )}
           {data.facts.map((f) => (
             <FactRow
               key={f.field}
@@ -91,16 +105,18 @@ function FactRow({
           background: f.status === "conflict" ? "#fff4e5" : undefined,
         }}
       >
-        <td>{f.field}</td>
-        <td>{short(f.value)}</td>
-        <td>{f.confidence.toFixed(2)}</td>
+        <td>{label(f.field)}</td>
+        <td>
+          <FactValue field={f.field} value={f.value} />
+        </td>
+        <td className="num">{f.confidence.toFixed(2)}</td>
         <td>{f.status}</td>
         <td>{f.lane}</td>
-        <td>{day(f.valid_from)}</td>
-        <td>{day(f.expires_at)}</td>
-        <td>
+        <td className="nowrap">{day(f.valid_from)}</td>
+        <td className="nowrap">{day(f.expires_at)}</td>
+        <td className="nowrap">
           <button type="button" onClick={toggle}>
-            {open ? "hide" : `${list.length} claim(s)`}
+            {open ? "Hide" : `${list.length} ${list.length === 1 ? "claim" : "claims"}`}
           </button>
         </td>
       </tr>
@@ -114,7 +130,7 @@ function FactRow({
                   <b>{role}</b> · {c?.source} (tier {c?.source_tier}, {c?.method}) · published{" "}
                   {day(c?.published_at ?? null)} · fetched {day(c?.fetched_at ?? null)}
                   <div>
-                    value: <code>{short(c?.value, 400)}</code>
+                    value: <FactValue field={f.field} value={c?.value} max={10} />
                   </div>
                   <div>
                     evidence: <code>{c?.evidence?.ref}</code>

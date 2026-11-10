@@ -285,7 +285,12 @@ export async function ingestCompanies(
   );
   const targets = o.limit ? members.slice(0, o.limit) : members;
   await storage.progress.ensure(job, targets, ["bundle"]);
+  const before = await storage.progress.summary(job);
   const run = await startRun(storage, "companies_house_api");
+  // A run that resumes earlier work, or is limited to a subset, covers only part of the job: drift
+  // monitoring must not compare it with full runs.
+  if (o.limit || before.done + before.failed + before.skipped > 0)
+    await storage.runs.markPartial(run.run_id);
   const started = Date.now();
   let done = 0;
   try {

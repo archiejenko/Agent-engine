@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { day, type Fact, getJson, short } from "./api.ts";
+import { day, type Fact, getJson } from "./api.ts";
+import { EmptyRow, FactValue, label } from "./format.tsx";
 
 const PAGE = 50;
 
@@ -27,7 +28,7 @@ export function Facts() {
   return (
     <>
       <h2>Facts</h2>
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
         <input
           placeholder="Company name or number"
           value={search}
@@ -37,7 +38,7 @@ export function Facts() {
           }}
         />
         <input
-          placeholder="field (e.g. company_status)"
+          placeholder="Field (e.g. company_status)"
           value={field}
           onChange={(e) => {
             setField(e.target.value.trim());
@@ -79,10 +80,7 @@ export function Facts() {
               next ›
             </button>
           </p>
-          <table
-            cellPadding={4}
-            style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.9rem" }}
-          >
+          <table style={{ width: "100%", fontSize: "0.9rem" }}>
             <thead>
               <tr style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>
                 <th>Company</th>
@@ -95,17 +93,26 @@ export function Facts() {
               </tr>
             </thead>
             <tbody>
+              {data.rows.length === 0 && (
+                <EmptyRow cols={7}>
+                  {search || field || status
+                    ? "No facts match these filters."
+                    : "No verified facts yet: run an ingestion first."}
+                </EmptyRow>
+              )}
               {data.rows.map((f) => (
                 <tr key={`${f.entity_id}.${f.field}`} style={{ borderBottom: "1px solid #eee" }}>
                   <td>
                     <a href={`#/company/${f.entity_id}`}>{f.entity_id}</a>
                   </td>
-                  <td>{f.field}</td>
-                  <td>{short(f.value, 80)}</td>
-                  <td>{f.confidence.toFixed(2)}</td>
+                  <td>{label(f.field)}</td>
+                  <td>
+                    <FactValue field={f.field} value={f.value} max={2} />
+                  </td>
+                  <td className="num">{f.confidence.toFixed(2)}</td>
                   <td>{f.status}</td>
-                  <td>{day(f.valid_from)}</td>
-                  <td>{day(f.last_verified_at)}</td>
+                  <td className="nowrap">{day(f.valid_from)}</td>
+                  <td className="nowrap">{day(f.last_verified_at)}</td>
                 </tr>
               ))}
             </tbody>

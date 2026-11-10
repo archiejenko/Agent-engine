@@ -34,7 +34,9 @@ export async function setKillSwitch(
   await storage.controls.set(key, on, by);
   await storage.alerts.raise(
     "kill_switch",
-    `${key} turned ${on ? "ON (external actions stopped)" : "OFF"}`,
+    scope === "global"
+      ? `Sending ${on ? "stopped for everything (dry run)" : "turned LIVE"} by ${by}`
+      : `${scope.playbook}: own switch ${on ? "stopped" : "turned on"} by ${by}`,
     { by },
   );
 }
@@ -75,9 +77,13 @@ export async function checkSpend(
     cfg.caps.per_playbook_per_day_gbp[task.playbook] ??
     cfg.caps.per_playbook_per_day_gbp.default ??
     0;
-  if ((await storage.runLog.spendSince(day, task.playbook)) + extraGbp > pbCap + 1e-9)
+  const ex = cfg.caps.exclude_steps;
+  if ((await storage.runLog.spendSince(day, task.playbook, ex)) + extraGbp > pbCap + 1e-9)
     problems.push(`${task.playbook} daily cap £${pbCap}`);
-  if ((await storage.runLog.spendSince(day)) + extraGbp > cfg.caps.global_per_day_gbp + 1e-9)
+  if (
+    (await storage.runLog.spendSince(day, undefined, ex)) + extraGbp >
+    cfg.caps.global_per_day_gbp + 1e-9
+  )
     problems.push(`global daily cap £${cfg.caps.global_per_day_gbp}`);
   if (problems.length) {
     if (!problems[0]?.startsWith("task budget"))

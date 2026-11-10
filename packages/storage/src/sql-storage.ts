@@ -194,6 +194,9 @@ export class SqlStorage implements Storage {
       ]);
       if (r.changes !== 1) throw new Error(`run ${runId} not found`);
     },
+    markPartial: async (runId: string) => {
+      await this.db.run("UPDATE runs SET partial = 1 WHERE run_id = ?", [runId]);
+    },
     get: async (runId: string) => {
       const rows = await this.db.all<Row>("SELECT * FROM runs WHERE run_id = ?", [runId]);
       return rows[0] ? rowToRun(rows[0]) : null;

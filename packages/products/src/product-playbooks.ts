@@ -1,4 +1,10 @@
-import type { InfraConfig, ProductsConfig } from "@ae/config";
+import {
+  type InfraConfig,
+  legalDetailsArePlaceholders,
+  loadInfraConfig,
+  type ProductsConfig,
+  tradingDisclosure,
+} from "@ae/config";
 import type { PlaybookImpl, RoleImpl, ToolRegistry } from "@ae/infra";
 import type { AlertChannel, EmailSender } from "@ae/ports";
 import type { Storage, WatchRow } from "@ae/storage";
@@ -51,6 +57,9 @@ export function registerProductTools(
     },
     async (args, { task, dryRun }) => {
       const a = args as { to: string; subject: string; html: string };
+      // Never send for real while our own trading details are placeholders.
+      if (!dryRun && legalDetailsArePlaceholders(d.infra.sender))
+        throw new Error("company number / registered office are still placeholders");
       const r = await d.email.send(
         {
           to: a.to,
@@ -104,12 +113,7 @@ export function registerProductTools(
         {
           kind: w.channel,
           target: w.target,
-          payload: {
-            company_number: w.entity_id,
-            field: a.change.field,
-            from: a.change.old_value,
-            to: a.change.new_value,
-          },
+          payload: alertPayload(w.entity_id, a.change, d.infra),
         },
         dryRun,
       );
@@ -139,7 +143,9 @@ export const HUMAN_REPORT: PlaybookImpl = {
       const check = (await ctx.tools.call("company_check", { company_number: n }))
         .result as CompanyCheck | null;
       if (!check) throw new Error(`no verified facts for ${n}`);
-      return { output: { check, html: renderReport(check) } };
+      return {
+        output: { check, html: renderReport(check, tradingDisclosure(loadInfraConfig().sender)) },
+      };
     }) satisfies RoleImpl,
     verify: (async (ctx) => {
       // The report must contain every risk flag and every field we hold; re-read the facts to confirm.
@@ -195,3 +201,19 @@ export const MONITORING_SUBSCRIPTION: PlaybookImpl = {
   roles: { activate: (async () => ({ output: { activated: true } })) satisfies RoleImpl },
   gateItem: () => null,
 };
+
+/** What a watch alert carries (webhook body / email content), including who sent it. */
+export function alertPayload(
+  companyNumber: string,
+  change: { field: string; old_value: unknown; new_value: unknown },
+  infra: InfraConfig,
+) {
+  return {
+    company_number: companyNumber,
+    field: change.field,
+    from: change.old_value,
+    to: change.new_value,
+    // Who is sending this (trading disclosures), shown in email alerts' footer.
+    sent_by: tradingDisclosure(infra.sender),
+  };
+}

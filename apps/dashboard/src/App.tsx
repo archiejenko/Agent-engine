@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Company } from "./Company.tsx";
 import { Controls } from "./Controls.tsx";
 import { Facts } from "./Facts.tsx";
+import { useTableLabels } from "./format.tsx";
 import { Golden } from "./Golden.tsx";
 import { Letters } from "./Letters.tsx";
 import { Metrics } from "./Metrics.tsx";
@@ -19,36 +20,32 @@ function useRoute() {
   return hash.slice(1);
 }
 
+const NAV: [string, string][] = [
+  ["/", "Overview"],
+  ["/review", "Review"],
+  ["/letters", "Letters"],
+  ["/facts", "Facts"],
+  ["/metrics", "Metrics"],
+  ["/golden", "Golden set"],
+  ["/controls", "Controls"],
+];
+
 export function App() {
   const route = useRoute();
+  useTableLabels();
   const company = route.match(/^\/company\/([A-Za-z0-9]{8})/)?.[1];
+  const active = (path: string) =>
+    path === "/" ? route === "/" || route === "" : route.startsWith(path);
   return (
-    <main
-      style={{
-        fontFamily: "system-ui, sans-serif",
-        maxWidth: 1100,
-        margin: "1.5rem auto",
-        padding: "0 1rem",
-      }}
-    >
-      <header
-        style={{
-          display: "flex",
-          gap: "1.5rem",
-          alignItems: "baseline",
-          borderBottom: "1px solid #ddd",
-          marginBottom: "1rem",
-        }}
-      >
-        <h1 style={{ fontSize: "1.3rem" }}>Agent Engine</h1>
-        <a href="#/">Overview</a>
-        <a href="#/review">Review</a>
-        <a href="#/letters">Letters</a>
-        <a href="#/facts">Facts</a>
-        <a href="#/metrics">Metrics</a>
-        <a href="#/golden">Golden set</a>
-        <a href="#/controls">Controls</a>
-      </header>
+    <main className="app">
+      <nav className="top" aria-label="Main">
+        <h1>Agent Engine</h1>
+        {NAV.map(([path, name]) => (
+          <a key={path} href={`#${path}`} className={active(path) ? "active" : undefined}>
+            {name}
+          </a>
+        ))}
+      </nav>
       {company ? (
         <Company id={company} />
       ) : route.startsWith("/review") ? (

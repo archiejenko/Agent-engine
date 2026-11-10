@@ -1,0 +1,255 @@
+/* Shared dashboard styles. Light only (no dark theme yet). Mobile: under 600px tables become stacked
+   cards (labels come from each table's header row, see useTableLabels) and nothing scrolls sideways. */
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  background: #fff;
+  color: #1b1f24;
+}
+body {
+  font:
+    15px / 1.5 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+main.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+}
+nav.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 18px;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 1rem;
+  padding-bottom: 8px;
+}
+nav.top h1 {
+  font-size: 1.25rem;
+  margin: 0 8px 0 0;
+  flex-basis: auto;
+}
+nav.top a {
+  white-space: nowrap;
+}
+nav.top a.active {
+  font-weight: 600;
+}
+h2 {
+  font-size: 1.3rem;
+  margin: 1.4rem 0 0.6rem;
+}
+h3 {
+  font-size: 1.05rem;
+}
+table {
+  border-collapse: collapse;
+  max-width: 100%;
+}
+th,
+td {
+  padding: 4px 8px;
+  vertical-align: top;
+  text-align: left;
+}
+td {
+  /* break-word only breaks a word that can't fit, so short words never split mid-word. */
+  overflow-wrap: break-word;
+}
+td.num,
+th.num {
+  text-align: right;
+  white-space: nowrap;
+}
+td.nowrap {
+  white-space: nowrap;
+}
+code,
+pre,
+q {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  max-width: 100%;
+}
+button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #b8c0ca;
+  background: #f6f8fa;
+  cursor: pointer;
+  min-height: 34px;
+}
+button.primary {
+  background: #1f5fbf;
+  border-color: #1f5fbf;
+  color: #fff;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+input[type="text"],
+input:not([type]),
+select,
+textarea {
+  padding: 6px 8px;
+  border: 1px solid #b8c0ca;
+  border-radius: 6px;
+}
+.empty {
+  color: #5b6470;
+  font-style: italic;
+  padding: 6px 0;
+}
+.muted {
+  color: #5b6470;
+}
+ul.facts-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0.5rem 0 1rem;
+}
+.tabs button[aria-selected="true"] {
+  background: #1f5fbf;
+  border-color: #1f5fbf;
+  color: #fff;
+}
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0.8rem 0;
+}
+.card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 0.7rem;
+  margin-bottom: 0.7rem;
+}
+.banner {
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 0 0 1rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+.banner.off {
+  background: #fff4e5;
+  border: 2px solid #e8a33a;
+  color: #6b3d00;
+}
+.banner.live {
+  background: #e7f6ec;
+  border: 2px solid #2e9d5b;
+  color: #11502c;
+}
+.banner small {
+  font-weight: 400;
+  font-size: 0.85rem;
+  display: block;
+}
+.pill {
+  display: inline-block;
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.pill.on {
+  background: #e7f6ec;
+  color: #11502c;
+}
+.pill.off {
+  background: #fdecea;
+  color: #8a1c13;
+}
+details > summary {
+  cursor: pointer;
+  color: #1f5fbf;
+}
+
+@media (max-width: 600px) {
+  main.app {
+    padding: 12px;
+  }
+  nav.top h1 {
+    flex-basis: 100%;
+  }
+  table,
+  thead,
+  tbody,
+  tr,
+  th,
+  td {
+    display: block;
+    width: 100%;
+  }
+  thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  tr {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin: 0 0 8px;
+    padding: 6px 4px;
+  }
+  td {
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    border: 0;
+    padding: 3px 6px;
+    text-align: right;
+  }
+  td.num {
+    text-align: right;
+  }
+  td[data-label]::before {
+    content: attr(data-label);
+    font-weight: 600;
+    text-align: left;
+    flex: 0 0 38%;
+    color: #3b4450;
+  }
+  td:not([data-label]) {
+    justify-content: flex-start;
+    text-align: left;
+  }
+  td > * {
+    min-width: 0;
+  }
+  td {
+    overflow-wrap: anywhere;
+  }
+  .banner {
+    font-size: 1.05rem;
+  }
+}

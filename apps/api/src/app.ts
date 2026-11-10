@@ -1,6 +1,13 @@
 import { loadInfraConfig, loadProductsConfig, loadUniverseConfig } from "@ae/config";
 import type { Autonomy, Claim } from "@ae/contracts";
-import { K, loadBundledPlaybooks, playbookStats, promotePlaybook, setKillSwitch } from "@ae/infra";
+import {
+  K,
+  loadBundledPlaybooks,
+  outreachRoutes,
+  playbookStats,
+  promotePlaybook,
+  setKillSwitch,
+} from "@ae/infra";
 import { reviewQueue } from "@ae/opportunity";
 import {
   InMemoryQueue,
@@ -11,7 +18,13 @@ import {
 } from "@ae/ports";
 import { handleCheckoutCompleted } from "@ae/products";
 import type { Storage } from "@ae/storage";
-import { accuracyReport, defaultContext, recordGolden, resolveConflict } from "@ae/verification";
+import {
+  accuracyReport,
+  defaultContext,
+  recordGolden,
+  resolveConflict,
+  resumeSource,
+} from "@ae/verification";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { mountLetters } from "./letters-route.ts";
@@ -143,6 +156,13 @@ export function createApp(deps: AppDeps) {
   app.get("/api/review", async (c) => {
     const s = deps.storage(c.env);
     const queue = await reviewQueue(s, 50);
+    const infra = loadInfraConfig();
+    const routes = await outreachRoutes(
+      s,
+      vctx,
+      infra,
+      queue.map((q) => q.entity_id),
+    );
     const names = new Map<string, string>();
     for (const q of queue)
       names.set(q.entity_id, (await s.entities.get(q.entity_id))?.name ?? q.entity_id);
@@ -163,7 +183,16 @@ export function createApp(deps: AppDeps) {
       .rows;
     const quarantine = await s.quarantine.listOpen(50);
     return c.json({
-      opportunities: queue.map((q) => ({ ...q, name: names.get(q.entity_id) })),
+      opportunities: queue.map((q) => ({
+        ...q,
+        name: names.get(q.entity_id),
+        // email: a verified role address we may write to; letter: everything else (sme_letter).
+        route: routes.get(q.entity_id) ?? "letter",
+        opportunities: q.opportunities.map((o) => ({
+          ...o,
+          actionable: Boolean(infra.playbook_for_module[o.module]),
+        })),
+      })),
       drafts,
       conflicts,
       quarantine,
@@ -177,6 +206,9 @@ export function createApp(deps: AppDeps) {
     const o = await s.opportunities.get(c.req.param("id"));
     if (!o) return c.json({ error: "not_found" }, 404);
     if (o.status !== "proposed") return c.json({ error: "already_decided", status: o.status }, 409);
+    // Only outreach modules can be approved; others (e.g. x402_discovery) are read-only.
+    if (body.data.decision === "approve" && !loadInfraConfig().playbook_for_module[o.module])
+      return c.json({ error: "read_only_module", module: o.module }, 409);
     await s.opportunities.setStatus(
       o.opportunity_id,
       body.data.decision === "approve" ? "approved" : "rejected",
@@ -311,7 +343,8 @@ export function createApp(deps: AppDeps) {
       .object({ source: z.string().min(1), field: z.string().min(1) })
       .safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "bad_request" }, 400);
-    await deps.storage(c.env).pauses.resume(body.data.source, body.data.field);
+    // Resuming also closes the source's drift alerts (Alerts and Paused sources always agree).
+    await resumeSource(deps.storage(c.env), body.data.source, body.data.field);
     return c.json({ ok: true });
   });
 

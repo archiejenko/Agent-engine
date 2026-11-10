@@ -111,8 +111,9 @@ def build(print_version):
         "Data: a synthetic database seeded by running the Phase 2–5 gates (each builds the Phase 1 synthetic world first), "
         "with the global kill switch ON and no network calls. Light theme only: the dashboard and demo pages have no dark styles "
         "(the two dark-mode shots show this). Seeding note: in one shared database the Phase 2 gate's \"12 drafts generated\" check "
-        "reads as failed (it counts other gates' tasks, and the pilot cap of 50 leads a week held two of its leads back); every other "
-        "gate criterion passed. Issues noticed while capturing: <code>ui-issues.md</code>.</p>",
+        "and Phase 3's drift check read as failed: in one shared database the Phase 2 gate counts other gates' tasks (and the contact "
+        "cooldown rightly skips companies Phase 5 already contacted), and the drift source already has 3+ complete runs from earlier gates, "
+        "so its \"not judged yet\" step can't be shown. Both pass in the separate gate runs (docs/gates/). Every other criterion passed. Issues noticed while capturing: <code>ui-issues.md</code>.</p>",
     ]
     if not print_version:
         parts.append(

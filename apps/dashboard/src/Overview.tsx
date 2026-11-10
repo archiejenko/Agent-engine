@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getJson } from "./api.ts";
+import { EmptyRow, label } from "./format.tsx";
 
 interface Health {
   status: string;
@@ -52,15 +53,19 @@ export function Overview() {
         unknown staff numbers) · {n(data.universe.excluded)} excluded · {n(data.counts.entities)}{" "}
         companies in the anchor registry
       </p>
-      <Table rows={data.universe.reasons} label="Decision" />
+      <Table
+        rows={data.universe.reasons}
+        label="Decision"
+        empty="No companies assessed yet: run the universe step first."
+      />
       <h2>Verified facts</h2>
-      <Table rows={data.facts} label="Status" />
+      <Table rows={data.facts} label="Status" empty="No verified facts yet." />
       <p>
         {n(data.counts.claims)} claims · {n(data.counts.observations)} observations
       </p>
       <h3>Claims rejected by sanity rules</h3>
       {Object.keys(data.counts.rejections).length ? (
-        <Table rows={data.counts.rejections} label="Rule" />
+        <Table rows={data.counts.rejections} label="Rule" empty="None." />
       ) : (
         <p>None.</p>
       )}
@@ -68,20 +73,30 @@ export function Overview() {
   );
 }
 
-function Table({ rows, label }: { rows: Record<string, number>; label: string }) {
+function Table({
+  rows,
+  label: head,
+  empty,
+}: {
+  rows: Record<string, number>;
+  label: string;
+  empty?: string;
+}) {
+  const entries = Object.entries(rows);
   return (
-    <table cellPadding={4}>
+    <table>
       <thead>
         <tr>
-          <th align="left">{label}</th>
-          <th align="right">Count</th>
+          <th>{head}</th>
+          <th className="num">Count</th>
         </tr>
       </thead>
       <tbody>
-        {Object.entries(rows).map(([k, v]) => (
+        {entries.length === 0 && <EmptyRow cols={2}>{empty ?? "Nothing yet."}</EmptyRow>}
+        {entries.map(([k, v]) => (
           <tr key={k}>
-            <td>{k}</td>
-            <td align="right">{v.toLocaleString("en-GB")}</td>
+            <td>{label(k)}</td>
+            <td className="num">{v.toLocaleString("en-GB")}</td>
           </tr>
         ))}
       </tbody>

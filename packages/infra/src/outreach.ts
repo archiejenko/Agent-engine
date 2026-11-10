@@ -1,6 +1,7 @@
-import type { InfraConfig } from "@ae/config";
+import { type InfraConfig, legalDetailsArePlaceholders, tradingDisclosure } from "@ae/config";
 import type { EmailSender, Inbox } from "@ae/ports";
 import type { Storage } from "@ae/storage";
+import { contactBlock, recordContactBlocked } from "./contact.ts";
 import type { ToolRegistry } from "./tools.ts";
 
 /**
@@ -29,7 +30,7 @@ const ROLE = /^(info|hello|enquiries|enquiry|contact|sales|office|admin|team)@/i
 
 export function composeEmail(body: string, cfg: InfraConfig): string {
   const s = cfg.sender;
-  return `${body.trim()}\n\n${s.name}\n${s.company}, ${s.address}\n\n${s.opt_out_text}`;
+  return `${body.trim()}\n\n${s.name}\n${s.company}, ${s.address}\n\n${s.opt_out_text}\n\n${tradingDisclosure(s)}`;
 }
 
 export async function checkSend(
@@ -82,8 +83,18 @@ export function registerOutreachTools(
       const sender = deps.cfg.sender.from_email;
       const body = composeEmail(a.body, deps.cfg);
       let reason = await checkSend(deps.storage, deps.cfg, a, now);
+      if (!reason) {
+        reason = await contactBlock(deps.storage, deps.cfg, a.entity_id, {
+          now: new Date(now),
+          taskId: task.task_id,
+          threadId: a.thread_id,
+        });
+        if (reason) await recordContactBlocked(deps.storage, a.entity_id, "sme_outreach", reason);
+      }
       if (!reason && !dryRun && sender.endsWith(".invalid"))
         reason = "no real sending domain configured";
+      if (!reason && !dryRun && legalDetailsArePlaceholders(deps.cfg.sender))
+        reason = "company number / registered office are still placeholders";
       const recipient = a.recipients.join(",");
       if (reason) {
         await deps.storage.outbox.add({

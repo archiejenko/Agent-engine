@@ -5,7 +5,8 @@
     "per_playbook_per_day_gbp": {
       "default": 5,
       "sme_outreach": 5
-    }
+    },
+    "exclude_steps": ["print_and_post"]
   },
   "kill_switch_default_on": true,
   "task_timeout_minutes": 30,
@@ -25,11 +26,16 @@
     "address": "Manchester, UK",
     "from_email": "archie@example.invalid",
     "opt_out_text": "If you'd rather not hear from me again, just reply 'no thanks' and I won't contact you again.",
-    "letter_opt_out_text": "Don't want letters from me? Email {email} quoting {code}, or visit {url}"
+    "letter_opt_out_text": "Don't want letters from me? Email {email} quoting {code}, or visit {url}",
+    "legal": {
+      "registered_name": "EJTECH Ltd",
+      "registered_in": "England and Wales",
+      "company_number": "00000000",
+      "registered_office": "Registered office placeholder, Manchester (set at cutover)"
+    }
   },
   "playbook_for_module": {
-    "lead_gen_sme_web": "sme_outreach",
-    "x402_discovery": "sme_outreach"
+    "lead_gen_sme_web": "sme_outreach"
   },
   "modules": {
     "pilot_weekly_limit": 50,
@@ -69,7 +75,24 @@
         "max_attempts_without_reply": 4,
         "min_days_between": 4
       }
-    }
+    },
+    "copy_rules": {
+      "_note": "Checked in code on every email and letter draft (packages/infra/src/playbooks/sme_outreach.ts checkDraft).",
+      "max_observations": 1,
+      "max_company_name_mentions": 2,
+      "max_i_noticed": 1,
+      "never_lead_with_fields": [
+        "officer_appointments",
+        "officers_active",
+        "psc_active",
+        "psc_history"
+      ],
+      "never_lead_with_words": ["director", "officer", "appointed", "resigned"],
+      "offer_markers": ["demo", "show you", "ideas", "short call", "quick call", "chat"],
+      "min_sentences_before_offer": 1
+    },
+    "contact_cooldown_days": 90,
+    "contact_playbooks": ["sme_outreach", "sme_letter"]
   },
   "autonomy": {
     "window": 50,
@@ -80,7 +103,7 @@
     "l2_review_sample": 0.2
   },
   "letters": {
-    "_note": "demo_base_url is a placeholder until a real demo host is set up (docs/live-cutover.md).",
+    "_note": "demo_base_url, print_cost_gbp and postage_gbp are placeholders until cutover (docs/live-cutover.md). Postage placeholder = second-class stamp.",
     "fallback_for": ["sme_outreach"],
     "playbook": "sme_letter",
     "demo_base_url": "https://demo.example.invalid",
@@ -98,6 +121,9 @@
       "virtual office",
       "c/o"
     ],
-    "demo_expiry_days": 30
-  }
+    "demo_expiry_days": 30,
+    "print_cost_gbp": 0.12,
+    "postage_gbp": 0.87
+  },
+  "_note_playbook_for_module": "Only modules listed here are outreach modules (approve buttons). x402_discovery is read-only: it shows who is checking companies, it doesn't contact anyone."
 }

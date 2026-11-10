@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getJson } from "./api.ts";
+import { EmptyRow } from "./format.tsx";
 
 interface MetricsData {
   verification: {
@@ -75,7 +76,7 @@ export function Metrics() {
       <h2>
         Verification accuracy (against your golden set: {d.verification.golden_companies} companies)
       </h2>
-      <table cellPadding={4}>
+      <table>
         <thead>
           <tr>
             <th align="left">Source</th>
@@ -85,6 +86,11 @@ export function Metrics() {
           </tr>
         </thead>
         <tbody>
+          {d.verification.accuracy.length === 0 && (
+            <EmptyRow cols={4}>
+              No accuracy yet: verify companies on the Golden set page first.
+            </EmptyRow>
+          )}
           {d.verification.accuracy.map((a) => (
             <tr key={`${a.source}.${a.field}`}>
               <td>{a.source}</td>
@@ -101,7 +107,7 @@ export function Metrics() {
           <small>Brier {d.verification.brier.toFixed(3)} (lower is better)</small>
         )}
       </h3>
-      <table cellPadding={4}>
+      <table>
         <thead>
           <tr>
             <th align="left">Field</th>
@@ -112,6 +118,9 @@ export function Metrics() {
           </tr>
         </thead>
         <tbody>
+          {d.verification.calibration.length === 0 && (
+            <EmptyRow cols={5}>No calibration yet: it needs hand-verified companies.</EmptyRow>
+          )}
           {d.verification.calibration.map((b) => (
             <tr key={`${b.field}.${b.bucket}`}>
               <td>{b.field}</td>
@@ -125,7 +134,7 @@ export function Metrics() {
       </table>
       <h2>Paused sources (drift)</h2>
       {d.pauses.length === 0 ? (
-        <p>None.</p>
+        <p className="empty">None: every source is running.</p>
       ) : (
         d.pauses.map((p) => (
           <p key={`${p.source}.${p.field}`}>
@@ -137,6 +146,7 @@ export function Metrics() {
         ))
       )}
       <h2>Module backtests</h2>
+      {d.backtests.length === 0 && <p className="empty">No backtests yet.</p>}
       {d.backtests.map((b) => (
         <p key={b.module}>
           {b.module} as of {b.as_of} ({b.mode}): precision@20 {pct(b.precision_at_20)}, base rate{" "}
@@ -145,7 +155,7 @@ export function Metrics() {
         </p>
       ))}
       <h2>Playbook margins (7 days)</h2>
-      <table cellPadding={4}>
+      <table>
         <thead>
           <tr>
             <th align="left">Playbook</th>
@@ -156,6 +166,7 @@ export function Metrics() {
           </tr>
         </thead>
         <tbody>
+          {d.margins_7d.length === 0 && <EmptyRow cols={5}>No tasks in the last 7 days.</EmptyRow>}
           {d.margins_7d.map((m) => (
             <tr key={m.playbook}>
               <td>{m.playbook}</td>

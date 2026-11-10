@@ -137,6 +137,14 @@ export function lettersStorage(db: SqlDriver) {
         );
         return rows.map((r) => letter(r, false));
       },
+      /** Letters to one company (without PDF bytes), newest first. */
+      forEntity: async (entityId: string): Promise<LetterRow[]> =>
+        (
+          await db.all<Row>(
+            "SELECT task_id, entity_id, company_name, address, demo_slug, opt_out_code, '' AS pdf_b64, flags, status, batch_id, created_at FROM letters WHERE entity_id = ? ORDER BY created_at DESC",
+            [entityId],
+          )
+        ).map((r) => letter(r, false)),
       byOptOutCode: async (code: string): Promise<LetterRow | null> => {
         const r = await first(db, "SELECT * FROM letters WHERE opt_out_code = ?", [
           code.toUpperCase(),

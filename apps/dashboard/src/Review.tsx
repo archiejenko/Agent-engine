@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { day, type Fact, getJson, short } from "./api.ts";
+import { day, type Fact, getJson } from "./api.ts";
+import { FactValue, label } from "./format.tsx";
 
 interface TraceItem {
   signal_id: string;
@@ -18,6 +19,8 @@ interface Opp {
   explore: boolean;
   rationale: string | null;
   trace: TraceItem[];
+  /** Only outreach modules can be approved. */
+  actionable: boolean;
 }
 interface QueueItem {
   entity_id: string;
@@ -25,6 +28,8 @@ interface QueueItem {
   best_score: number;
   best_expected_value_gbp: number;
   explore: boolean;
+  /** email when we hold an address we may write to, otherwise a letter. */
+  route: "email" | "letter";
   opportunities: Opp[];
 }
 interface Draft {
@@ -53,10 +58,47 @@ async function post(path: string, body: unknown) {
   if (!r.ok) throw new Error((await r.json()).error ?? `HTTP ${r.status}`);
 }
 
-/** One review queue across everything that needs Archie: leads, drafts, conflicts, quarantined matches. */
+const PAGE = 20;
+type Tab = "drafts" | "leads" | "conflicts" | "quarantine";
+
+/** Readable fact reference: "Incorporated (2015-03-02)" instead of the raw fact id. */
+function factRef(id: string): string {
+  const [, field, from] = id.split("/");
+  return field ? `${label(field)}${from ? ` (as of ${from.slice(0, 10)})` : ""}` : id;
+}
+
+function Pager({
+  page,
+  total,
+  onPage,
+}: {
+  page: number;
+  total: number;
+  onPage: (p: number) => void;
+}) {
+  const pages = Math.max(1, Math.ceil(total / PAGE));
+  if (pages <= 1) return null;
+  return (
+    <div className="pager">
+      <button type="button" disabled={page === 0} onClick={() => onPage(page - 1)}>
+        ‹ Previous
+      </button>
+      <span>
+        Page {page + 1} of {pages} ({total})
+      </span>
+      <button type="button" disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>
+        Next ›
+      </button>
+    </div>
+  );
+}
+
+/** One review queue across everything that needs Archie, in tabs: drafts, leads, conflicts, quarantine. */
 export function Review() {
   const [data, setData] = useState<ReviewData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("drafts");
+  const [page, setPage] = useState(0);
   const load = useCallback(() => {
     getJson<ReviewData>("/api/review")
       .then(setData)
@@ -66,95 +108,173 @@ export function Review() {
   const act = (p: Promise<unknown>) => p.then(load).catch((e: Error) => setError(e.message));
   if (error) return <p style={{ color: "crimson" }}>{error}</p>;
   if (!data) return <p>Loading…</p>;
+  const counts: Record<Tab, number> = {
+    drafts: data.drafts.length,
+    leads: data.opportunities.length,
+    conflicts: data.conflicts.length,
+    quarantine: data.quarantine.length,
+  };
+  const names: Record<Tab, string> = {
+    drafts: "Drafts",
+    leads: "Leads",
+    conflicts: "Conflicts",
+    quarantine: "Quarantine",
+  };
+  const slice = <T,>(xs: T[]) => xs.slice(page * PAGE, (page + 1) * PAGE);
   return (
     <>
-      <h2>Drafts waiting for you ({data.drafts.length})</h2>
-      {data.drafts.length === 0 && <p>Nothing to approve.</p>}
-      {data.drafts.map((d) => (
-        <DraftCard
-          key={d.task_id}
-          d={d}
-          onDecide={(decision, text) =>
-            act(post(`/api/tasks/${d.task_id}/decision`, { decision, edited_text: text }))
-          }
-        />
-      ))}
+      <h2>Review</h2>
+      <div className="tabs" role="tablist">
+        {(Object.keys(names) as Tab[]).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => {
+              setTab(t);
+              setPage(0);
+            }}
+          >
+            {names[t]} ({counts[t]})
+          </button>
+        ))}
+      </div>
 
-      <h2>Leads ({data.opportunities.length})</h2>
-      {data.opportunities.map((q) => (
-        <div
-          key={q.entity_id}
-          style={{ border: "1px solid #ddd", padding: "0.5rem", marginBottom: "0.5rem" }}
-        >
-          <b>{q.name}</b> <a href={`#/company/${q.entity_id}`}>{q.entity_id}</a> · score{" "}
-          {q.best_score.toFixed(2)} · EV £{q.best_expected_value_gbp.toFixed(0)}{" "}
-          {q.explore && <em>(exploration pick)</em>}
-          {q.opportunities.map((o) => (
-            <div key={o.opportunity_id} style={{ fontSize: "0.85rem", marginTop: "0.3rem" }}>
-              <div>
-                {o.module} · confidence {o.confidence.toFixed(2)}{" "}
-                {o.rationale && <>· {o.rationale}</>}
-              </div>
-              <table cellPadding={2} style={{ fontSize: "0.8rem" }}>
-                <tbody>
-                  {o.trace.map((t) => (
-                    <tr key={t.signal_id}>
-                      <td>{t.signal_id}</td>
-                      <td>{t.raw_value === null ? "unknown (neutral)" : t.raw_value}</td>
-                      <td>× {t.weight}</td>
-                      <td>= {t.contribution.toFixed(3)}</td>
-                      <td style={{ color: "#888" }}>{t.fact_ids.join(", ")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <button
-                type="button"
-                onClick={() =>
-                  act(
-                    post(`/api/opportunities/${o.opportunity_id}/decision`, {
-                      decision: "approve",
-                    }),
-                  )
-                }
-              >
-                Approve → draft email
-              </button>{" "}
-              <button
-                type="button"
-                onClick={() =>
-                  act(
-                    post(`/api/opportunities/${o.opportunity_id}/decision`, { decision: "reject" }),
-                  )
-                }
-              >
-                Reject
-              </button>
+      {tab === "drafts" && (
+        <>
+          {data.drafts.length === 0 && (
+            <p className="empty">
+              No email drafts waiting. (Letters are approved as a batch on Letters.)
+            </p>
+          )}
+          {slice(data.drafts).map((d) => (
+            <DraftCard
+              key={d.task_id}
+              d={d}
+              onDecide={(decision, text) =>
+                act(post(`/api/tasks/${d.task_id}/decision`, { decision, edited_text: text }))
+              }
+            />
+          ))}
+          <Pager page={page} total={data.drafts.length} onPage={setPage} />
+        </>
+      )}
+
+      {tab === "leads" && (
+        <>
+          {data.opportunities.length === 0 && <p className="empty">No leads waiting.</p>}
+          {slice(data.opportunities).map((q) => (
+            <div key={q.entity_id} className="card">
+              <b>{q.name}</b> <a href={`#/company/${q.entity_id}`}>{q.entity_id}</a> · score{" "}
+              {q.best_score.toFixed(2)} · EV £{q.best_expected_value_gbp.toFixed(0)}{" "}
+              {q.explore && <em>(exploration pick)</em>}
+              {q.opportunities.map((o) => (
+                <div key={o.opportunity_id} style={{ fontSize: "0.9rem", marginTop: "0.4rem" }}>
+                  <div>
+                    <b>{o.module}</b> · confidence {o.confidence.toFixed(2)}
+                    {o.rationale && <> · {o.rationale}</>}
+                  </div>
+                  <details>
+                    <summary>How the score adds up ({o.trace.length} signals)</summary>
+                    <table style={{ fontSize: "0.85rem" }}>
+                      <thead>
+                        <tr>
+                          <th>Signal</th>
+                          <th>Value</th>
+                          <th className="num">Weight</th>
+                          <th className="num">Adds</th>
+                          <th>From</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {o.trace.map((t) => (
+                          <tr key={t.signal_id}>
+                            <td>{label(t.signal_id)}</td>
+                            <td>{t.raw_value === null ? "unknown (neutral)" : t.raw_value}</td>
+                            <td className="num">× {t.weight}</td>
+                            <td className="num">{t.contribution.toFixed(3)}</td>
+                            <td className="muted">{t.fact_ids.map(factRef).join(", ") || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </details>
+                  {o.actionable ? (
+                    <p style={{ margin: "0.4rem 0 0" }}>
+                      <button
+                        type="button"
+                        className="primary"
+                        onClick={() =>
+                          act(
+                            post(`/api/opportunities/${o.opportunity_id}/decision`, {
+                              decision: "approve",
+                            }),
+                          )
+                        }
+                      >
+                        {q.route === "email" ? "Approve → email" : "Approve → letter"}
+                      </button>{" "}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          act(
+                            post(`/api/opportunities/${o.opportunity_id}/decision`, {
+                              decision: "reject",
+                            }),
+                          )
+                        }
+                      >
+                        Reject
+                      </button>
+                    </p>
+                  ) : (
+                    <p className="muted" style={{ margin: "0.3rem 0 0" }}>
+                      Read-only: {o.module} shows who is checking this company; it doesn't contact
+                      anyone.
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
           ))}
-        </div>
-      ))}
+          <Pager page={page} total={data.opportunities.length} onPage={setPage} />
+        </>
+      )}
 
-      <h2>Conflicts ({data.conflicts.length})</h2>
-      {data.conflicts.map((f) => (
-        <p key={`${f.entity_id}.${f.field}`}>
-          <a href={`#/company/${f.entity_id}`}>{f.entity_id}</a> · {f.field}: {short(f.value)}{" "}
-          (since {day(f.valid_from)}) — open the company to compare the claims.
-        </p>
-      ))}
+      {tab === "conflicts" && (
+        <>
+          {data.conflicts.length === 0 && (
+            <p className="empty">No conflicts: every fact's sources agree.</p>
+          )}
+          {slice(data.conflicts).map((f) => (
+            <p key={`${f.entity_id}.${f.field}`} className="card">
+              <a href={`#/company/${f.entity_id}`}>{f.entity_id}</a> · {label(f.field)}:{" "}
+              <FactValue field={f.field} value={f.value} max={2} /> (since {day(f.valid_from)}).
+              Open the company to compare the claims.
+            </p>
+          ))}
+          <Pager page={page} total={data.conflicts.length} onPage={setPage} />
+        </>
+      )}
 
-      <h2>Quarantined matches ({data.quarantine.length})</h2>
-      {data.quarantine.map((q) => (
-        <p key={q.id}>
-          {q.source} · {q.raw_ref} · {q.reason}{" "}
-          <button
-            type="button"
-            onClick={() => act(post(`/api/quarantine/${q.id}/resolve`, { entity_id: null }))}
-          >
-            Not a match
-          </button>
-        </p>
-      ))}
+      {tab === "quarantine" && (
+        <>
+          {data.quarantine.length === 0 && <p className="empty">Nothing in quarantine.</p>}
+          {slice(data.quarantine).map((q) => (
+            <p key={q.id} className="card">
+              {q.source} · {q.raw_ref} · {q.reason}{" "}
+              <button
+                type="button"
+                onClick={() => act(post(`/api/quarantine/${q.id}/resolve`, { entity_id: null }))}
+              >
+                Not a match
+              </button>
+            </p>
+          ))}
+          <Pager page={page} total={data.quarantine.length} onPage={setPage} />
+        </>
+      )}
     </>
   );
 }
@@ -180,8 +300,9 @@ function DraftCard({
         padding: "0.75rem",
         marginBottom: "0.75rem",
         display: "grid",
-        gridTemplateColumns: "1fr 1fr",
+        gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
         gap: "1rem",
+        borderRadius: 8,
       }}
     >
       <div>
@@ -195,8 +316,8 @@ function DraftCard({
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          rows={8}
-          style={{ width: "100%" }}
+          rows={12}
+          style={{ width: "100%", font: "inherit", lineHeight: 1.5 }}
         />
         <p style={{ fontSize: "0.8rem", color: "#666" }}>
           Cost so far £{d.cost_gbp.toFixed(4)} · sender details and opt-out are added automatically
@@ -207,6 +328,7 @@ function DraftCard({
           <>
             <button
               type="button"
+              className="primary"
               onClick={() =>
                 onDecide(text === item.body ? "approve" : "edit", text === item.body ? null : text)
               }
@@ -225,8 +347,7 @@ function DraftCard({
           const f = d.brief?.facts.find((x) => x.fact_id === c.fact_id);
           return (
             <div key={c.fact_id} style={{ marginTop: "0.4rem" }}>
-              “{c.text}” ← <code>{c.fact_id}</code>{" "}
-              {f && <>(confidence {f.confidence.toFixed(2)})</>}
+              “{c.text}” ← {factRef(c.fact_id)} {f && <>(confidence {f.confidence.toFixed(2)})</>}
             </div>
           );
         })}

@@ -1,7 +1,8 @@
-import type { InfraConfig } from "@ae/config";
+import { type InfraConfig, tradingDisclosure } from "@ae/config";
 import type { VerifiedFact } from "@ae/contracts";
 import type { ModelRequest } from "@ae/ports";
 import type { LetterFlag, Storage } from "@ae/storage";
+import { contactBlock, recordContactBlocked } from "../contact.ts";
 import { externalActionsAllowed } from "../controls.ts";
 import { mergePdfs, renderDemoHtml, renderLetterPdf } from "../letters/render.ts";
 import type { PlaybookImpl, RoleImpl, TaskState } from "../runner.ts";
@@ -12,6 +13,7 @@ import {
   type CompanyBrief,
   checkDraft,
   type EmailDraft,
+  whyItMatters,
 } from "./sme_outreach.ts";
 
 /**
@@ -25,6 +27,7 @@ export const LETTER_FIELDS = [
   ...BRIEF_FIELDS,
   "registered_office_address",
   "registered_office_flags",
+  "sic_codes",
 ];
 
 type Address = Record<string, string>;
@@ -35,6 +38,7 @@ export interface LetterBrief {
   undeliverable: boolean;
   town: string | null;
   since_year: string | null;
+  sic_codes: string[];
 }
 
 /** Envelope lines: "The Directors", company, then the registered office as Companies House holds it. */
@@ -73,10 +77,13 @@ export function accountantFlags(a: Address, sharedBy: number, cfg: InfraConfig):
 
 export const LETTER_WRITER_PROMPT = {
   id: "sme_letter_draft",
-  version: 1,
+  version: 2,
   system: `You write a short, friendly letter from Archie (a Manchester web designer) to the directors of a small business.
 It goes with a free demo homepage Archie made for them (a QR code is printed below the letter).
-Use ONLY statements from the brief, copied word for word, and list each one you use in "claims" with its fact_id.
+Use exactly ONE statement from the brief, copied word for word, as the first sentence, and list it in "claims" with its fact_id.
+Then one or two sentences on why that matters to them (no facts, numbers or dates), then the offer: the free demo homepage.
+Mention the company name at most twice. Don't write "I noticed" more than once.
+Never open with, or mention, director, officer or ownership changes.
 Do not add any other facts, numbers, dates, names or compliments. No placeholders. Under 140 words.
 Do not write the greeting, sign-off, address, QR code text or opt-out line: those are added automatically.
 Return JSON: {"subject": string, "body": string, "claims": [{"fact_id": string, "text": string}]}.`,
@@ -104,6 +111,7 @@ async function readBrief(
     undeliverable: flags?.undeliverable === true,
     town: address?.locality ?? null,
     since_year: typeof inc === "string" ? inc.slice(0, 4) : null,
+    sic_codes: Array.isArray(get("sic_codes")) ? (get("sic_codes") as string[]) : [],
   };
 }
 
@@ -161,6 +169,7 @@ export const SME_LETTER: PlaybookImpl = {
         address: lb.address,
         town: lb.town,
         since_year: lb.since_year,
+        sic_codes: lb.sic_codes,
         body: draft.body,
       });
       return { output: r.result };
@@ -172,17 +181,16 @@ export const SME_LETTER: PlaybookImpl = {
   }),
 };
 
-/** Deterministic fake writer: up to three brief statements, verbatim. */
+/** Deterministic fake writer: one brief statement first, why it matters, then the demo. */
 export function fakeLetterWriter(req: ModelRequest): string {
   const { brief } = JSON.parse(req.user) as { brief: CompanyBrief };
-  const picked = brief.facts.slice(0, 3);
+  const f = brief.facts[0];
   const name = brief.company_name.replace(/ LIMITED$| LTD$/i, "");
-  const sentences = picked.map((f) => `I noticed that ${name} ${f.statement}.`);
-  const body = `${sentences.join(" ")} I help Manchester businesses with fast, modern websites that bring in enquiries, so I've made a free demo homepage for ${name} to show what's possible. If you like it, I'd be glad to talk it through.`;
+  const body = `${f ? `${name} ${f.statement}. ${whyItMatters(f.field)} ` : ""}I help Manchester businesses with fast, modern websites that bring in enquiries, so I've made a free demo homepage to show what's possible. If you like it, I'd be glad to talk it through.`;
   return JSON.stringify({
     subject: `A demo homepage for ${name}`,
     body,
-    claims: picked.map((f) => ({ fact_id: f.fact_id, text: f.statement })),
+    claims: f ? [{ fact_id: f.fact_id, text: f.statement }] : [],
   });
 }
 
@@ -247,12 +255,20 @@ export function registerLetterTools(
         address: Address | null;
         town: string | null;
         since_year: string | null;
+        sic_codes?: string[];
         body: string;
       };
       if (!a.address) throw new Error("no registered office address");
       // "No more letters": the company is on the suppression list as entity:<company number>.
       if (await deps.storage.suppressions.isSuppressed(letterSuppressionKey(a.entity_id)))
         throw new Error("this company asked not to receive letters (suppression list)");
+      const blocked = await contactBlock(deps.storage, deps.cfg, a.entity_id, {
+        taskId: task.task_id,
+      });
+      if (blocked) {
+        await recordContactBlocked(deps.storage, a.entity_id, "sme_letter", blocked);
+        throw new Error(`contact cooldown: ${blocked}`);
+      }
       const s = deps.cfg.sender;
       const existing = await deps.storage.letters.get(task.task_id);
       const slug = existing?.demo_slug ?? slugFor();
@@ -265,9 +281,11 @@ export function registerLetterTools(
           companyName: a.company_name,
           town: a.town,
           sinceYear: a.since_year,
+          sicCodes: a.sic_codes ?? [],
           senderName: s.name,
           senderCompany: s.company,
           senderEmail: s.from_email,
+          disclosure: tradingDisclosure(s),
         }),
       });
       const recipient = addressLines(a.company_name, a.address);
@@ -275,6 +293,7 @@ export function registerLetterTools(
       const flags = accountantFlags(a.address, shared, deps.cfg);
       const pdf = await renderLetterPdf({
         sender: { name: s.name, company: s.company, address: s.address, email: s.from_email },
+        disclosure: tradingDisclosure(s),
         recipient,
         date: (deps.now?.() ?? new Date()).toISOString().slice(0, 10),
         body: a.body,
@@ -325,9 +344,23 @@ export async function createPrintBatch(
   )
     return null;
   const waiting = [];
+  const seen = new Set<string>();
   for (const l of await storage.letters.list({ status: "waiting", limit: 1000 })) {
     const t = await storage.tasks.get(l.task_id);
-    if (t?.status === "awaiting_approval") waiting.push(l);
+    if (t?.status !== "awaiting_approval") continue;
+    // Never two letters to one company in a batch (the cooldown should already prevent it).
+    if (seen.has(l.entity_id)) {
+      await storage.letters.setStatus([l.task_id], "rejected");
+      await recordContactBlocked(
+        storage,
+        l.entity_id,
+        "sme_letter",
+        "a second letter to the same company in this batch",
+      );
+      continue;
+    }
+    seen.add(l.entity_id);
+    waiting.push(l);
   }
   if (!waiting.length) return null;
   const week = isoWeek(now);
@@ -384,12 +417,31 @@ export async function decidePrintBatch(
     ok.map((l) => l.demo_slug),
     true,
   );
+  // Printing and postage are real costs: add them to each approved letter's task (margins use these).
+  const perLetter = cfg.letters.print_cost_gbp + cfg.letters.postage_gbp;
+  for (const l of ok) {
+    await storage.tasks.addCost(l.task_id, perLetter);
+    await storage.runLog.append({
+      task_id: l.task_id,
+      step_id: "print_and_post",
+      role: "gate",
+      model: null,
+      tool_calls: [],
+      output: { print_gbp: cfg.letters.print_cost_gbp, postage_gbp: cfg.letters.postage_gbp },
+      check_result: null,
+      tokens: { input: 0, output: 0 },
+      cost_gbp: perLetter,
+      duration_ms: 0,
+      timestamp: new Date().toISOString(),
+    });
+  }
   for (const l of ok) await decideTask(l.task_id, "approve");
   for (const l of no) await decideTask(l.task_id, "reject");
   await storage.printBatches.decide(batchId, decision === "approve" ? "approved" : "rejected");
   return {
     approved: ok.length,
     rejected: no.length,
+    print_and_post_gbp: Number((ok.length * perLetter).toFixed(2)),
     demo_links_live: await externalActionsAllowed(storage, cfg, "sme_letter"),
   };
 }

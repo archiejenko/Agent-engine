@@ -144,7 +144,8 @@ const dash = (hash) => async (page) => {
       go: async (p) => {
         await dash(`/company/${ids.conflict_entity}`)(p);
         await p.waitForSelector("table");
-        const row = p.locator("tr", { hasText: ids.conflict_field }).first();
+        // The conflicting fact's row (its status cell reads "conflict").
+        const row = p.locator("tr", { has: p.locator('td:text-is("conflict")') }).first();
         await row.locator("button").click();
         await p.waitForTimeout(300);
       },
@@ -161,27 +162,57 @@ const dash = (hash) => async (page) => {
     },
     {
       area: "dashboard",
-      page: "review",
-      route: "/#/review",
+      page: "review-drafts",
+      route: "/#/review (Drafts tab)",
       about:
-        "Your queue: email drafts to approve, ranked leads with their signals, conflicts and quarantined matches.",
+        "Email drafts waiting for approval: the draft, why it matters, and the evidence for its one claim.",
       go: dash("/review"),
     },
     {
       area: "dashboard",
-      page: "review-draft",
-      route: "/#/review (first draft)",
-      about: "Close-up: one email draft with its brief, claims and approve/edit/reject.",
-      element: 'h2:has-text("Drafts waiting") + *',
-      go: dash("/review"),
+      page: "review-leads",
+      route: "/#/review (Leads tab)",
+      about:
+        "Ranked leads, 20 per page. Each says whether approving makes an email or a letter; score breakdowns are collapsed; x402_discovery is read-only.",
+      go: async (p) => {
+        await dash("/review")(p);
+        await p.click('button[role="tab"]:has-text("Leads")');
+        await p.waitForTimeout(300);
+      },
     },
     {
       area: "dashboard",
-      page: "review-conflict",
-      route: "/#/review (conflicts)",
-      about: "Close-up: the conflicts list (each links to the company page above).",
-      element: 'h2:has-text("Conflicts") + p',
-      go: dash("/review"),
+      page: "review-leads-expanded",
+      route: "/#/review (Leads tab, first breakdown open)",
+      about: "One lead's score breakdown opened: each signal, its weight and the facts behind it.",
+      go: async (p) => {
+        await dash("/review")(p);
+        await p.click('button[role="tab"]:has-text("Leads")');
+        await p.locator("details summary").first().click();
+        await p.waitForTimeout(300);
+      },
+    },
+    {
+      area: "dashboard",
+      page: "review-conflicts",
+      route: "/#/review (Conflicts tab)",
+      about: "Facts whose sources disagree (each links to the company page to compare the claims).",
+      go: async (p) => {
+        await dash("/review")(p);
+        await p.click('button[role="tab"]:has-text("Conflicts")');
+        await p.waitForTimeout(300);
+      },
+    },
+    {
+      area: "dashboard",
+      page: "review-quarantine",
+      route: "/#/review (Quarantine tab)",
+      about: "Records we couldn't match to a company with confidence, 20 per page.",
+      go: async (p) => {
+        await dash("/review")(p);
+        await p.click('button[role="tab"]:has-text("Quarantine")');
+        await p.waitForTimeout(300);
+      },
     },
     {
       area: "dashboard",
@@ -217,7 +248,7 @@ const dash = (hash) => async (page) => {
   for (const [page, hash, about] of [
     ["overview", "/", "Overview with no data yet."],
     ["facts", "/facts", "Facts with no data yet."],
-    ["review", "/review", "Review queue with nothing waiting."],
+    ["review", "/review", "Review queue with nothing waiting (Drafts tab)."],
     ["letters", "/letters", "Letters with no letters or batches."],
     ["metrics", "/metrics", "Metrics with no measurements yet."],
     ["golden", "/golden", "Golden set with nothing verified yet."],

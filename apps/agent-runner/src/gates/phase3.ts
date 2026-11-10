@@ -11,7 +11,13 @@ import {
   writeSuggestion,
 } from "@ae/opportunity";
 import type { Storage } from "@ae/storage";
-import { accuracyReport, computeDrift, recordGolden, runDriftCheck } from "@ae/verification";
+import {
+  accuracyReport,
+  computeDrift,
+  recordGolden,
+  resumeSource,
+  runDriftCheck,
+} from "@ae/verification";
 import { fakeModel } from "../service.ts";
 import type { GateCriterion } from "./phase2.ts";
 import { buildSyntheticWorld } from "./synthetic-world.ts";
@@ -70,9 +76,28 @@ export async function runPhase3Gate(
       today.map((m) => ({ ...m, day: past, volume: m === victim ? m.volume * 10 : m.volume })),
     );
   }
+  // A source is only judged after 3 complete runs: first check that it isn't, then add two earlier
+  // complete runs (re-fetches of the same claims) and check again.
+  const early = await runDriftCheck(storage, ctx, day);
+  const notJudgedYet = early.not_evaluated.some((n) => n.source === victim?.source);
+  const victimClaims = (await storage.claims.listUsableFor(null, [victim?.field as string]))
+    .map((u) => u.claim)
+    .filter((c) => c.source === victim?.source);
+  for (const d of [9, 8]) {
+    const at = new Date(Date.now() - d * 86_400_000).toISOString();
+    const r = await storage.runs.start({ kind: "synthetic_refetch" });
+    await storage.claims.record(victimClaims, { run_id: r.run_id, fetched_at: at });
+    await storage.runs.finish(r.run_id, "succeeded");
+  }
   const drift = await runDriftCheck(storage, ctx, day);
   const paused = await storage.pauses.active();
-  for (const p of paused) await storage.pauses.resume(p.source, p.field); // undo for the rest of the gate
+  const alertsWhilePaused = (
+    await storage.alerts.list({ unacknowledged: true, limit: 500 })
+  ).filter((a) => a.kind === "drift").length;
+  for (const p of paused) await resumeSource(storage, p.source, p.field); // undo for the rest of the gate
+  const alertsAfterResume = (
+    await storage.alerts.list({ unacknowledged: true, limit: 500 })
+  ).filter((a) => a.kind === "drift").length;
 
   // 3. Backtest with planted outcomes: new directors reply far more often.
   const fw = await parseFramework(
@@ -156,8 +181,15 @@ export async function runPhase3Gate(
     },
     {
       criterion: "Drift monitoring pauses a source on a breach",
-      status: drift.breaches.length > 0 && paused.length > 0 ? "passed (synthetic)" : "failed",
-      evidence: `${drift.metrics.length} source/field metrics today; breach on ${drift.breaches.map((b) => `${b.source}.${b.field} (${b.reasons.join("; ")})`).join(", ")}; ${paused.length} paused`,
+      status:
+        notJudgedYet &&
+        drift.breaches.length > 0 &&
+        paused.length > 0 &&
+        alertsWhilePaused > 0 &&
+        alertsAfterResume === 0
+          ? "passed (synthetic)"
+          : "failed",
+      evidence: `${notJudgedYet ? `not judged while ${victim?.source} had fewer than 3 complete runs` : `${victim?.source} already had 3+ complete runs before the check (so the "not judged yet" step couldn't be shown)`}; after 3: ${drift.metrics.length} source/field metrics today; resuming closed its drift alert (${alertsWhilePaused} → ${alertsAfterResume} open); breach on ${drift.breaches.map((b) => `${b.source}.${b.field} (${b.reasons.join("; ")})`).join(", ")}; ${paused.length} paused`,
     },
     {
       criterion: "Lead-gen backtest reports lift",

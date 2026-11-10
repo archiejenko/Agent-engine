@@ -202,6 +202,14 @@ export function phase5(db: SqlDriver) {
         (await db.all<Row>("SELECT * FROM outbox ORDER BY created_at DESC LIMIT ?", [limit])).map(
           toOutbox,
         ),
+      /** Emails to one company that weren't blocked (sent or dry run), newest first. */
+      forEntity: async (entityId: string) =>
+        (
+          await db.all<Row>(
+            "SELECT * FROM outbox WHERE entity_id = ? AND status != 'blocked' ORDER BY created_at DESC",
+            [entityId],
+          )
+        ).map(toOutbox),
     },
 
     followups: {

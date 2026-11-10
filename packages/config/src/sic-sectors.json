@@ -1,0 +1,208 @@
+{
+  "_note": "Demo homepage service cards by SIC 2007 division (first two digits). The copy describes what each section of THEIR site would show; it never claims anything about the company. 'default' is used when no division matches.",
+  "sectors": [
+    {
+      "key": "manufacturing",
+      "divisions": [
+        10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+        33
+      ],
+      "label": "manufacturing",
+      "cards": [
+        [
+          "What you make",
+          "Your products and capabilities, set out so buyers can see straight away whether you fit."
+        ],
+        ["How to order", "Minimum runs, lead times and how to request a quote, all in one place."],
+        [
+          "Quality and standards",
+          "The certifications and processes buyers ask about before they place an order."
+        ]
+      ]
+    },
+    {
+      "key": "construction",
+      "divisions": [41, 42, 43],
+      "label": "building and trades",
+      "cards": [
+        [
+          "Jobs you take on",
+          "The work you do, from small repairs to bigger projects, so the right customers get in touch."
+        ],
+        ["Recent work", "A few photos of finished jobs show quality better than any description."],
+        ["Areas you cover", "Where you work, so visitors know straight away whether you can help."]
+      ]
+    },
+    {
+      "key": "motor",
+      "divisions": [45],
+      "label": "motor trade",
+      "cards": [
+        [
+          "Services and repairs",
+          "What you do (servicing, MOTs, repairs, sales) with clear ways to book."
+        ],
+        ["Book online", "A simple booking form saves phone calls on both sides."],
+        ["Find us", "Opening hours, a map and parking, so customers turn up at the right time."]
+      ]
+    },
+    {
+      "key": "wholesale",
+      "divisions": [46],
+      "label": "wholesale",
+      "cards": [
+        ["Ranges you supply", "Your product ranges and the brands you carry, for trade buyers."],
+        [
+          "Opening a trade account",
+          "How to apply and what you need, so new customers can start quickly."
+        ],
+        ["Delivery and collection", "Delivery areas, cut-off times and collection details."]
+      ]
+    },
+    {
+      "key": "retail",
+      "divisions": [47],
+      "label": "retail",
+      "cards": [
+        ["What you sell", "Your main ranges, with photos, so people know it's worth the visit."],
+        ["Visit the shop", "Opening hours, address and directions, easy to find on a phone."],
+        ["Offers and news", "A simple place for new stock and seasonal offers."]
+      ]
+    },
+    {
+      "key": "transport",
+      "divisions": [49, 50, 51, 52, 53],
+      "label": "transport and logistics",
+      "cards": [
+        ["Services", "The kinds of loads, routes and storage you handle."],
+        ["Get a quote", "A short form for collection and delivery details."],
+        ["Coverage", "Where you operate and your typical turnaround times."]
+      ]
+    },
+    {
+      "key": "hospitality",
+      "divisions": [55, 56],
+      "label": "food and hospitality",
+      "cards": [
+        ["Menus and rooms", "Your menu or rooms, kept up to date and readable on a phone."],
+        ["Book a table or stay", "Bookings straight from the site, without the back-and-forth."],
+        ["Find us", "Opening times, location and how to get there."]
+      ]
+    },
+    {
+      "key": "digital",
+      "divisions": [58, 59, 60, 61, 62, 63],
+      "label": "technology and media",
+      "cards": [
+        ["What you build", "Your services and the kinds of clients you work with."],
+        ["Case studies", "Short write-ups of past projects, with permission from the client."],
+        ["Start a project", "A clear way to get in touch about a new piece of work."]
+      ]
+    },
+    {
+      "key": "finance",
+      "divisions": [64, 65, 66],
+      "label": "financial services",
+      "cards": [
+        ["How you help", "The services you offer, in plain English."],
+        ["Who you work with", "The kinds of clients you're best suited to."],
+        [
+          "Regulation and trust",
+          "Your regulatory details and memberships, where clients expect to find them."
+        ]
+      ]
+    },
+    {
+      "key": "property",
+      "divisions": [68],
+      "label": "property",
+      "cards": [
+        ["Properties", "Current listings, with photos and key details."],
+        ["Valuations", "A simple form for owners who want to know what their property is worth."],
+        ["Landlords and tenants", "What you offer each, and how to get started."]
+      ]
+    },
+    {
+      "key": "professional",
+      "divisions": [69, 70, 71],
+      "label": "professional services",
+      "cards": [
+        ["Services", "What you do and who you do it for, in plain English."],
+        ["Your team", "The people clients will deal with, and their qualifications."],
+        ["Book a consultation", "One clear way to arrange a first conversation."]
+      ]
+    },
+    {
+      "key": "creative",
+      "divisions": [72, 73, 74, 75],
+      "label": "specialist and creative services",
+      "cards": [
+        ["Your work", "A portfolio of recent projects."],
+        ["Services", "What clients can hire you for, and how projects usually run."],
+        ["Enquiries", "A short brief form so you get the details you need up front."]
+      ]
+    },
+    {
+      "key": "support",
+      "divisions": [77, 78, 79, 80, 81, 82],
+      "label": "business support services",
+      "cards": [
+        ["Services", "The services you provide and the sectors you serve."],
+        ["Coverage", "Where you operate and when you're available."],
+        ["Request a quote", "A quick form for the details you need to price a job."]
+      ]
+    },
+    {
+      "key": "education",
+      "divisions": [85],
+      "label": "education and training",
+      "cards": [
+        ["Courses", "What you teach, who it's for and how long it takes."],
+        ["Dates and booking", "Upcoming dates and an easy way to book a place."],
+        ["Your tutors", "The people who teach, and their experience."]
+      ]
+    },
+    {
+      "key": "health",
+      "divisions": [86, 87, 88],
+      "label": "health and care",
+      "cards": [
+        ["Services", "The care and treatments you offer, explained clearly."],
+        ["Appointments", "How to book, and what to expect at the first visit."],
+        ["Your team", "The people patients and families will meet."]
+      ]
+    },
+    {
+      "key": "leisure",
+      "divisions": [90, 91, 92, 93],
+      "label": "arts, sport and leisure",
+      "cards": [
+        ["What's on", "Events, classes or sessions, kept up to date."],
+        ["Book", "Tickets or places booked straight from the site."],
+        ["Visit", "Opening times, location and access information."]
+      ]
+    },
+    {
+      "key": "personal",
+      "divisions": [94, 95, 96],
+      "label": "personal services",
+      "cards": [
+        ["Treatments and services", "What you offer, with prices if you want to show them."],
+        ["Book an appointment", "Online booking that works on a phone."],
+        ["Find us", "Opening hours and where you are."]
+      ]
+    }
+  ],
+  "default": {
+    "key": "default",
+    "label": "business",
+    "cards": [
+      [
+        "What you do",
+        "A clear list of your services, so visitors know straight away they're in the right place."
+      ],
+      ["Works on every phone", "Fast, readable and easy to tap: most visitors arrive on a mobile."],
+      ["Easy to contact", "One obvious button to call, email or ask for a quote."]
+    ]
+  }
+}

@@ -27,7 +27,7 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-overview-390-light.png",
-    "overflow_px": 264
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -37,7 +37,7 @@
     "width": 390,
     "theme": "dark",
     "file": "dashboard-overview-390-dark.png",
-    "overflow_px": 264
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -57,7 +57,7 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-facts-390-light.png",
-    "overflow_px": 774
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -77,7 +77,7 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-facts-search-390-light.png",
-    "overflow_px": 772
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -97,7 +97,7 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-facts-search-empty-390-light.png",
-    "overflow_px": 264
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -117,7 +117,7 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-company-390-light.png",
-    "overflow_px": 766
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -137,67 +137,107 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-company-not-found-390-light.png",
-    "overflow_px": 264
-  },
-  {
-    "area": "dashboard",
-    "page": "review",
-    "route": "/#/review",
-    "about": "Your queue: email drafts to approve, ranked leads with their signals, conflicts and quarantined matches.",
-    "width": 1440,
-    "theme": "light",
-    "file": "dashboard-review-1440-light.png",
     "overflow_px": 0
   },
   {
     "area": "dashboard",
-    "page": "review",
-    "route": "/#/review",
-    "about": "Your queue: email drafts to approve, ranked leads with their signals, conflicts and quarantined matches.",
-    "width": 390,
-    "theme": "light",
-    "file": "dashboard-review-390-light.png",
-    "overflow_px": 264
-  },
-  {
-    "area": "dashboard",
-    "page": "review-draft",
-    "route": "/#/review (first draft)",
-    "about": "Close-up: one email draft with its brief, claims and approve/edit/reject.",
+    "page": "review-drafts",
+    "route": "/#/review (Drafts tab)",
+    "about": "Email drafts waiting for approval: the draft, why it matters, and the evidence for its one claim.",
     "width": 1440,
     "theme": "light",
-    "file": "dashboard-review-draft-1440-light.png",
+    "file": "dashboard-review-drafts-1440-light.png",
     "overflow_px": 0
   },
   {
     "area": "dashboard",
-    "page": "review-draft",
-    "route": "/#/review (first draft)",
-    "about": "Close-up: one email draft with its brief, claims and approve/edit/reject.",
+    "page": "review-drafts",
+    "route": "/#/review (Drafts tab)",
+    "about": "Email drafts waiting for approval: the draft, why it matters, and the evidence for its one claim.",
     "width": 390,
     "theme": "light",
-    "file": "dashboard-review-draft-390-light.png",
-    "overflow_px": 264
-  },
-  {
-    "area": "dashboard",
-    "page": "review-conflict",
-    "route": "/#/review (conflicts)",
-    "about": "Close-up: the conflicts list (each links to the company page above).",
-    "width": 1440,
-    "theme": "light",
-    "file": "dashboard-review-conflict-1440-light.png",
+    "file": "dashboard-review-drafts-390-light.png",
     "overflow_px": 0
   },
   {
     "area": "dashboard",
-    "page": "review-conflict",
-    "route": "/#/review (conflicts)",
-    "about": "Close-up: the conflicts list (each links to the company page above).",
+    "page": "review-leads",
+    "route": "/#/review (Leads tab)",
+    "about": "Ranked leads, 20 per page. Each says whether approving makes an email or a letter; score breakdowns are collapsed; x402_discovery is read-only.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-review-leads-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "review-leads",
+    "route": "/#/review (Leads tab)",
+    "about": "Ranked leads, 20 per page. Each says whether approving makes an email or a letter; score breakdowns are collapsed; x402_discovery is read-only.",
     "width": 390,
     "theme": "light",
-    "file": "dashboard-review-conflict-390-light.png",
-    "overflow_px": 264
+    "file": "dashboard-review-leads-390-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "review-leads-expanded",
+    "route": "/#/review (Leads tab, first breakdown open)",
+    "about": "One lead's score breakdown opened: each signal, its weight and the facts behind it.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-review-leads-expanded-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "review-leads-expanded",
+    "route": "/#/review (Leads tab, first breakdown open)",
+    "about": "One lead's score breakdown opened: each signal, its weight and the facts behind it.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-review-leads-expanded-390-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "review-conflicts",
+    "route": "/#/review (Conflicts tab)",
+    "about": "Facts whose sources disagree (each links to the company page to compare the claims).",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-review-conflicts-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "review-conflicts",
+    "route": "/#/review (Conflicts tab)",
+    "about": "Facts whose sources disagree (each links to the company page to compare the claims).",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-review-conflicts-390-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "review-quarantine",
+    "route": "/#/review (Quarantine tab)",
+    "about": "Records we couldn't match to a company with confidence, 20 per page.",
+    "width": 1440,
+    "theme": "light",
+    "file": "dashboard-review-quarantine-1440-light.png",
+    "overflow_px": 0
+  },
+  {
+    "area": "dashboard",
+    "page": "review-quarantine",
+    "route": "/#/review (Quarantine tab)",
+    "about": "Records we couldn't match to a company with confidence, 20 per page.",
+    "width": 390,
+    "theme": "light",
+    "file": "dashboard-review-quarantine-390-light.png",
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -217,7 +257,7 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-letters-390-light.png",
-    "overflow_px": 264
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -237,7 +277,7 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-metrics-390-light.png",
-    "overflow_px": 264
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -257,7 +297,7 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-golden-390-light.png",
-    "overflow_px": 264
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -277,7 +317,7 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-controls-390-light.png",
-    "overflow_px": 380
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -297,7 +337,7 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-overview-empty-390-light.png",
-    "overflow_px": 264
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -317,13 +357,13 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-facts-empty-390-light.png",
-    "overflow_px": 264
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
     "page": "review-empty",
     "route": "/#/review (empty database)",
-    "about": "Empty state: Review queue with nothing waiting.",
+    "about": "Empty state: Review queue with nothing waiting (Drafts tab).",
     "width": 1440,
     "theme": "light",
     "file": "dashboard-review-empty-1440-light.png",
@@ -333,11 +373,11 @@
     "area": "dashboard",
     "page": "review-empty",
     "route": "/#/review (empty database)",
-    "about": "Empty state: Review queue with nothing waiting.",
+    "about": "Empty state: Review queue with nothing waiting (Drafts tab).",
     "width": 390,
     "theme": "light",
     "file": "dashboard-review-empty-390-light.png",
-    "overflow_px": 264
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -357,7 +397,7 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-letters-empty-390-light.png",
-    "overflow_px": 264
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -377,7 +417,7 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-metrics-empty-390-light.png",
-    "overflow_px": 264
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -397,7 +437,7 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-golden-empty-390-light.png",
-    "overflow_px": 264
+    "overflow_px": 0
   },
   {
     "area": "dashboard",
@@ -417,12 +457,12 @@
     "width": 390,
     "theme": "light",
     "file": "dashboard-controls-empty-390-light.png",
-    "overflow_px": 380
+    "overflow_px": 0
   },
   {
     "area": "public",
     "page": "demo",
-    "route": "/demo/74pxsbx4zmum",
+    "route": "/demo/t7bvf3w2kg86",
     "about": "The demo homepage a letter's QR code opens (noindex, fixed 'not affiliated' banner).",
     "note": "Served from a copy of the database with external actions allowed: with the kill switch ON demo pages return 404 (next shot).",
     "width": 1440,
@@ -433,7 +473,7 @@
   {
     "area": "public",
     "page": "demo",
-    "route": "/demo/74pxsbx4zmum",
+    "route": "/demo/t7bvf3w2kg86",
     "about": "The demo homepage a letter's QR code opens (noindex, fixed 'not affiliated' banner).",
     "note": "Served from a copy of the database with external actions allowed: with the kill switch ON demo pages return 404 (next shot).",
     "width": 1440,
@@ -444,7 +484,7 @@
   {
     "area": "public",
     "page": "demo",
-    "route": "/demo/74pxsbx4zmum",
+    "route": "/demo/t7bvf3w2kg86",
     "about": "The demo homepage a letter's QR code opens (noindex, fixed 'not affiliated' banner).",
     "note": "Served from a copy of the database with external actions allowed: with the kill switch ON demo pages return 404 (next shot).",
     "width": 390,
@@ -455,7 +495,7 @@
   {
     "area": "public",
     "page": "demo",
-    "route": "/demo/74pxsbx4zmum",
+    "route": "/demo/t7bvf3w2kg86",
     "about": "The demo homepage a letter's QR code opens (noindex, fixed 'not affiliated' banner).",
     "note": "Served from a copy of the database with external actions allowed: with the kill switch ON demo pages return 404 (next shot).",
     "width": 390,
@@ -466,7 +506,7 @@
   {
     "area": "public",
     "page": "demo-kill-switch-on",
-    "route": "/demo/74pxsbx4zmum",
+    "route": "/demo/t7bvf3w2kg86",
     "about": "The same demo URL while the kill switch is ON: deliberately not found.",
     "width": 1440,
     "theme": "light",
@@ -476,7 +516,7 @@
   {
     "area": "public",
     "page": "demo-kill-switch-on",
-    "route": "/demo/74pxsbx4zmum",
+    "route": "/demo/t7bvf3w2kg86",
     "about": "The same demo URL while the kill switch is ON: deliberately not found.",
     "width": 390,
     "theme": "light",
@@ -486,7 +526,7 @@
   {
     "area": "public",
     "page": "demo-expired",
-    "route": "/demo/wz5z2j7hkq5c",
+    "route": "/demo/bcgzzhwrwhfy",
     "about": "A demo more than 30 days after its batch was approved.",
     "note": "Same database copy, with this demo aged 31 days.",
     "width": 1440,
@@ -497,7 +537,7 @@
   {
     "area": "public",
     "page": "demo-expired",
-    "route": "/demo/wz5z2j7hkq5c",
+    "route": "/demo/bcgzzhwrwhfy",
     "about": "A demo more than 30 days after its batch was approved.",
     "note": "Same database copy, with this demo aged 31 days.",
     "width": 390,
@@ -508,7 +548,7 @@
   {
     "area": "public",
     "page": "opt-out",
-    "route": "/stop/LQFSK74",
+    "route": "/stop/LVRY5EY",
     "about": "The short opt-out URL printed on each letter: asks before recording anything.",
     "width": 1440,
     "theme": "light",
@@ -518,7 +558,7 @@
   {
     "area": "public",
     "page": "opt-out",
-    "route": "/stop/LQFSK74",
+    "route": "/stop/LVRY5EY",
     "about": "The short opt-out URL printed on each letter: asks before recording anything.",
     "width": 390,
     "theme": "light",
@@ -528,7 +568,7 @@
   {
     "area": "public",
     "page": "opt-out-done",
-    "route": "/stop/LQFSK74 (after confirming)",
+    "route": "/stop/LVRY5EY (after confirming)",
     "about": "After pressing the button: the company is on the suppression list.",
     "width": 1440,
     "theme": "light",
@@ -538,7 +578,7 @@
   {
     "area": "public",
     "page": "opt-out-done",
-    "route": "/stop/LQFSK74 (after confirming)",
+    "route": "/stop/LVRY5EY (after confirming)",
     "about": "After pressing the button: the company is on the suppression list.",
     "width": 390,
     "theme": "light",
@@ -588,7 +628,7 @@
   {
     "area": "letter",
     "page": "print-batch-p1",
-    "route": "/api/letters/batches/2026-W46-mw9rlijw/pdf (page 1)",
+    "route": "/api/letters/batches/2026-W46-mw9th4do/pdf (page 1)",
     "about": "Page 1 of the print batch PDF: the letter as it will be printed.",
     "width": 1440,
     "theme": "light",
@@ -598,7 +638,7 @@
   {
     "area": "letter",
     "page": "print-batch-p1",
-    "route": "/api/letters/batches/2026-W46-mw9rlijw/pdf (page 1)",
+    "route": "/api/letters/batches/2026-W46-mw9th4do/pdf (page 1)",
     "about": "Page 1 of the print batch PDF: the letter as it will be printed.",
     "width": 390,
     "theme": "light",

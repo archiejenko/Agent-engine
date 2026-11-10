@@ -69,7 +69,7 @@ Hand-verify first, so the comparison has a yardstick
 Prompts on the real model (~20 real companies each; read every output)
 - [ ] `website_extract` v1 (`packages/verification/src/sources/website/prompts.ts`): exact quotes, allow-listed fields only, role-based emails only; include pages with injected instructions
 - [ ] `opportunity_explain` v1 (`packages/opportunity/src/explain.ts`): cites only trace facts; measure how often the code check falls back to the template
-- [ ] `sme_outreach_draft` v1 (`packages/infra/src/playbooks/sme_outreach.ts`) and `sme_letter_draft` v1 (`packages/infra/src/playbooks/sme_letter.ts`): brief statements used verbatim; measure checker rejections; read 20 of each for tone
+- [ ] `sme_outreach_draft` v2 (`packages/infra/src/playbooks/sme_outreach.ts`) and `sme_letter_draft` v2 (`packages/infra/src/playbooks/sme_letter.ts`): one brief statement verbatim as the first sentence, why it matters, then the offer; measure how often the copy rules reject a draft and which rule; read 20 of each for tone and repeated phrases (the checker doesn't catch repetition)
 
 Model comparison (a config change: `roles` in `packages/config/src/models.json`, no code)
 - [ ] **Extraction: Haiku 5.5 vs Opus 5.5** (`extractor` role) on the same 100 websites. Compare: extractions rejected because the value isn't in the evidence span; accuracy against the golden set (Metrics); injected-instruction pages handled; cost per company. Switch to Haiku only if accuracy is within ~2 points and no injection gets through
@@ -87,6 +87,9 @@ Keys and accounts
 - [ ] Email provider account + API key (e.g. Postmark, SES, Resend) → runner secret. Needs a real `EmailSender` adapter (about an hour)
 - [ ] Inbox access for replies (provider inbound webhook or IMAP) → needs a real `Inbox` adapter
 - [ ] Your real sender details in `packages/config/src/infra.json` → `sender`: from address, company name, **postal address** (letters must identify you; it's printed on every letter)
+- [ ] **Trading disclosures** in `infra.json` → `sender.legal`: EJTECH's exact registered name, company number and registered office (currently placeholders `00000000` / "Registered office placeholder"). They print on every letter, email footer and demo page; real sends refuse to run and Letters says "Don't print yet" until they're set
+- [ ] Real print and postage costs per letter → `infra.json` → `letters.print_cost_gbp`, `postage_gbp` (placeholders £0.12 + £0.87)
+- [ ] Read the demo-page sector copy in `packages/config/src/sic-sectors.json` (17 sectors + default) and adjust the wording to your voice
 - [ ] Demo host for letters: e.g. `demo.ejtech.co.uk` routed to the Worker for `/demo/*` **and** `/stop/*` (the short opt-out URL printed on every letter), **without** Access; set `letters.demo_base_url` in `infra.json` (QR codes and opt-out URLs point there). Keep it short: it's typed by hand
 
 Verify against current guidance

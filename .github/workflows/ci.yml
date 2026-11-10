@@ -22,5 +22,7 @@ jobs:
         run: pnpm lint
       - name: Build dashboard
         run: pnpm build:dashboard
+      - name: Browser for the layout test (no sideways scroll on any page)
+        run: pnpm exec playwright install --with-deps chromium
       - name: Tests (includes building and running the real Worker bundle)
         run: pnpm test

@@ -72,6 +72,8 @@ export interface Storage
     start(input: { kind: string; config_versions?: Record<string, string> }): Promise<Run>;
     finish(runId: string, status: Exclude<RunStatus, "running">): Promise<void>;
     get(runId: string): Promise<Run | null>;
+    /** Mark a run as covering only part of its job (resumed or limited): drift ignores it. */
+    markPartial(runId: string): Promise<void>;
   };
   claims: {
     /** Append claims (validated). Atomic: all or none. Fails on duplicates. */

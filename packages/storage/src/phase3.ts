@@ -168,12 +168,26 @@ export function phase3(db: SqlDriver) {
             match_rate: Number(r.match_rate),
           }),
         ),
+      /** How many complete (succeeded, not partial) runs have fed this source up to the end of `day`. */
+      completeRuns: async (source: string, day: string) =>
+        Number(
+          (
+            await db.all<Row>(
+              `SELECT COUNT(DISTINCT o.run_id) AS n FROM claim_observations o
+               JOIN claims c ON c.claim_id = o.claim_id JOIN runs r ON r.run_id = o.run_id
+               WHERE c.source = ? AND o.fetched_at <= ? AND r.status = 'succeeded' AND r.partial = 0`,
+              [source, `${day}T23:59:59.999Z`],
+            )
+          )[0]?.n ?? 0,
+        ),
       /** Claims fetched on one day, for computing metrics: (source, field, value, entity_id). */
       claimsOnDay: async (day: string) =>
         (
           await db.all<Row>(
+            // Only complete runs count: failed, still-running and partial (resumed/limited) runs are left out.
             `SELECT c.source, c.field, c.value, c.entity_id FROM claim_observations o JOIN claims c ON c.claim_id = o.claim_id
-             WHERE o.fetched_at >= ? AND o.fetched_at <= ?`,
+             JOIN runs r ON r.run_id = o.run_id
+             WHERE o.fetched_at >= ? AND o.fetched_at <= ? AND r.status = 'succeeded' AND r.partial = 0`,
             [`${day}T00:00:00`, `${day}T23:59:59.999Z`],
           )
         ).map((r) => ({

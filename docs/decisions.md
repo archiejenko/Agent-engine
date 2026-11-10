@@ -2,6 +2,44 @@
 
 Newest first. Each entry: what we decided, why, and who approved it.
 
+## 2026-11-10 — Fixes from the screenshot review
+
+- **Trading disclosures everywhere** (registered name, "Registered in England and Wales", company number,
+  registered office) from `infra.json` → `sender.legal`, via one `tradingDisclosure()` line used by
+  every email footer, the paid report, alert payloads, letters, demo pages and the small public pages.
+  A test renders every outbound template (the letter by decoding its PDF text) and fails if any part
+  is missing. The real number and office aren't known yet, so they're **placeholders**; real sends
+  refuse to run while they are, and Letters says "Don't print yet".
+- **Copy rules, checked in code** (`infra.json` → `outreach.copy_rules`): one factual observation per
+  message; company name at most twice; "I noticed" at most once; never lead with director, officer or
+  ownership changes (those facts are no longer offered to the writer at all); structure = the
+  observation as the first sentence → at least one sentence on why it matters → an offer (demo, ideas,
+  short call). "Why it matters" itself can't be judged in code: the prompt asks for it, the checker
+  only enforces that a sentence sits between observation and offer. Writer prompts are now v2.
+- **One contact per company per 90 days** (`outreach.contact_cooldown_days`), across email and letters
+  and every module: blocked if emailed or sent a letter in the window, a letter is pending in any
+  batch, or a draft is already in progress. Follow-ups in the same email thread are exempt. Checked at
+  intake, at send and when a letter is prepared; a batch never holds two letters to one company.
+  Blocks are listed on Letters (and as alerts).
+- **Print and postage per letter** (placeholders £0.12 + £0.87) are added to the task's cost when you
+  approve a batch, so margins are real. They're left out of the automatic daily spend caps
+  (`caps.exclude_steps`): you approved them, and counting them would pause the queue after every
+  normal weekly batch.
+- **Demo homepage service cards come from the company's SIC division** (`sic-sectors.json`, 17 sectors
+  + default). The copy describes what each section of *their* site would show; it never claims
+  anything about the company.
+- **Drift**: a source isn't judged until it has 3 complete runs; failed, still-running and partial runs
+  (a resumed or limited Companies House pull, flagged on the run) are ignored; resuming a source also
+  closes its drift alert, so Alerts and Paused sources always agree.
+- **x402_discovery is read-only**: removed from `playbook_for_module`; the API refuses to approve its
+  leads; the Leads tab says why. Leads show "Approve → email" or "Approve → letter" from the same routing
+  rule the runner uses.
+- **Dashboard**: shared stylesheet; nav wraps; tables become labelled cards under 600px; a Playwright
+  test (`tests/mobile-layout.test.ts`, now in CI) checks every page at 390px and 1440px, seeded and
+  empty, for zero sideways scroll, with a negative control. Review has tabs and 20 per page; field
+  labels and readable lists; empty states; Controls has one "Sending" banner and each playbook's own
+  switch.
+
 ## 2026-11-09 — sme_letter: demo banner, expiry, letter opt-out
 
 - **Demo banner** (fixed to the top of the screen): "Sample prepared by EJTECH Ltd, not affiliated with

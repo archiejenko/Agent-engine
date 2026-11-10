@@ -1,4 +1,4 @@
-import { InfraConfig, loadInfraConfig } from "@ae/config";
+import { InfraConfig, loadInfraConfig, tradingDisclosure } from "@ae/config";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { mergePdfs, renderDemoHtml, renderLetterPdf, toWinAnsi } from "../letters/render.ts";
@@ -25,6 +25,7 @@ const content = {
   body: "I noticed that ACME WIDGETS doesn't seem to have a website yet. I've made a free demo homepage.",
   demoUrl: "https://demo.example.invalid/demo/abc123",
   companyName: "ACME WIDGETS",
+  disclosure: tradingDisclosure(cfg.sender),
   optOut: letterOptOutLine(cfg, "LABC234"),
   demoDays: cfg.letters.demo_expiry_days,
 };
@@ -68,6 +69,8 @@ describe("demo homepage", () => {
     senderName: "Archie",
     senderCompany: "EJTECH Ltd",
     senderEmail: "a@x.invalid",
+    sicCodes: ["43210"],
+    disclosure: tradingDisclosure(cfg.sender),
   });
   it("is noindex, with the fixed 'not affiliated' banner", () => {
     expect(html).toContain('<meta name="robots" content="noindex, nofollow, noarchive">');
@@ -75,6 +78,32 @@ describe("demo homepage", () => {
       '<div class="demo" role="note">Sample prepared by EJTECH Ltd, not affiliated with ACME &lt;WIDGETS&gt; LTD</div>',
     );
     expect(html).toMatch(/\.demo \{ position: fixed; top: 0;/);
+  });
+  it("writes the services section for the company's sector (SIC), without claims about them", () => {
+    expect(html).toContain("Jobs you take on"); // 43210 = electrical installation → building and trades
+    expect(html).not.toContain("Your services here");
+    const other = renderDemoHtml({
+      companyName: "ACME LTD",
+      town: null,
+      sinceYear: null,
+      sicCodes: ["56101"],
+      senderName: "Archie",
+      senderCompany: "EJTECH Ltd",
+      senderEmail: "a@x",
+      disclosure: "d",
+    });
+    expect(other).toContain("Menus and rooms"); // 56101 = restaurants
+    const unknown = renderDemoHtml({
+      companyName: "ACME LTD",
+      town: null,
+      sinceYear: null,
+      sicCodes: [],
+      senderName: "Archie",
+      senderCompany: "EJTECH Ltd",
+      senderEmail: "a@x",
+      disclosure: "d",
+    });
+    expect(unknown).toContain("What you do");
   });
   it("has no logos or imagery and loads nothing from anywhere else", () => {
     expect(html).not.toMatch(

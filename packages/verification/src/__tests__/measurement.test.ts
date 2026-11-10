@@ -1,7 +1,7 @@
 import type { Storage } from "@ae/storage";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { VerificationContext } from "../context.ts";
-import { compareToBaseline, computeDrift, runDriftCheck } from "../drift.ts";
+import { compareToBaseline, computeDrift, resumeSource, runDriftCheck } from "../drift.ts";
 import { ingestClaims } from "../ingest.ts";
 import { accuracyReport, recordGolden, resolveConflict } from "../measurement.ts";
 import { getVerifiedFacts } from "../query.ts";
@@ -125,17 +125,65 @@ describe("drift monitoring", () => {
     expect(compareToBaseline(row({ volume: 1 }), hist.slice(0, 2), cfg())).toEqual([]); // not enough baseline yet
   });
 
+  const websiteClaim = () =>
+    chClaim(runId, {
+      field: "website_copyright_year",
+      value: 2015,
+      published: NOW,
+      source: "company_website",
+      tier: 3,
+      fetched: NOW,
+    });
+  /** Two earlier complete runs that re-fetched the same claim (so the source has 3 in total). */
+  const twoEarlierRuns = async () => {
+    for (const d of [10, 9]) {
+      const r = await storage.runs.start({ kind: "earlier" });
+      await storage.claims.record([await websiteClaim()], {
+        run_id: r.run_id,
+        fetched_at: new Date(Date.now() - d * 86_400_000).toISOString(),
+      });
+      await storage.runs.finish(r.run_id, "succeeded");
+    }
+  };
+  const baseline = async () => {
+    for (let d = 1; d <= 4; d++) {
+      const day = new Date(Date.now() - d * 86_400_000).toISOString().slice(0, 10);
+      await storage.drift.put([
+        {
+          day,
+          source: "company_website",
+          field: "website_copyright_year",
+          volume: 100,
+          null_rate: 0,
+          mean: 2015,
+          top_share: null,
+          match_rate: 1,
+        },
+      ]);
+    }
+  };
+
+  it("only complete runs count: a still-running or partial run is ignored", async () => {
+    await ingest([await websiteClaim()]);
+    expect(await computeDrift(storage, today)).toEqual([]); // run still running
+    await storage.runs.markPartial(runId);
+    await storage.runs.finish(runId, "succeeded");
+    expect(await computeDrift(storage, today)).toEqual([]); // partial (resumed / limited)
+  });
+
+  it("a source isn't judged until it has 3 complete runs", async () => {
+    await ingest([await websiteClaim()]);
+    await storage.runs.finish(runId, "succeeded");
+    await baseline();
+    const r = await runDriftCheck(storage, ctx, today);
+    expect(r.breaches).toEqual([]);
+    expect(r.not_evaluated).toEqual([{ source: "company_website", complete_runs: 1 }]);
+  });
+
   it("a breach pauses the source; its facts become quarantined, not verified", async () => {
-    await ingest([
-      await chClaim(runId, {
-        field: "website_copyright_year",
-        value: 2015,
-        published: NOW,
-        source: "company_website",
-        tier: 3,
-        fetched: NOW,
-      }),
-    ]);
+    await ingest([await websiteClaim()]);
+    await storage.runs.finish(runId, "succeeded");
+    await twoEarlierRuns();
     const m = await computeDrift(storage, today);
     expect(m.find((x) => x.source === "company_website")?.volume).toBe(1);
     // A baseline of 4 days at volume 100 makes today's 1 a breach.
@@ -168,7 +216,13 @@ describe("drift monitoring", () => {
       });
     expect((await q("dashboard"))[0]?.status).toBe("quarantined");
     expect(await q("opportunity")).toEqual([]);
-    await storage.pauses.resume("company_website", "website_copyright_year");
+    await resumeSource(storage, "company_website", "website_copyright_year");
     expect((await q("opportunity"))[0]?.status).toBe("verified");
+    // Resuming closes the drift alert too: Alerts and Paused sources agree.
+    expect(
+      (await storage.alerts.list({ unacknowledged: true, limit: 10 })).filter(
+        (a) => a.kind === "drift",
+      ),
+    ).toEqual([]);
   });
 });

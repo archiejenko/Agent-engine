@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getJson } from "./api.ts";
+import { EmptyRow } from "./format.tsx";
 
 interface ControlsData {
   kill_global: boolean;
@@ -49,22 +50,27 @@ export function Controls() {
   useEffect(load, [load]);
   const act = (p: Promise<unknown>) => p.then(load).catch((e: Error) => setMsg(e.message));
   if (!d) return <p>{msg ?? "Loading…"}</p>;
+  const rate = (p: ControlsData["playbooks"][0], x: number) => (p.tasks === 0 ? "—" : pct(x));
   return (
     <>
       {msg && <p style={{ color: "crimson" }}>{msg}</p>}
-      <h2>Kill switch</h2>
-      <p>
-        External actions are{" "}
-        <b style={{ color: d.kill_global ? "crimson" : "green" }}>
-          {d.kill_global ? "OFF (kill switch ON — everything is a dry run)" : "ON"}
-        </b>{" "}
+      <div className={`banner ${d.kill_global ? "off" : "live"}`} role="status">
+        <div>
+          {d.kill_global ? "Sending: OFF, dry run" : "Sending: LIVE"}
+          <small>
+            {d.kill_global
+              ? "Nothing leaves the system: emails go to the outbox, payments to the fake ledger, alerts to a log."
+              : "External actions are allowed, for every playbook whose own switch below is also on."}
+          </small>
+        </div>
         <button
           type="button"
+          className={d.kill_global ? "primary" : undefined}
           onClick={() => act(post("/api/controls/kill", { scope: "global", on: !d.kill_global }))}
         >
-          {d.kill_global ? "Allow external actions" : "Stop all external actions"}
+          {d.kill_global ? "Go live (allow sending)" : "Stop all sending"}
         </button>
-      </p>
+      </div>
       <p>
         Task queue: <b>{d.queue_paused ? "paused" : "running"}</b>{" "}
         <button
@@ -79,41 +85,40 @@ export function Controls() {
           .join(", ")}
       </p>
       <h2>Playbooks and autonomy</h2>
-      <table cellPadding={4}>
+      <table>
         <thead>
           <tr>
-            <th align="left">Playbook</th>
+            <th>Playbook</th>
+            <th>Own switch</th>
             <th>Level</th>
-            <th>Last tasks</th>
-            <th>Success</th>
-            <th>No-edit approvals</th>
-            <th>Breaches</th>
-            <th>Cost £</th>
-            <th>Revenue £</th>
-            <th />
+            <th className="num">Last tasks</th>
+            <th className="num">Success</th>
+            <th className="num">No-edit approvals</th>
+            <th className="num">Breaches</th>
+            <th className="num">Cost £</th>
+            <th className="num">Revenue £</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {d.playbooks.map((p) => (
             <tr key={p.playbook}>
+              <td>{p.playbook}</td>
               <td>
-                {p.playbook}
-                {p.killed && " (stopped)"}
+                <span className={`pill ${p.killed ? "off" : "on"}`}>
+                  {p.killed ? "Stopped" : d.kill_global ? "On (dry run)" : "On"}
+                </span>
               </td>
-              <td align="center">{p.autonomy}</td>
-              <td align="right">{p.tasks}</td>
-              <td align="right">{pct(p.success_rate)}</td>
-              <td align="right">{pct(p.approved_without_edit)}</td>
-              <td align="right">{p.breaches}</td>
-              <td align="right">{p.cost_gbp.toFixed(2)}</td>
-              <td align="right">{p.revenue_gbp.toFixed(2)}</td>
-              <td>
-                <button
-                  type="button"
-                  onClick={() => act(post(`/api/playbooks/${p.playbook}/promote`, {}))}
-                >
-                  Promote
-                </button>{" "}
+              <td>{p.autonomy}</td>
+              <td className="num">{p.tasks}</td>
+              <td className="num">{rate(p, p.success_rate)}</td>
+              <td className="num">
+                {p.autonomy === "L3" ? "n/a (automatic)" : rate(p, p.approved_without_edit)}
+              </td>
+              <td className="num">{p.breaches}</td>
+              <td className="num">{p.cost_gbp.toFixed(2)}</td>
+              <td className="num">{p.revenue_gbp.toFixed(2)}</td>
+              <td className="nowrap">
                 <button
                   type="button"
                   onClick={() =>
@@ -125,24 +130,33 @@ export function Controls() {
                     )
                   }
                 >
-                  {p.killed ? "Restart" : "Stop"}
-                </button>
+                  {p.killed ? "Turn on" : "Stop"}
+                </button>{" "}
+                {p.autonomy !== "L3" && (
+                  <button
+                    type="button"
+                    onClick={() => act(post(`/api/playbooks/${p.playbook}/promote`, {}))}
+                  >
+                    Promote
+                  </button>
+                )}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p style={{ fontSize: "0.85rem", color: "#666" }}>
+      <p className="muted" style={{ fontSize: "0.85rem" }}>
+        A playbook acts for real only when sending is live <b>and</b> its own switch is on.
         Promotion needs ≥ 90% success, ≥ 80% approved without edits and zero breaches over the last
-        50 tasks. Any breach drops the playbook a level automatically.
+        50 tasks. Any breach drops the playbook a level automatically. L3 is the top level.
       </p>
       <h2>Alerts</h2>
       {d.alerts.length === 0 ? (
-        <p>None.</p>
+        <p className="empty">No open alerts.</p>
       ) : (
         d.alerts.map((a) => (
           <p key={a.id}>
-            <b>{a.kind}</b> {a.message}{" "}
+            <b>{a.kind.replace(/_/g, " ")}</b> {a.message}{" "}
             <button type="button" onClick={() => act(post(`/api/alerts/${a.id}/ack`, {}))}>
               OK
             </button>
@@ -150,15 +164,27 @@ export function Controls() {
         ))
       )}
       <h2>Outbox (latest)</h2>
-      <table cellPadding={4} style={{ fontSize: "0.85rem" }}>
+      <table style={{ fontSize: "0.85rem", width: "100%" }}>
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>To</th>
+            <th>Subject</th>
+            <th>Status</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
         <tbody>
+          {d.outbox.length === 0 && (
+            <EmptyRow cols={5}>Nothing sent yet (dry runs are listed here too).</EmptyRow>
+          )}
           {d.outbox.map((m) => (
             <tr key={m.id}>
-              <td>{m.created_at.slice(0, 16)}</td>
+              <td className="nowrap">{m.created_at.slice(0, 16).replace("T", " ")}</td>
               <td>{m.recipient}</td>
               <td>{m.subject}</td>
-              <td>{m.status}</td>
-              <td>{m.reason}</td>
+              <td>{m.status.replace("_", " ")}</td>
+              <td>{m.reason ?? "—"}</td>
             </tr>
           ))}
         </tbody>

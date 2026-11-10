@@ -35,9 +35,9 @@ Both are placeholders until Phase 3 measures real outcomes.
 
 Weights change only when Archie accepts a suggested change (written below by the system).
 
-## Suggested weight change (PENDING — not applied) <!-- ae:suggestion a20027d5-2a0f-4adb-90a3-9efd4f7dec0a -->
+## Suggested weight change (PENDING — not applied) <!-- ae:suggestion 3a21c104-9c84-4d56-b874-a9f6af1abcbf -->
 
-Generated 2026-11-07 from 1528 leads whose 30-day outcome
+Generated 2026-11-09 from 1528 leads whose 30-day outcome
 window has closed: 239 positive, £449386 of deal value. Suggested weights blend
 the current ones with the evidence (revenue-weighted). Nothing changes until you accept.
 
@@ -48,4 +48,4 @@ the current ones with the evidence (revenue-weighted). Nothing changes until you
 | hiring_momentum | 0.25 | **0.13** | 0.000 |
 | website_age_years | 0.30 | **0.15** | 0.000 |
 
-To accept: `pnpm weights accept a20027d5-2a0f-4adb-90a3-9efd4f7dec0a` · to reject: `pnpm weights reject a20027d5-2a0f-4adb-90a3-9efd4f7dec0a`
+To accept: `pnpm weights accept 3a21c104-9c84-4d56-b874-a9f6af1abcbf` · to reject: `pnpm weights reject 3a21c104-9c84-4d56-b874-a9f6af1abcbf`
