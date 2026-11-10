@@ -1,5 +1,6 @@
 import { legalDetailsArePlaceholders, loadInfraConfig, tradingDisclosure } from "@ae/config";
 import {
+  type BlockedItem,
   batchPdf,
   createPrintBatch,
   decidePrintBatch,
@@ -44,15 +45,20 @@ export function mountLetters(
           demo_url: demoUrl(cfg, l.demo_slug),
         })),
       });
+    // Blocked duplicates arrive as one digest alert per day; list their items, newest first.
     const blocked = (await s.alerts.list({ unacknowledged: true, limit: 500 }))
       .filter((a) => a.kind === "contact_blocked")
+      .flatMap((a) =>
+        ((a.details as { items?: BlockedItem[] } | null)?.items ?? []).map((i, n) => ({
+          id: `${a.id}-${n}`,
+          message: `${i.name} (${i.entity_id}): no new ${i.playbook === "sme_letter" ? "letter" : "email"}: ${i.reason}`,
+          created_at: i.at,
+        })),
+      )
+      .sort((x, y) => y.created_at.localeCompare(x.created_at))
       .slice(0, 50);
     return c.json({
-      blocked_duplicates: blocked.map((a) => ({
-        id: a.id,
-        message: a.message,
-        created_at: a.created_at,
-      })),
+      blocked_duplicates: blocked,
       cooldown_days: cfg.outreach.contact_cooldown_days,
       legal_placeholders: legalDetailsArePlaceholders(cfg.sender),
       cost_per_letter_gbp: cfg.letters.print_cost_gbp + cfg.letters.postage_gbp,

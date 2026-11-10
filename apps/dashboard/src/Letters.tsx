@@ -19,7 +19,7 @@ interface Batch {
   letters: Letter[];
 }
 interface LettersData {
-  blocked_duplicates: { id: number; message: string; created_at: string }[];
+  blocked_duplicates: { id: string; message: string; created_at: string }[];
   cooldown_days: number;
   legal_placeholders: boolean;
   cost_per_letter_gbp: number;

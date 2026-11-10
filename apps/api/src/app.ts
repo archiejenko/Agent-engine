@@ -1,6 +1,8 @@
 import { loadInfraConfig, loadProductsConfig, loadUniverseConfig } from "@ae/config";
 import type { Autonomy, Claim } from "@ae/contracts";
 import {
+  type ContactStatus,
+  contactStatus,
   K,
   loadBundledPlaybooks,
   outreachRoutes,
@@ -110,6 +112,34 @@ export function createApp(deps: AppDeps) {
     return c.json(body, db.ok ? 200 : 503);
   });
 
+  // "Today" panel on Overview: what's waiting for Archie, and the last 7 days' money.
+  app.get("/api/today", async (c) => {
+    const s = deps.storage(c.env);
+    const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const waiting = await s.tasks.list({ status: "awaiting_approval", limit: 5000 });
+    const pendingBatches = (await s.printBatches.list(50)).filter((b) => b.status === "pending");
+    let lettersInBatches = 0;
+    for (const b of pendingBatches)
+      lettersInBatches += (await s.letters.list({ batchId: b.id })).length;
+    const margins = await s.margins(since);
+    const revenue = margins.reduce((a, m) => a + m.revenue_gbp, 0);
+    const cost = margins.reduce((a, m) => a + m.cost_gbp, 0);
+    return c.json({
+      drafts_waiting: waiting.filter((t) => t.playbook !== "sme_letter").length,
+      letters_awaiting_batch_approval: lettersInBatches,
+      letters_waiting_for_next_batch: (await s.letters.list({ status: "waiting" })).length,
+      pending_batches: pendingBatches.length,
+      open_conflicts: (await s.facts.listCurrent({ status: "conflict", limit: 1, offset: 0 }))
+        .total,
+      open_alerts: (await s.alerts.list({ unacknowledged: true, limit: 10_000 })).length,
+      last_7_days: {
+        revenue_gbp: Number(revenue.toFixed(2)),
+        cost_gbp: Number(cost.toFixed(2)),
+        margin_gbp: Number((revenue - cost).toFixed(2)),
+      },
+    });
+  });
+
   app.get("/api/overview", async (c) => {
     const s = deps.storage(c.env);
     const [u, facts, counts, reasons] = await Promise.all([
@@ -157,6 +187,11 @@ export function createApp(deps: AppDeps) {
     const s = deps.storage(c.env);
     const queue = await reviewQueue(s, 50);
     const infra = loadInfraConfig();
+    const cooldowns = new Map<string, ContactStatus>();
+    for (const q of queue) {
+      const st = await contactStatus(s, infra, q.entity_id);
+      if (st) cooldowns.set(q.entity_id, st);
+    }
     const routes = await outreachRoutes(
       s,
       vctx,
@@ -188,6 +223,8 @@ export function createApp(deps: AppDeps) {
         name: names.get(q.entity_id),
         // email: a verified role address we may write to; letter: everything else (sme_letter).
         route: routes.get(q.entity_id) ?? "letter",
+        // Blocked by the per-company contact cooldown? Then there's nothing to approve yet.
+        cooldown: cooldowns.get(q.entity_id) ?? null,
         opportunities: q.opportunities.map((o) => ({
           ...o,
           actionable: Boolean(infra.playbook_for_module[o.module]),

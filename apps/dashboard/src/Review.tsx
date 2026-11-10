@@ -30,6 +30,8 @@ interface QueueItem {
   explore: boolean;
   /** email when we hold an address we may write to, otherwise a letter. */
   route: "email" | "letter";
+  /** Set when the per-company contact cooldown blocks a new email or letter. */
+  cooldown: { reason: string; contacted_on: string | null; until: string | null } | null;
   opportunities: Opp[];
 }
 interface Draft {
@@ -200,7 +202,18 @@ export function Review() {
                       </tbody>
                     </table>
                   </details>
-                  {o.actionable ? (
+                  {o.actionable && q.cooldown ? (
+                    <p style={{ margin: "0.4rem 0 0" }}>
+                      <button type="button" disabled title={q.cooldown.reason}>
+                        {q.route === "email" ? "Approve → email" : "Approve → letter"}
+                      </button>{" "}
+                      <span className="muted">
+                        {q.cooldown.contacted_on
+                          ? `Contacted ${q.cooldown.contacted_on}, cooldown until ${q.cooldown.until}`
+                          : `Not yet: ${q.cooldown.reason}`}
+                      </span>
+                    </p>
+                  ) : o.actionable ? (
                     <p style={{ margin: "0.4rem 0 0" }}>
                       <button
                         type="button"

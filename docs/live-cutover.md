@@ -63,6 +63,8 @@ Live runs
 
 ## Stage 5 — Real drafts and prompt tests (model comparison)
 
+> **Feature freeze until this stage is done** (2026-11-10): only fixes needed for the cutover itself.
+
 Hand-verify first, so the comparison has a yardstick
 - [ ] Hand-verify 150 companies on the Golden set page; read Metrics → accuracy and calibration
 

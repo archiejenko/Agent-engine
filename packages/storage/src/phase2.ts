@@ -536,6 +536,14 @@ export function phase2(db: SqlDriver) {
       acknowledge: async (id: number) => {
         await db.run("UPDATE alerts SET acknowledged_at = ? WHERE id = ?", [nowIso(), id]);
       },
+      /** Rewrite an alert in place (used for daily digests that accumulate). */
+      update: async (id: number, message: string, details: unknown) => {
+        await db.run("UPDATE alerts SET message = ?, details = ? WHERE id = ?", [
+          message,
+          j(details),
+          id,
+        ]);
+      },
     },
 
     quarantine: {

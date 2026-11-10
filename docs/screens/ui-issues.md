@@ -27,6 +27,14 @@ the open items below are not fixed.
 | 21 | Bare public pages with no sender | Expired / opt-out / not-found pages carry the full trading disclosure | `public-*.png` |
 | 22 | Tiny default buttons | Larger buttons; primary actions highlighted | most dashboard shots |
 
+## Fixed after this capture (2026-11-10, not yet in the screenshots)
+
+- Open #2: the Leads tab disables "Approve" for companies in cooldown and says "Contacted [date],
+  cooldown until [date]" (or what's pending).
+- Open #4: blocked duplicates are one digest alert per day ("7 duplicates blocked today").
+- Open #10: Overview starts with a "Today" panel: drafts waiting, letters awaiting batch approval,
+  open conflicts, alerts, and 7-day revenue / cost / margin; the data section follows it.
+
 ## Still open
 
 1. **Cards make long pages on a phone.** Facts shows 50 facts as 50 seven-line cards, and the Company

@@ -2,6 +2,17 @@
 
 Newest first. Each entry: what we decided, why, and who approved it.
 
+## 2026-11-10 — Last pre-cutover fixes, then feature freeze
+
+- Leads in cooldown: the approve button is disabled and the card says "Contacted [date], cooldown until
+  [date]" (or what's still pending), from the same cooldown check the runner uses.
+- Blocked duplicates: one `contact_blocked` alert per day, updated in place ("N duplicates blocked
+  today"); the same company and reason isn't counted twice in a day. Letters lists the items.
+- Overview "Today" panel (`/api/today`): drafts waiting, letters awaiting batch approval (+ waiting for
+  the next batch), open conflicts, open alerts, and 7-day revenue / cost / margin from task totals.
+- **Feature freeze** (Archie, 2026-11-10): no more feature work until the real-drafts stage of the live
+  cutover is done (Stage 5 in docs/live-cutover.md; Archie called it "step 3 (real drafts)"). Only fixes needed for the cutover itself.
+
 ## 2026-11-10 — Fixes from the screenshot review
 
 - **Trading disclosures everywhere** (registered name, "Registered in England and Wales", company number,

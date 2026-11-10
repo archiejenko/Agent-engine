@@ -146,3 +146,51 @@ describe("letter costs", () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe("cooldown status and the daily digest", () => {
+  it("says when the company was contacted and when the cooldown ends", async () => {
+    const { contactStatus } = await import("../contact.ts");
+    await email();
+    const st = await contactStatus(storage, cfg, E);
+    const today = new Date().toISOString().slice(0, 10);
+    const until = new Date(Date.now() + cfg.outreach.contact_cooldown_days * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    expect(st).toMatchObject({ contacted_on: today, until });
+  });
+
+  it("blocked duplicates make ONE alert per day, counted once per company and reason", async () => {
+    const { recordContactBlocked } = await import("../contact.ts");
+    const now = new Date("2026-11-10T09:00:00Z");
+    await recordContactBlocked(
+      storage,
+      "00000001",
+      "sme_letter",
+      "a letter is already pending",
+      now,
+    );
+    await recordContactBlocked(storage, "00000002", "sme_outreach", "emailed on 2026-11-01", now);
+    await recordContactBlocked(
+      storage,
+      "00000001",
+      "sme_letter",
+      "a letter is already pending",
+      now,
+    );
+    let alerts = (await storage.alerts.list({ limit: 50 })).filter(
+      (a) => a.kind === "contact_blocked",
+    );
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]?.message).toMatch(/^2 duplicates blocked today/);
+    // The next day starts a new digest.
+    await recordContactBlocked(
+      storage,
+      "00000003",
+      "sme_letter",
+      "x",
+      new Date("2026-11-11T09:00:00Z"),
+    );
+    alerts = (await storage.alerts.list({ limit: 50 })).filter((a) => a.kind === "contact_blocked");
+    expect(alerts.map((a) => a.message.split(" ")[0])).toEqual(["1", "2"]);
+  });
+});

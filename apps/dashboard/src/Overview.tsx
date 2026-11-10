@@ -26,28 +26,113 @@ interface OverviewData {
   };
 }
 
+interface Today {
+  drafts_waiting: number;
+  letters_awaiting_batch_approval: number;
+  letters_waiting_for_next_batch: number;
+  pending_batches: number;
+  open_conflicts: number;
+  open_alerts: number;
+  last_7_days: { revenue_gbp: number; cost_gbp: number; margin_gbp: number };
+}
+
+const gbp = (x: number) =>
+  `${x < 0 ? "−" : ""}£${Math.abs(x).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** What needs Archie today, and the last 7 days' money. Each tile links to where you act on it. */
+function TodayPanel({ t }: { t: Today }) {
+  const tiles: { label: string; value: string; note?: string; href: string; attention: boolean }[] =
+    [
+      {
+        label: "Drafts waiting",
+        value: String(t.drafts_waiting),
+        href: "#/review",
+        attention: t.drafts_waiting > 0,
+      },
+      {
+        label: "Letters awaiting batch approval",
+        value: String(t.letters_awaiting_batch_approval),
+        note: t.letters_waiting_for_next_batch
+          ? `+${t.letters_waiting_for_next_batch} for the next batch`
+          : undefined,
+        href: "#/letters",
+        attention: t.letters_awaiting_batch_approval > 0,
+      },
+      {
+        label: "Open conflicts",
+        value: String(t.open_conflicts),
+        href: "#/review",
+        attention: t.open_conflicts > 0,
+      },
+      {
+        label: "Alerts",
+        value: String(t.open_alerts),
+        href: "#/controls",
+        attention: t.open_alerts > 0,
+      },
+      {
+        label: "Revenue (7 days)",
+        value: gbp(t.last_7_days.revenue_gbp),
+        href: "#/metrics",
+        attention: false,
+      },
+      {
+        label: "Cost (7 days)",
+        value: gbp(t.last_7_days.cost_gbp),
+        href: "#/metrics",
+        attention: false,
+      },
+      {
+        label: "Margin (7 days)",
+        value: gbp(t.last_7_days.margin_gbp),
+        href: "#/metrics",
+        attention: t.last_7_days.margin_gbp < 0,
+      },
+    ];
+  return (
+    <section aria-labelledby="today">
+      <h2 id="today">Today</h2>
+      <div className="tiles">
+        {tiles.map((x) => (
+          <a key={x.label} href={x.href} className={`tile${x.attention ? " attention" : ""}`}>
+            <span className="tile-value">{x.value}</span>
+            <span className="tile-label">{x.label}</span>
+            {x.note && <span className="tile-note">{x.note}</span>}
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function Overview() {
   const [health, setHealth] = useState<Health | null>(null);
   const [data, setData] = useState<OverviewData | null>(null);
+  const [today, setToday] = useState<Today | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     getJson<Health>("/api/health")
       .then(setHealth)
+      .catch((e: Error) => setError(e.message));
+    getJson<Today>("/api/today")
+      .then(setToday)
       .catch((e: Error) => setError(e.message));
     getJson<OverviewData>("/api/overview")
       .then(setData)
       .catch((e: Error) => setError(e.message));
   }, []);
   if (error) return <p style={{ color: "crimson" }}>Unavailable: {error}</p>;
-  if (!health || !data) return <p>Loading…</p>;
+  if (!health || !data || !today) return <p>Loading…</p>;
   const n = (x: number) => x.toLocaleString("en-GB");
   return (
     <>
+      <TodayPanel t={today} />
+      <h2>Data</h2>
       <p>
         API <b>{health.status}</b> ({health.runtime}, v{health.version}) · database{" "}
         {health.storage.ok ? "ok" : "error"} · {health.storage.migrations} migrations
       </p>
-      <h2>Universe: {data.universe.region}</h2>
+      <h3>Universe: {data.universe.region}</h3>
       <p>
         <b>{n(data.universe.included)}</b> companies included ({n(data.universe.staff_unknown)} with
         unknown staff numbers) · {n(data.universe.excluded)} excluded · {n(data.counts.entities)}{" "}
@@ -58,7 +143,7 @@ export function Overview() {
         label="Decision"
         empty="No companies assessed yet: run the universe step first."
       />
-      <h2>Verified facts</h2>
+      <h3>Verified facts</h3>
       <Table rows={data.facts} label="Status" empty="No verified facts yet." />
       <p>
         {n(data.counts.claims)} claims · {n(data.counts.observations)} observations
