@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { day, type Fact, getJson } from "./api.ts";
 import { FactValue, label } from "./format.tsx";
+import { recordReview } from "./reviewTimer.ts";
 
 interface TraceItem {
   signal_id: string;
@@ -154,9 +155,10 @@ export function Review() {
             <DraftCard
               key={d.task_id}
               d={d}
-              onDecide={(decision, text) =>
-                act(post(`/api/tasks/${d.task_id}/decision`, { decision, edited_text: text }))
-              }
+              onDecide={(decision, text) => {
+                recordReview("draft", d.task_id, [d.task_id]);
+                act(post(`/api/tasks/${d.task_id}/decision`, { decision, edited_text: text }));
+              }}
             />
           ))}
           <Pager page={page} total={data.drafts.length} onPage={setPage} />
@@ -218,25 +220,27 @@ export function Review() {
                       <button
                         type="button"
                         className="primary"
-                        onClick={() =>
+                        onClick={() => {
+                          recordReview("opportunity", o.opportunity_id);
                           act(
                             post(`/api/opportunities/${o.opportunity_id}/decision`, {
                               decision: "approve",
                             }),
-                          )
-                        }
+                          );
+                        }}
                       >
                         {q.route === "email" ? "Approve → email" : "Approve → letter"}
                       </button>{" "}
                       <button
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
+                          recordReview("opportunity", o.opportunity_id);
                           act(
                             post(`/api/opportunities/${o.opportunity_id}/decision`, {
                               decision: "reject",
                             }),
-                          )
-                        }
+                          );
+                        }}
                       >
                         Reject
                       </button>
@@ -279,7 +283,10 @@ export function Review() {
               {q.source} · {q.raw_ref} · {q.reason}{" "}
               <button
                 type="button"
-                onClick={() => act(post(`/api/quarantine/${q.id}/resolve`, { entity_id: null }))}
+                onClick={() => {
+                  recordReview("quarantine", q.id);
+                  act(post(`/api/quarantine/${q.id}/resolve`, { entity_id: null }));
+                }}
               >
                 Not a match
               </button>

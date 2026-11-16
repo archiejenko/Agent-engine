@@ -4,11 +4,15 @@ import {
   type ContactStatus,
   contactStatus,
   K,
+  lastOutreachTask,
+  liftReport,
   loadBundledPlaybooks,
   outreachRoutes,
   playbookStats,
   promotePlaybook,
+  recordOutcome,
   setKillSwitch,
+  unitEconomics,
 } from "@ae/infra";
 import { reviewQueue } from "@ae/opportunity";
 import {
@@ -19,7 +23,7 @@ import {
   WebhookSignatureError,
 } from "@ae/ports";
 import { handleCheckoutCompleted } from "@ae/products";
-import type { Storage } from "@ae/storage";
+import type { Storage, StoredTask } from "@ae/storage";
 import {
   accuracyReport,
   defaultContext,
@@ -90,6 +94,35 @@ const FactsQuery = z.object({
   status: z.enum(["verified", "conflict", "stale", "quarantined"]).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
+});
+
+const entityOfRef = (ref: string) => ref.split(":").pop() ?? ref;
+
+/** While a draft waits for review, hide which arm (ranked or random holdout) it came from. */
+function blindTask(t: StoredTask): StoredTask {
+  const { cohort: _cohort, ...state } = t.state as Record<string, unknown>;
+  const ref = `entity:${entityOfRef(t.source_ref)}`;
+  return { ...t, source_ref: ref, idempotency_key: ref, state };
+}
+
+const ReviewSession = z.object({
+  item_type: z.enum(["opportunity", "draft", "print_batch", "conflict", "quarantine"]),
+  item_id: z.string().min(1).max(200),
+  task_ids: z.array(z.string().max(100)).max(1000).default([]),
+  started_at: z.iso.datetime({ offset: true }),
+  decided_at: z.iso.datetime({ offset: true }),
+  active_ms: z
+    .number()
+    .int()
+    .min(0)
+    .max(4 * 3_600_000),
+});
+const LedgerBody = z.object({
+  event: z.enum(["booking", "paid", "refunded", "churned"]),
+  entity_id: z.string().regex(/^[A-Z0-9]{8}$/),
+  value_gbp: z.number().nonnegative().nullable().default(null),
+  observed_at: z.iso.datetime({ offset: true }).optional(),
+  note: z.string().max(500).optional(),
 });
 
 /** The shared Hono app. Runtime-specific wiring lives in node.ts and worker.ts. Read-only in Phase 1. */
@@ -207,7 +240,9 @@ export function createApp(deps: AppDeps) {
       .map((t) => ({
         task_id: t.task_id,
         playbook: t.playbook,
-        source_ref: t.source_ref,
+        // Blind review (decision D4): holdout and ranked drafts must look identical, so the reference
+        // (which says how the task was created) is reduced to the company number.
+        entity_id: entityOfRef(t.source_ref),
         cost_gbp: t.cost_gbp,
         awaiting: (t.state as { awaiting?: unknown }).awaiting ?? null,
         brief:
@@ -275,7 +310,7 @@ export function createApp(deps: AppDeps) {
     const t = await s.tasks.get(c.req.param("id"));
     if (!t) return c.json({ error: "not_found" }, 404);
     return c.json({
-      task: t,
+      task: t.status === "awaiting_approval" ? blindTask(t) : t,
       run_log: await s.runLog.forTask(t.task_id),
       approvals: await s.approvals.forTask(t.task_id),
     });
@@ -307,6 +342,62 @@ export function createApp(deps: AppDeps) {
       margins_7d: await s.margins(since),
       alerts: await s.alerts.list({ unacknowledged: true, limit: 20 }),
     });
+  });
+
+  // ---- v2 Phase 1: outcome ledger, lift against the holdout, unit economics, review time.
+  // Reports may include simulator rows (?synthetic=1), clearly labelled; learning never does.
+  app.get("/api/lift", async (c) => {
+    const includeSynthetic = c.req.query("synthetic") === "1";
+    return c.json(await liftReport(deps.storage(c.env), { includeSynthetic }));
+  });
+
+  app.get("/api/economics", async (c) => {
+    const days = Math.min(365, Math.max(1, Number(c.req.query("days") ?? 30) || 30));
+    const includeSynthetic = c.req.query("synthetic") === "1";
+    return c.json({
+      days,
+      ...(await unitEconomics(deps.storage(c.env), loadInfraConfig(), {
+        since: new Date(Date.now() - days * 86_400_000).toISOString(),
+        includeSynthetic,
+      })),
+    });
+  });
+
+  app.get("/api/ledger", async (c) => {
+    const limit = Math.min(500, Math.max(1, Number(c.req.query("limit") ?? 100) || 100));
+    return c.json({ events: await deps.storage(c.env).outcomeLedger.list({ limit }) });
+  });
+
+  // Events that happen outside the system (a booked call, a bank-transfer payment) are entered by hand
+  // and attributed to the outreach task that last contacted the company.
+  app.post("/api/ledger", async (c) => {
+    const body = LedgerBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "bad_request", issues: body.error.issues }, 400);
+    const s = deps.storage(c.env);
+    const infra = loadInfraConfig();
+    const task = await lastOutreachTask(s, infra, body.data.entity_id);
+    const ok = await recordOutcome(s, infra, {
+      event: body.data.event,
+      entity_id: body.data.entity_id,
+      task,
+      source: "human",
+      dedupe_key: `human:${crypto.randomUUID()}`,
+      observed_at: body.data.observed_at,
+      value_gbp: body.data.value_gbp,
+    });
+    return c.json({ ok, attributed_to: task?.task_id ?? null }, 201);
+  });
+
+  // The dashboard times each review item (only while the page is visible) for unit economics.
+  app.post("/api/review-sessions", async (c) => {
+    const body = ReviewSession.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "bad_request", issues: body.error.issues }, 400);
+    await deps.storage(c.env).reviewSessions.add({
+      id: crypto.randomUUID(),
+      ...body.data,
+      synthetic: false,
+    });
+    return c.json({ ok: true }, 201);
   });
 
   app.get("/api/golden/next", async (c) => {

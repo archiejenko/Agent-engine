@@ -166,10 +166,10 @@ export function phase5(db: SqlDriver) {
     },
 
     outbox: {
-      add: async (m: Omit<OutboxRow, "id" | "created_at">) => {
+      add: async (m: Omit<OutboxRow, "id" | "created_at"> & { synthetic?: boolean }) => {
         const id = crypto.randomUUID();
         await db.run(
-          "INSERT INTO outbox (id, task_id, thread_id, attempt, entity_id, recipient, sender, subject, body, status, reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO outbox (id, task_id, thread_id, attempt, entity_id, recipient, sender, subject, body, status, reason, created_at, synthetic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
           [
             id,
             m.task_id,
@@ -183,6 +183,7 @@ export function phase5(db: SqlDriver) {
             m.status,
             m.reason,
             nowIso(),
+            m.synthetic ? 1 : 0,
           ],
         );
         return id;

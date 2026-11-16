@@ -15,7 +15,7 @@ export async function createTask(
   cfg: InfraConfig,
   playbooks: Map<string, LoadedPlaybook>,
   queue: QueueBus,
-  input: TaskInput & { state?: Record<string, unknown> },
+  input: TaskInput & { state?: Record<string, unknown>; synthetic?: boolean },
 ): Promise<{ task: StoredTask; created: boolean }> {
   const i = TaskInputSchema.parse(input);
   const pb = playbooks.get(i.playbook);
@@ -39,6 +39,7 @@ export async function createTask(
     cost_gbp: 0,
     priority,
     state: input.state ?? {},
+    synthetic: input.synthetic === true,
   });
   const created = stored.task_id === task_id;
   if (created) await queue.send(priority, { task_id });

@@ -5,16 +5,22 @@ import {
   loadInfraConfig,
   loadModelsConfig,
   loadProductsConfig,
+  loadUniverseConfig,
   type ModelsConfig,
 } from "@ae/config";
 import {
-  contactBlock,
+  assessCandidates,
+  type Candidate,
+  type Channel,
   createPrintBatch,
   createTask,
+  drawHoldout,
+  estimatePaid,
+  evGate,
   fakeLetterWriter,
   fakeOutreachWriter,
+  holdoutSize,
   type LoadedPlaybook,
-  letterSuppressionKey,
   outreachRoutes,
   type PlaybookImpl,
   PlaybookRunner,
@@ -105,6 +111,15 @@ export interface ServiceDeps {
   alerts?: AlertChannel;
   inbox?: Inbox;
   now?: () => Date;
+  /** Simulator runs: every task this service creates is marked synthetic (never learned from). */
+  synthetic?: boolean;
+}
+
+interface OpenCohort {
+  id: string;
+  seed: string;
+  ranked: number;
+  entities: Set<string>;
 }
 
 /**
@@ -123,6 +138,7 @@ export class AgentService {
   readonly alerts: AlertChannel;
   readonly inbox: Inbox;
   readonly ctx: VerificationContext;
+  readonly synthetic: boolean;
 
   constructor(d: ServiceDeps) {
     this.storage = d.storage;
@@ -133,6 +149,7 @@ export class AgentService {
     this.tools = new ToolRegistry(d.storage, this.infra);
     const ctx = d.ctx ?? defaultContext();
     this.ctx = ctx;
+    this.synthetic = d.synthetic === true;
     this.email = d.email ?? new FakeEmailSender();
     this.alerts = d.alerts ?? new FakeAlertChannel();
     this.inbox = d.inbox ?? new FakeInbox();
@@ -170,6 +187,7 @@ export class AgentService {
   async intakeApproved(): Promise<number> {
     const approved = await this.storage.opportunities.list({ status: "approved", limit: 500 });
     let created = 0;
+    let cohort: OpenCohort | null = null;
     const pilotUsed = new Map<string, number>();
     for (const o of approved) {
       // Pilot modules (no backtest ≥ 3× lift yet) are capped per week; live modules aren't.
@@ -197,40 +215,156 @@ export class AgentService {
       }
       let playbook = this.infra.playbook_for_module[o.module];
       if (!playbook) continue;
-      // Leads we can't email (no website, or no emailable address) get a letter instead.
-      if (
-        this.infra.letters.fallback_for.includes(playbook) &&
-        !(await this.emailable(o.entity_id))
-      )
-        playbook = this.infra.letters.playbook;
-      if (
-        playbook === this.infra.letters.playbook &&
-        (await this.storage.suppressions.isSuppressed(letterSuppressionKey(o.entity_id)))
-      ) {
+      if (this.infra.letters.fallback_for.includes(playbook)) {
+        // Outreach: the same eligibility checks as the holdout (suppression, cooldown, PECR routing,
+        // deliverable non-accountant registered office for letters), then the expected-value gate.
+        cohort ??= await this.openCohort();
+        const cand = (
+          await assessCandidates(this.storage, this.ctx, this.infra, [o.entity_id])
+        ).get(o.entity_id) as Candidate;
+        const skip = async (
+          reason: string,
+          channel: Channel | null,
+          pPaid: number | null,
+          ev: number | null,
+        ) => {
+          await this.storage.cohorts.addMember({
+            cohort_id: cohort?.id as string,
+            entity_id: o.entity_id,
+            arm: "ranked",
+            channel,
+            p_paid: pPaid,
+            ev_gbp: ev,
+            task_id: null,
+            status: "skipped",
+            reason,
+          });
+          await this.storage.opportunities.setStatus(o.opportunity_id, "actioned");
+        };
+        if (!cand.eligible) {
+          if (cand.reason?.startsWith("cooldown: "))
+            await recordContactBlocked(
+              this.storage,
+              o.entity_id,
+              playbook,
+              cand.reason.slice("cooldown: ".length),
+            );
+          await skip(cand.reason ?? "not eligible", null, null, null);
+          continue;
+        }
+        const channel = cand.channel as Channel;
+        if (channel === "letter") playbook = this.infra.letters.playbook;
+        const pb = this.playbooks.get(playbook);
+        if (!pb) continue;
+        const est = await estimatePaid(this.storage, this.infra, playbook);
+        const ev = evGate(this.infra, channel, est);
+        if (!ev.send) {
+          await skip(ev.reason as string, channel, ev.p_paid, ev.ev_gbp);
+          continue;
+        }
+        const r = await createTask(this.storage, this.infra, this.playbooks, this.queue, {
+          idempotency_key: `opportunity:${o.opportunity_id}`,
+          playbook,
+          revenue_path: pb.spec.revenue_path,
+          source_ref: `opportunity:${o.opportunity_id}:entity:${o.entity_id}`,
+          lane: o.lane,
+          state: { cohort: { id: cohort.id, arm: "ranked" } },
+          synthetic: this.synthetic,
+        });
+        await this.storage.cohorts.addMember({
+          cohort_id: cohort.id,
+          entity_id: o.entity_id,
+          arm: "ranked",
+          channel,
+          p_paid: ev.p_paid,
+          ev_gbp: ev.ev_gbp,
+          task_id: r.task.task_id,
+          status: "assigned",
+          reason: null,
+        });
+        if (r.created) {
+          created++;
+          cohort.ranked++;
+          cohort.entities.add(o.entity_id);
+        }
         await this.storage.opportunities.setStatus(o.opportunity_id, "actioned");
-        continue; // asked not to receive letters
+        continue;
       }
       const pb = this.playbooks.get(playbook);
       if (!pb) continue;
-      // One company, one contact per cooldown, whichever module or playbook found it.
-      if (this.infra.outreach.contact_playbooks.includes(playbook)) {
-        const blocked = await contactBlock(this.storage, this.infra, o.entity_id);
-        if (blocked) {
-          await recordContactBlocked(this.storage, o.entity_id, playbook, blocked);
-          await this.storage.opportunities.setStatus(o.opportunity_id, "actioned");
-          continue;
-        }
-      }
       const r = await createTask(this.storage, this.infra, this.playbooks, this.queue, {
         idempotency_key: `opportunity:${o.opportunity_id}`,
         playbook,
         revenue_path: pb.spec.revenue_path,
         source_ref: `opportunity:${o.opportunity_id}:entity:${o.entity_id}`,
         lane: o.lane,
+        synthetic: this.synthetic,
       });
       if (r.created) created++;
       await this.storage.opportunities.setStatus(o.opportunity_id, "actioned");
     }
+    if (cohort) created += await this.closeCohort(cohort);
+    return created;
+  }
+
+  /** A new outreach cohort for this intake, with a recorded seed for its holdout draw. */
+  private async openCohort(): Promise<OpenCohort> {
+    const id = crypto.randomUUID();
+    const seed = `${id}:${new Date().toISOString()}`;
+    await this.storage.cohorts.create({
+      id,
+      seed,
+      holdout_share: this.infra.measurement.holdout_share,
+      ranked: 0,
+      holdout: 0,
+      synthetic: this.synthetic,
+    });
+    return { id, seed, ranked: 0, entities: new Set() };
+  }
+
+  /**
+   * Draws the cohort's holdout: random, unranked, eligible companies (same compliance checks), sent the
+   * same playbook for their channel. The EV gate is NOT applied to them, or they wouldn't be random.
+   * Their drafts look identical in Review (decision D4).
+   */
+  private async closeCohort(c: OpenCohort): Promise<number> {
+    const k = holdoutSize(c.ranked, this.infra.measurement.holdout_share);
+    const picks = await drawHoldout(this.storage, this.ctx, this.infra, {
+      seed: c.seed,
+      k,
+      universeName: loadUniverseConfig().name,
+      exclude: c.entities,
+    });
+    let created = 0;
+    for (const p of picks) {
+      const playbook = p.channel === "letter" ? this.infra.letters.playbook : "sme_outreach";
+      const pb = this.playbooks.get(playbook);
+      if (!pb) continue;
+      const est = await estimatePaid(this.storage, this.infra, playbook);
+      const ev = evGate(this.infra, p.channel as Channel, est);
+      const r = await createTask(this.storage, this.infra, this.playbooks, this.queue, {
+        idempotency_key: `holdout:${c.id}:${p.entity_id}`,
+        playbook,
+        revenue_path: pb.spec.revenue_path,
+        source_ref: `cohort:${c.id}:entity:${p.entity_id}`,
+        lane: "open",
+        state: { cohort: { id: c.id, arm: "holdout" } },
+        synthetic: this.synthetic,
+      });
+      await this.storage.cohorts.addMember({
+        cohort_id: c.id,
+        entity_id: p.entity_id,
+        arm: "holdout",
+        channel: p.channel,
+        p_paid: ev.p_paid,
+        ev_gbp: ev.ev_gbp,
+        task_id: r.task.task_id,
+        status: "assigned",
+        reason: null,
+      });
+      if (r.created) created++;
+    }
+    await this.storage.cohorts.setCounts(c.id, c.ranked, created);
     return created;
   }
 

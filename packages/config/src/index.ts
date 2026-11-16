@@ -191,6 +191,8 @@ export const InfraConfig = z.object({
       never_lead_with_fields: z.array(z.string()),
       never_lead_with_words: z.array(z.string()),
       offer_markers: z.array(z.string().min(2)).min(1),
+      /** Truthful labelling (v2 rule 15): a sales approach may not pose as a survey, research or a personal note. */
+      disguise_phrases: z.array(z.string().min(3)).min(1),
       min_sentences_before_offer: z.number().int().min(0),
     }),
     corporate_company_types: z.array(z.string()).min(1),
@@ -244,6 +246,28 @@ export const InfraConfig = z.object({
       .refine((t) => ["{email}", "{code}", "{url}"].every((k) => t.includes(k)), {
         message: "the letter opt-out line must include {email}, {code} and {url}",
       }),
+  }),
+  /** v2 measurement: cold-start priors (assumptions), holdout, expected-value send gate. */
+  measurement: z.object({
+    priors: z.object({
+      /** P(reply | sent) before any real outcomes. ASSUMPTION. */
+      reply_rate: z.number().min(0).max(1),
+      /** P(paid | reply) before any real outcomes. ASSUMPTION. */
+      close_rate: z.number().min(0).max(1),
+      /** £ a paying customer is worth in their first year (setup + 12 months). ASSUMPTION. */
+      first_year_value_gbp: z.number().nonnegative(),
+      /** How many sends the prior counts as (Beta pseudo-count): bigger = slower to move. */
+      strength: z.number().positive(),
+    }),
+    /** Share of each outreach cohort sent to random, unranked eligible companies (0.10–0.20). */
+    holdout_share: z.number().min(0.1).max(0.2),
+    /** Send a letter only when EV ≥ k × letter cost. */
+    letter_ev_k: z.number().positive(),
+    email_send_cost_gbp: z.number().min(0),
+    /** Skip letters to registered offices flagged as an accountant's/agent's (no trading address held). */
+    skip_flagged_registered_offices: z.boolean(),
+    /** A demo-page beacon updates the latest visit to that page within this window. */
+    demo_visit_window_minutes: z.number().int().positive(),
   }),
   /** sme_letter: postal letters + demo homepage for leads we can't email. */
   letters: z.object({

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getJson } from "./api.ts";
 import { EmptyRow } from "./format.tsx";
+import { Outcomes } from "./Outcomes.tsx";
 
 interface MetricsData {
   verification: {
@@ -73,6 +74,7 @@ export function Metrics() {
           ))}
         </>
       )}
+      <Outcomes />
       <h2>
         Verification accuracy (against your golden set: {d.verification.golden_companies} companies)
       </h2>

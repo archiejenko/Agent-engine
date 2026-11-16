@@ -175,7 +175,22 @@ export async function runPhase5Gate(
   const suppressed = first ? await storage.suppressions.isSuppressed(first.recipient) : false;
 
   // 5. Letters (sme_letter, L0) for the leads we can't email → weekly print batch → Archie approves.
-  const letterTasks = await storage.tasks.list({ playbook: "sme_letter", limit: 500 });
+  // v2: every outreach intake is a cohort. Ranked letters come from approved leads; a random holdout
+  // (same compliance checks, blind in Review) is drawn alongside. Leads whose registered office looks
+  // like an accountant's are now skipped at intake (no trading address held) instead of only flagged.
+  const allLetterTasks = await storage.tasks.list({ playbook: "sme_letter", limit: 500 });
+  const letterTasks = allLetterTasks.filter((t) => t.source_ref.startsWith("opportunity:"));
+  const holdoutLetters = allLetterTasks.length - letterTasks.length;
+  const cohortMembers = (
+    await Promise.all(
+      (
+        await storage.cohorts.list({ includeSynthetic: true, limit: 100 })
+      ).map((c) => storage.cohorts.members(c.id)),
+    )
+  ).flat();
+  const skippedFlagged = cohortMembers.filter(
+    (m) => m.status === "skipped" && m.reason?.includes("accountant's or agent's"),
+  ).length;
   const queue = (await (await app.request("/api/letters")).json()) as {
     batches: {
       id: string;
@@ -280,20 +295,20 @@ export async function runPhase5Gate(
     {
       criterion: "Leads we can't email get a letter instead (sme_letter, L0: drafts only)",
       status:
-        letterTasks.length === o.letters &&
+        letterTasks.length + skippedFlagged === o.letters &&
         !letterTasks.some((t) => t.source_ref.endsWith(`:entity:${optedOut}`)) &&
         letterTasks.every((t) => t.status === "awaiting_approval") &&
         outreach.every((m) => m.reason !== "no recipient")
           ? "passed (synthetic)"
           : "failed",
-      evidence: `${letterTasks.length} unreachable leads routed to sme_letter (none sent to email as "no recipient"); each passed the same truth check and waits at the print-batch gate; 1 more lead had asked for no more letters and got none`,
+      evidence: `${letterTasks.length} unreachable leads routed to sme_letter (none sent to email as "no recipient"); ${skippedFlagged} skipped at intake because the registered office looks like an accountant's (no trading address held); each passed the same truth check and waits at the print-batch gate; 1 more lead had asked for no more letters and got none; plus ${holdoutLetters} random holdout letter(s)`,
     },
     {
       criterion:
-        "Weekly print batch: print-ready PDF to The Directors with a QR to a demo; accountant addresses flagged",
+        "Weekly print batch: print-ready PDF to The Directors with a QR to a demo; accountant addresses skipped or flagged",
       status:
         batch &&
-        batch.letter_count === o.letters &&
+        batch.letter_count === allLetterTasks.length &&
         pages === batch.letter_count &&
         flagged.every((l) => l.flags.some((f) => f.flag === "accountant_address"))
           ? "passed (synthetic)"

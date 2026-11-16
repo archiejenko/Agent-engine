@@ -99,9 +99,11 @@ export function lettersStorage(db: SqlDriver) {
       },
     },
     letters: {
-      put: async (l: Omit<LetterRow, "status" | "batch_id" | "created_at">) => {
+      put: async (
+        l: Omit<LetterRow, "status" | "batch_id" | "created_at"> & { synthetic?: boolean },
+      ) => {
         await db.run(
-          "INSERT INTO letters (task_id, entity_id, company_name, address, demo_slug, opt_out_code, pdf_b64, flags, status, batch_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'waiting', NULL, ?) ON CONFLICT (task_id) DO UPDATE SET pdf_b64 = excluded.pdf_b64, flags = excluded.flags",
+          "INSERT INTO letters (task_id, entity_id, company_name, address, demo_slug, opt_out_code, pdf_b64, flags, status, batch_id, created_at, synthetic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'waiting', NULL, ?, ?) ON CONFLICT (task_id) DO UPDATE SET pdf_b64 = excluded.pdf_b64, flags = excluded.flags",
           [
             l.task_id,
             l.entity_id,
@@ -112,6 +114,7 @@ export function lettersStorage(db: SqlDriver) {
             l.pdf_b64,
             JSON.stringify(l.flags),
             nowIso(),
+            l.synthetic ? 1 : 0,
           ],
         );
       },

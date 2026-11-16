@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getJson } from "./api.ts";
+import { recordReview } from "./reviewTimer.ts";
 
 interface Letter {
   task_id: string;
@@ -50,8 +51,13 @@ export function Letters() {
   useEffect(load, [load]);
   if (!data) return <p>{msg ?? "Loading…"}</p>;
   const pending = data.batches.find((b) => b.status === "pending");
-  const decide = (b: Batch, decision: "approve" | "reject") =>
-    post(`/api/letters/batches/${b.id}/decision`, { decision, exclude: [...exclude] }).then(
+  const decide = (b: Batch, decision: "approve" | "reject") => {
+    recordReview(
+      "print_batch",
+      b.id,
+      b.letters.map((l) => l.task_id),
+    );
+    return post(`/api/letters/batches/${b.id}/decision`, { decision, exclude: [...exclude] }).then(
       (r) => {
         setMsg(`Batch ${decision}d. ${r.note ?? ""}`);
         setExclude(new Set());
@@ -59,6 +65,7 @@ export function Letters() {
       },
       (e) => setMsg(String(e)),
     );
+  };
   return (
     <section>
       <h2>Letters</h2>

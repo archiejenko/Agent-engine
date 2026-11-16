@@ -4,6 +4,7 @@ export * from "./config.ts";
 export * from "./evidence.ts";
 export * from "./fact.ts";
 export * from "./infra.ts";
+export * from "./ledger.ts";
 export * from "./opportunity.ts";
 export * from "./query.ts";
 export * from "./registry.ts";

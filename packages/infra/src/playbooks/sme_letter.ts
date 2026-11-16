@@ -84,6 +84,7 @@ Use exactly ONE statement from the brief, copied word for word, as the first sen
 Then one or two sentences on why that matters to them (no facts, numbers or dates), then the offer: the free demo homepage.
 Mention the company name at most twice. Don't write "I noticed" more than once.
 Never open with, or mention, director, officer or ownership changes.
+It is a sales approach and must read as one: never present it as a survey, research or a personal note.
 Do not add any other facts, numbers, dates, names or compliments. No placeholders. Under 140 words.
 Do not write the greeting, sign-off, address, QR code text or opt-out line: those are added automatically.
 Return JSON: {"subject": string, "body": string, "claims": [{"fact_id": string, "text": string}]}.`,
@@ -311,6 +312,7 @@ export function registerLetterTools(
         opt_out_code: code,
         pdf_b64: b64(pdf),
         flags,
+        synthetic: task.synthetic,
       });
       return { result: { demo_slug: slug, opt_out_code: code, pages: 1, flags } };
     },

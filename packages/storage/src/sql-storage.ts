@@ -16,6 +16,7 @@ import type {
   UniverseMember,
   UsableClaim,
 } from "./storage.ts";
+import { v2Storage } from "./v2.ts";
 
 type Row = Record<string, unknown>;
 
@@ -135,7 +136,15 @@ const CLAIM_INSERT_COLS =
 /** Storage implemented over plain SQL. Works on any SqlDriver (SQLite file or D1). */
 export class SqlStorage implements Storage {
   constructor(private readonly db: SqlDriver) {
-    Object.assign(this, phase2(db), phase3(db), phase4(db), phase5(db), lettersStorage(db));
+    Object.assign(
+      this,
+      phase2(db),
+      phase3(db),
+      phase4(db),
+      phase5(db),
+      lettersStorage(db),
+      v2Storage(db),
+    );
   }
   declare signals: Storage["signals"];
   declare moduleRuns: Storage["moduleRuns"];
@@ -165,6 +174,10 @@ export class SqlStorage implements Storage {
   declare demoPages: Storage["demoPages"];
   declare letters: Storage["letters"];
   declare printBatches: Storage["printBatches"];
+  declare outcomeLedger: Storage["outcomeLedger"];
+  declare cohorts: Storage["cohorts"];
+  declare demoVisits: Storage["demoVisits"];
+  declare reviewSessions: Storage["reviewSessions"];
 
   private async batchChunked(statements: SqlStatement[]) {
     for (const part of chunk(statements, BATCH)) await this.db.batch(part);

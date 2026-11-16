@@ -178,6 +178,14 @@ export function checkCopyRules(
   const mentions = count(text.split(brief.company_name).join(short), short);
   if (mentions > rules.max_company_name_mentions)
     reasons.push(`company name used ${mentions} times (max ${rules.max_company_name_mentions})`);
+  // Truthful labelling (v2 rule 15): a sales approach never poses as a survey, research or a personal note.
+  const disguise = rules.disguise_phrases.find((p) =>
+    `${draft.subject ?? ""} ${draft.body ?? ""}`.toLowerCase().includes(p.toLowerCase()),
+  );
+  if (disguise)
+    reasons.push(
+      `presents itself as "${disguise}": a sales approach must say it is one (no surveys, research or personal notes)`,
+    );
   const noticed = count(draft.body ?? "", "i noticed");
   if (noticed > rules.max_i_noticed) reasons.push(`"I noticed" used ${noticed} times`);
   const byId = new Map(brief.facts.map((f) => [f.fact_id, f]));
@@ -238,6 +246,7 @@ Use exactly ONE statement from the brief, copied word for word, as the first sen
 Then one or two sentences on why that matters to them (no facts, numbers or dates), then the offer: a few ideas or a short call.
 Mention the company name at most twice, including the subject. Don't write "I noticed" more than once.
 Never open with, or mention, director, officer or ownership changes.
+It is a sales approach and must read as one: never present it as a survey, research or a personal note.
 Do not add any other facts, numbers, dates, names or compliments. No placeholders. Under 120 words.
 Do not write a sign-off, sender details or unsubscribe line: those are added automatically.
 Return JSON: {"subject": string, "body": string, "claims": [{"fact_id": string, "text": string}]}.`,

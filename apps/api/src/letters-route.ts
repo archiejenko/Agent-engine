@@ -4,9 +4,14 @@ import {
   batchPdf,
   createPrintBatch,
   decidePrintBatch,
+  demoBeaconHash,
   demoUrl,
+  instrumentDemoHtml,
   letterSuppressionKey,
   optOutByCode,
+  recordDemoTime,
+  recordDemoVisit,
+  recordOutcome,
   renderPublicPage,
   servableDemo,
 } from "@ae/infra";
@@ -114,6 +119,17 @@ export function mountLetters(
           });
       },
     );
+    // Outcome ledger: each approved letter counts as sent (dry run while the kill switch is on).
+    if (body.data.decision === "approve")
+      for (const l of await s.letters.list({ batchId: b.id, status: "approved", limit: 1000 }))
+        await recordOutcome(s, loadInfraConfig(), {
+          event: "sent",
+          entity_id: l.entity_id,
+          task: await s.tasks.get(l.task_id),
+          source: "letters",
+          dedupe_key: `sent:letter:${l.task_id}`,
+          dry_run: !r.demo_links_live,
+        });
     return c.json({
       ...r,
       note: r.demo_links_live
@@ -135,16 +151,28 @@ export function mountLetters(
 
   // Public demo homepage. Not indexed; only for approved letters while external actions are allowed;
   // expires a fixed time after approval. CSP: no external resources at all (no third-party imagery).
+  // The page logs the visit (QR or link) and runs one inline script (allowed by its hash) that reports
+  // visible time on page to /demo/:slug/t. No cookies, IP address or user agent are stored.
   app.get("/demo/:slug", async (c) => {
-    const page = await servableDemo(storageFor(c.env), loadInfraConfig(), c.req.param("slug"));
+    const s = storageFor(c.env);
+    const cfg = loadInfraConfig();
+    const slug = c.req.param("slug");
+    const page = await servableDemo(s, cfg, slug);
     const headers = {
       "X-Robots-Tag": "noindex, nofollow, noarchive",
       "Cache-Control": "no-store",
-      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'none'",
+      "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; img-src 'none'; script-src '${await demoBeaconHash()}'; connect-src 'self'`,
+      "Referrer-Policy": "no-referrer",
     };
     if (!page) return c.html(SIMPLE("This page isn't available."), 404, headers);
     if (page.state === "expired") return c.html(SIMPLE("This sample has expired."), 410, headers);
-    return c.html(page.html, 200, headers);
+    await recordDemoVisit(s, cfg, slug, c.req.query("s") === "qr" ? "qr" : "link");
+    return c.html(instrumentDemoHtml(page.html), 200, headers);
+  });
+  app.post("/demo/:slug/t", async (c) => {
+    const ms = Number((await c.req.text()).slice(0, 20));
+    await recordDemoTime(storageFor(c.env), loadInfraConfig(), c.req.param("slug"), ms);
+    return c.body(null, 204);
   });
 
   // Short opt-out URL printed on every letter. GET shows a confirm button (so link previews and

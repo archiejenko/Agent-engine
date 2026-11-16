@@ -2,6 +2,26 @@
 
 Newest first. Each entry: what we decided, why, and who approved it.
 
+## 2026-11-16 — v2 plan approved (Archie)
+
+Plan: `brain/build-reports/v2-plan.md`. Answers:
+
+- **D1 Freeze:** lifted **for v2 Milestone A only**, in dry-run (it adds measurement and checkout, not
+  lead-quality or copy tuning). Archie runs cutover Stages 1–5 in parallel. Milestone B stays frozen
+  until real outcomes exist. Stop at the Milestone A report.
+- **D2 Revenue paths** (status-and-vision numbering): 3 monitoring alerts, 4 human company report,
+  5 Agent House lead gen, 6 M&A target briefs — build nothing new on them; built monitoring and human
+  check stay. x402 (path 2) not frozen, not in v2 scope. Archie adds the status-and-vision doc to brain/.
+- **D3 Runtime:** production on Workers (Cron Trigger, Queues, Workflows, Durable Objects); Node kept
+  for local dev and the bulk Companies House import; a Durable Object holds the change feed, with
+  polling as the fallback. `CLAUDE.md` updated.
+- **D4 Holdout:** holdout drafts are blind in Review; lift measured on assignment (intent to treat);
+  rejected holdout drafts reported separately.
+- **D5:** v2 reports in `brain/build-reports/`; earlier reports stay in `docs/`.
+- **D6:** customer sites on the placeholder `sites.ejtech.example`; live will be a subdomain of
+  ejtech.co.uk that is never used for sending.
+- **D7:** business-function taxonomy added to `brain/taxonomy.md` (16 functions, 3 tiers).
+
 ## 2026-11-10 — Last pre-cutover fixes, then feature freeze
 
 - Leads in cooldown: the approve button is disabled and the card says "Contacted [date], cooldown until
@@ -313,3 +333,19 @@ Newest first. Each entry: what we decided, why, and who approved it.
 - Point-in-time: mode (a) "reconstructed" by default, using `published_at` (filing received /
   published) as the knowable date; mode (b) "strict" also available; every backtest states its mode.
 - Deploy an empty health-check API behind Cloudflare Access at the end of Phase 0.
+
+## 2026-11-16 — v2 Phase 1 build decisions
+
+- **A company-level opt-out covers every channel.** "No more letters" (by post, email or the short URL)
+  now also stops email at intake. Why: one global suppression list; the v2 gate caught a holdout email to
+  a company that had opted out of letters.
+- **Accountant / formation-agent registered offices are skipped at intake** (config
+  `measurement.skip_flagged_registered_offices`, on), not only flagged in the print batch. Why: we hold
+  no trading address, so the letter rarely reaches the directors; the plan audit listed this as missing.
+- **Holdout gets the same compliance checks but not the EV gate**, or it wouldn't be random (D4).
+- **Blind review hides the task reference, idempotency key and arm** while a draft awaits approval.
+- **Letter "sent" is recorded when the print batch is approved**, flagged dry run while the sme_letter
+  kill switch is on.
+- **Review time** = visible dashboard time since the previous decision, charged to the next decision;
+  a print batch's time is split across its letters.
+- **P(paid) is one estimate per playbook** (Beta-binomial on priors) until real outcomes support more.

@@ -15,6 +15,8 @@ export interface StoredOpportunity extends Opportunity {
 }
 
 export interface StoredTask extends Task {
+  /** Written by the simulator: never counted by learning or autonomy (v2 rule 10). */
+  synthetic: boolean;
   priority: string;
   state: Record<string, unknown>;
   error: string | null;
@@ -90,6 +92,7 @@ function rowToTask(r: Row): StoredTask {
   });
   return {
     ...t,
+    synthetic: Number(r.synthetic ?? 0) === 1,
     priority: r.priority as string,
     state: pj(r.state) ?? {},
     error: (r.error as string | null) ?? null,
@@ -294,12 +297,14 @@ export function phase2(db: SqlDriver) {
 
     tasks: {
       /** Insert unless the idempotency key exists; returns the stored task either way. */
-      insertIdempotent: async (t: Task & { priority: string; state?: Record<string, unknown> }) => {
+      insertIdempotent: async (
+        t: Task & { priority: string; state?: Record<string, unknown>; synthetic?: boolean },
+      ) => {
         const v = Task.parse(t);
         const at = nowIso();
         await db.run(
-          `INSERT OR IGNORE INTO tasks (task_id, idempotency_key, playbook, playbook_version, revenue_path, source_ref, lane, autonomy, status, budget_gbp, revenue_gbp, cost_gbp, priority, state, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT OR IGNORE INTO tasks (task_id, idempotency_key, playbook, playbook_version, revenue_path, source_ref, lane, autonomy, status, budget_gbp, revenue_gbp, cost_gbp, priority, state, created_at, updated_at, synthetic)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             v.task_id,
             v.idempotency_key,
@@ -317,6 +322,7 @@ export function phase2(db: SqlDriver) {
             j(t.state ?? {}),
             at,
             at,
+            t.synthetic ? 1 : 0,
           ],
         );
         const r = (
@@ -368,12 +374,18 @@ export function phase2(db: SqlDriver) {
       list: async (q: {
         status?: string;
         playbook?: string;
+        /** Only tasks created at or after this time. */
+        since?: string;
         limit: number;
         offset?: number;
         order?: "asc" | "desc";
       }) => {
         const w: string[] = [];
         const p: SqlValue[] = [];
+        if (q.since) {
+          w.push("created_at >= ?");
+          p.push(q.since);
+        }
         if (q.status) {
           w.push("status = ?");
           p.push(q.status);
@@ -423,6 +435,23 @@ export function phase2(db: SqlDriver) {
         (await db.all<Row>("SELECT * FROM run_log WHERE task_id = ? ORDER BY id", [taskId])).map(
           rowToRunLog,
         ),
+      /** Cost per task since `since`, split into sending (print and post) and everything else (model, tools). */
+      costByTask: async (
+        since: string,
+      ): Promise<Map<string, { send_gbp: number; other_gbp: number }>> => {
+        const rows = await db.all<Row>(
+          `SELECT task_id, SUM(CASE WHEN step_id = 'print_and_post' THEN cost_gbp ELSE 0 END) AS send,
+                  SUM(CASE WHEN step_id = 'print_and_post' THEN 0 ELSE cost_gbp END) AS other
+           FROM run_log WHERE timestamp >= ? GROUP BY task_id`,
+          [since],
+        );
+        return new Map(
+          rows.map((r) => [
+            r.task_id as string,
+            { send_gbp: Number(r.send ?? 0), other_gbp: Number(r.other ?? 0) },
+          ]),
+        );
+      },
       /** Spend in GBP since `since`, optionally for one playbook, leaving out the given step ids. */
       spendSince: async (since: string, playbook?: string, excludeSteps: string[] = []) => {
         const ex = excludeSteps.length

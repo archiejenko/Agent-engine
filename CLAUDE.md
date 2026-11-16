@@ -41,11 +41,29 @@ Three layers, in dependency order:
 - **5 Alerts, human check, autonomy, L1 outreach.**
 - **Later, do not build:** licensed adapters, Agent House, M&A briefs.
 
+### v2 (approved 2026-11-16, plan: `brain/build-reports/v2-plan.md`)
+
+- **Milestone A (v2 Phases 1–4)** — outcome ledger + holdout, Workers runtime (Cron, Queues, Workflows,
+  Durable Objects), hard budgets, "claim this site" checkout + fulfilment. Built in **dry-run**; stop at
+  the Milestone A report (`brain/build-reports/v2-milestone-a.md`) and wait for Archie.
+- **Milestone B (v2 Phases 5–9)** — golden sets, earned autonomy, opportunity cards, brain PRs, the
+  loop. **Frozen** until real outcomes exist.
+- The pre-cutover feature freeze is lifted **for Milestone A only**; Archie runs cutover Stages 1–5 in
+  parallel.
+- **Frozen revenue paths** (status-and-vision numbering): 3 monitoring alerts, 4 human company report,
+  5 Agent House lead gen, 6 M&A target briefs. Build nothing new on them; the built monitoring and
+  human check stay as they are. Path 2 (x402) isn't frozen but isn't in v2 scope.
+
 ## 2. Stack (approved)
 
 - TypeScript 5.9 everywhere, Node 22, pnpm workspaces. Biome for lint + format. Vitest 4.1.
-- Cloudflare Workers + Hono for APIs; Queues, Cron, Durable Objects where needed; Containers for the agent runner (Phase 2).
-- Claude Agent SDK (TypeScript) runs in a **Node service** (`apps/agent-runner`), never inside a Worker.
+- Cloudflare Workers + Hono for APIs. **Production runs on Workers** (v2 decision D3, 2026-11-16): a Cron
+  Trigger and Queues (each with a dead-letter queue) run the regular loop; Workflows run multi-step work
+  over time (fulfilment, experiments, weekly/monthly loops); Durable Objects hold strongly consistent
+  budgets and the Companies House change feed (polling is the fallback). No Containers.
+- `apps/agent-runner` (Node) is for **local development** and runs the same functions against SQLite with
+  fakes. Bulk Companies House / accounts imports stay Node scripts run by hand. The Claude Agent SDK
+  isn't used: playbooks call the Claude API directly through the `ModelClient` port.
 - Storage behind the `Storage` interface (`packages/storage`). Adapters: SQLite (better-sqlite3, local file `data/dev.sqlite`) and Cloudflare D1. **Plain SQL migrations** in `packages/storage/migrations/`, no ORM. **No code outside `packages/storage` may import `better-sqlite3` or use D1 directly** (a test enforces this).
 - Locally the API runs on Node (`apps/api/src/node.ts`) against the SQLite file; on Cloudflare the same Hono app runs as a Worker (`apps/api/src/worker.ts`) against D1. The dashboard is served from Workers static assets, behind Cloudflare Access, and the Worker also validates the Access JWT (fail closed).
 - Brain: `brain/` Markdown notes with YAML front matter, Obsidian-compatible.
@@ -94,6 +112,18 @@ Every contract is a Zod schema with tests. Change the schema → change the test
 6. **Spend caps** per task, per playbook per day, global per day. Hitting a cap pauses the queue and alerts Archie.
 7. **Kill switches**: one per playbook, one global; stop all external actions immediately.
 8. **Reproducibility.** Same inputs + config versions → same outputs. Every verified fact traces to its claims, run and evidence; any run can be rolled back by `run_id`.
+
+### v2 rules (added 2026-11-16, each enforced in code with a test)
+
+9. **Dry-run stays on.** Every external action (send, post, spend, charge) goes through the tool registry and stays simulated; Stripe is test mode only.
+10. **Synthetic data never trains anything.** Simulator rows carry `synthetic = 1`; every learning, weighting and autonomy calculation excludes them. Reports may *show* synthetic rows, clearly labelled.
+11. **Point-in-time learning.** A learning step at time T only uses outcomes recorded before T.
+12. **Scoring learns from the ledger only.** P(paid), lead scores and weights update from ledger outcomes (replies, payments, churn). Archie's approve/edit/reject decisions never feed targeting; they only evaluate copy (Milestone B).
+13. **The proposer never grades itself** (Milestone B): agent-proposed changes are evaluated against cases the proposing job can't read or write.
+14. **Agents can never change the safety layer**: guardrail code, tool registry, caps, budgets, kill switches, autonomy rules, the eval harness and its holdout cases, CI config and CODEOWNERS. Spend-tier increases and L3 need a recorded approval from Archie.
+15. **Truthful labelling.** A test or learning send is still a commercial approach and says so; no message may pose as a survey, research or a personal note when its purpose is to sell.
+16. **Compliance gates apply to every send**, including holdout and experiment sends: PECR recipient rules, suppression list, 90-day cooldown, trading disclosures.
+17. **No repeated external actions.** An external tool call is recorded before it runs; a retried or resumed step never repeats it unless the tool confirms the first attempt didn't happen.
 
 ## 5. Approved Phase 1 decisions (2026-11-07)
 

@@ -2,6 +2,7 @@ import { type InfraConfig, legalDetailsArePlaceholders, tradingDisclosure } from
 import type { EmailSender, Inbox } from "@ae/ports";
 import type { Storage } from "@ae/storage";
 import { contactBlock, recordContactBlocked } from "./contact.ts";
+import { recordOutcome } from "./ledger.ts";
 import type { ToolRegistry } from "./tools.ts";
 
 /**
@@ -108,6 +109,7 @@ export function registerOutreachTools(
           body,
           status: "blocked",
           reason,
+          synthetic: task.synthetic,
         });
         return { result: { sent: false, blocked: reason } };
       }
@@ -133,6 +135,16 @@ export function registerOutreachTools(
         body,
         status: dryRun ? "dry_run" : "sent",
         reason: null,
+        synthetic: task.synthetic,
+      });
+      // Outcome ledger: one "sent" per email (a dry run is recorded as one and never learned from).
+      await recordOutcome(deps.storage, deps.cfg, {
+        event: "sent",
+        entity_id: a.entity_id,
+        task,
+        source: "outbox",
+        dedupe_key: `sent:outbox:${id}`,
+        dry_run: dryRun,
       });
       const policy = deps.cfg.outreach.contact_policy[a.contact_source];
       if (policy && a.attempt < policy.max_attempts_without_reply) {
@@ -208,6 +220,31 @@ export async function processInbox(
       observed_at: m.received_at,
       source: "system",
     });
+    // Outcome ledger (v2): every reply, plus reply_positive unless it was an opt-out. Attributed to the
+    // task that sent the original email (its cohort arm and synthetic flag come with it).
+    if (original.entity_id) {
+      const task = original.task_id ? await storage.tasks.get(original.task_id) : null;
+      const dryRun = original.status === "dry_run";
+      await recordOutcome(storage, cfg, {
+        event: "reply",
+        entity_id: original.entity_id,
+        task,
+        source: "inbox",
+        dedupe_key: `reply:${m.id}`,
+        observed_at: m.received_at,
+        dry_run: dryRun,
+      });
+      if (!optOut)
+        await recordOutcome(storage, cfg, {
+          event: "reply_positive",
+          entity_id: original.entity_id,
+          task,
+          source: "inbox",
+          dedupe_key: `reply_positive:${m.id}`,
+          observed_at: m.received_at,
+          dry_run: dryRun,
+        });
+    }
     replies++;
   }
   return { replies, opt_outs: optOuts };

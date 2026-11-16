@@ -32,7 +32,8 @@
     "gate:phase3": "tsx scripts/gate-phase3.ts",
     "gate:phase4": "tsx scripts/gate-phase4.ts",
     "gen:playbooks": "tsx scripts/gen-playbooks.ts",
-    "gate:phase5": "tsx scripts/gate-phase5.ts"
+    "gate:phase5": "tsx scripts/gate-phase5.ts",
+    "gate:v2-phase1": "tsx scripts/gate-v2-phase1.ts"
   },
   "devDependencies": {
     "@ae/agent-runner": "workspace:*",

@@ -126,7 +126,8 @@ export async function renderLetterPdf(l: LetterContent): Promise<Uint8Array> {
   // QR to the demo, bottom of the page.
   const qrSize = 30 * MM;
   const qrY = 30 * MM;
-  drawQr(page, l.demoUrl, left, qrY, qrSize);
+  // The QR code carries ?s=qr so a scan can be told apart from a typed link (v2 funnel).
+  drawQr(page, `${l.demoUrl}?s=qr`, left, qrY, qrSize);
   const cap = wrap(
     `Scan to see a free demo homepage I made for ${l.companyName}. It's private (not on Google), stays up for ${l.demoDays} days, and there's nothing to pay or sign up for.`,
     font,

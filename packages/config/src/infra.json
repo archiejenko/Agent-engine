@@ -89,7 +89,20 @@
       ],
       "never_lead_with_words": ["director", "officer", "appointed", "resigned"],
       "offer_markers": ["demo", "show you", "ideas", "short call", "quick call", "chat"],
-      "min_sentences_before_offer": 1
+      "min_sentences_before_offer": 1,
+      "disguise_phrases": [
+        "survey",
+        "questionnaire",
+        "research project",
+        "research study",
+        "for my research",
+        "for a study",
+        "personal note",
+        "just a personal",
+        "not a sales",
+        "not selling",
+        "no sales pitch"
+      ]
     },
     "contact_cooldown_days": 90,
     "contact_playbooks": ["sme_outreach", "sme_letter"]
@@ -125,5 +138,19 @@
     "print_cost_gbp": 0.12,
     "postage_gbp": 0.87
   },
-  "_note_playbook_for_module": "Only modules listed here are outreach modules (approve buttons). x402_discovery is read-only: it shows who is checking companies, it doesn't contact anyone."
+  "_note_playbook_for_module": "Only modules listed here are outreach modules (approve buttons). x402_discovery is read-only: it shows who is checking companies, it doesn't contact anyone.",
+  "measurement": {
+    "_note": "v2 Phase 1. PLACEHOLDER ASSUMPTIONS until real outcomes replace them: Archie sets priors, holdout share, letter k and costs (brain/build-reports/v2-milestone-a.md).",
+    "priors": {
+      "reply_rate": 0.03,
+      "close_rate": 0.15,
+      "first_year_value_gbp": 1500,
+      "strength": 20
+    },
+    "holdout_share": 0.15,
+    "letter_ev_k": 3,
+    "email_send_cost_gbp": 0.001,
+    "skip_flagged_registered_offices": true,
+    "demo_visit_window_minutes": 120
+  }
 }
