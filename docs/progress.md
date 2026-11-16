@@ -36,3 +36,4 @@ phase; commit + push per phase with CI green. Branch: `claude/nifty-curie-91l1nq
 - 2026-11-16: v2 Phase 3 gate passed: reserve/settle budgets in a Durable Object, S-tiers and L3 behind recorded owner approvals, weekly explore share. Report: brain/build-reports/v2-phase-3.md.
 - 2026-11-16: v2 Phase 4 gate passed (test mode): claim this site (setup + monthly), fulfilment workflow with details form and publish approval, replay/cancel safety, post_reply (L0). Real Stripe subscription call deferred (docs blocked). Report: brain/build-reports/v2-phase-4.md.
 - 2026-11-16: **v2 Milestone A complete — STOPPED for Archie.** Report: brain/build-reports/v2-milestone-a.md (gates, config values needing real numbers, legal questions, updated cutover checklist). Milestone B frozen.
+- 2026-11-16: v3 plan written (no code): brain/build-reports/v3-plan.md. Waiting for Archie's approval before Milestone C.
