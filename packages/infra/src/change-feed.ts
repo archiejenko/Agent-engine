@@ -1,6 +1,11 @@
 import type { TriggersConfig } from "@ae/config";
 import type { Storage } from "@ae/storage";
-import { getVerifiedFacts, type VerificationContext } from "@ae/verification";
+import {
+  type ChangeStream,
+  getVerifiedFacts,
+  type StreamName,
+  type VerificationContext,
+} from "@ae/verification";
 import type { CompanyEvent } from "./triggers.ts";
 
 /**
@@ -9,9 +14,9 @@ import type { CompanyEvent } from "./triggers.ts";
  * and through the trigger rules. Polling is the fallback whenever the feed is not configured or has
  * gone quiet for `feed_stale_minutes`.
  *
- * The SOURCE is a port. The Companies House streaming adapter is not built yet: its documentation host
- * was blocked from the build environment, and the rule is to check current docs before using an API.
- * Until it exists the feed reports "not configured" and polling does the work.
+ * The SOURCE is a port. `streamFeedSource` adapts the existing Companies House stream client
+ * (HttpChangeStream, whose host, paths, auth and event shape are flagged to verify at cutover). Without
+ * a stream key the feed reports "not configured" and polling does the work.
  */
 export interface FeedRead {
   events: CompanyEvent[];
@@ -122,4 +127,55 @@ export async function pollFallback(
     });
   }
   return { polled, events };
+}
+
+const KIND: Record<StreamName, CompanyEvent["kind"]> = {
+  companies: "company",
+  filings: "filing",
+  officers: "officers",
+  "persons-with-significant-control": "psc",
+  charges: "charges",
+};
+
+/**
+ * Adapts the Companies House stream client to the feed: reads each stream for its share of the time
+ * budget, keeps one resume position per stream (the feed's timepoint is a small JSON map), and turns
+ * each event into a CompanyEvent. Field names inside `data` are as the stream sends them (to verify).
+ */
+export function streamFeedSource(stream: ChangeStream, streams: StreamName[]): ChangeFeedSource {
+  return {
+    name: "companies_house_stream",
+    read: async (timepoint, budgetMs) => {
+      const pos = (timepoint ? JSON.parse(timepoint) : {}) as Partial<Record<StreamName, number>>;
+      const events: CompanyEvent[] = [];
+      for (const s of streams) {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), Math.max(1000, budgetMs / streams.length));
+        try {
+          for await (const ev of stream.events(s, pos[s] ?? null, ctl.signal)) {
+            pos[s] = ev.timepoint;
+            if (!ev.company_number) continue;
+            const d = ev.data ?? {};
+            events.push({
+              id: `${s}:${ev.timepoint}`,
+              entity_id: ev.company_number,
+              kind: KIND[s],
+              data:
+                s === "filings"
+                  ? { category: d.category ?? null }
+                  : s === "companies"
+                    ? { company_status: d.company_status ?? null }
+                    : {},
+              published_at: ev.published_at,
+            });
+          }
+        } catch (e) {
+          if (!ctl.signal.aborted) throw e; // the budget ran out: normal; anything else is an error
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+      return { events, timepoint: JSON.stringify(pos) };
+    },
+  };
 }

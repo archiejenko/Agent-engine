@@ -2,7 +2,7 @@
 
 Read `CLAUDE.md`, then this file, then `docs/live-cutover.md`.
 
-**v2 (2026-11-16):** the 2026-11-10 freeze is lifted for **v2 Milestone A only** (dry-run). Milestone B stays frozen until real outcomes exist. Plan and gate reports: `brain/build-reports/`. Archie runs cutover Stages 1–5 in parallel. Stop at `brain/build-reports/v2-milestone-a.md`.
+**v2 (2026-11-16):** the 2026-11-10 freeze is lifted for **v2 Milestone A only** (dry-run). Milestone B stays frozen until real outcomes exist. Plan and gate reports: `brain/build-reports/`. Archie runs cutover Stages 1–5 in parallel. **Milestone A is done and the build is STOPPED** at `brain/build-reports/v2-milestone-a.md`, waiting for Archie.
 
 **Status:** keyless build of Phases 0–5 COMPLETE, plus the 2026-11-09 pre-cutover changes (official x402 middleware, 90-day website shelf life, `sme_letter`). Next: live cutover (`docs/live-cutover.md`, ordered by time to cash), led by Archie.
 
@@ -35,3 +35,4 @@ phase; commit + push per phase with CI green. Branch: `claude/nifty-curie-91l1nq
 - 2026-11-16: v2 Phase 2 gate passed: Workers runtime (cron → queue + DLQ, workflow engine, recorded external effects, change-feed DO with polling fallback, trigger rules, health page). CH streaming adapter deferred (docs blocked). Report: brain/build-reports/v2-phase-2.md.
 - 2026-11-16: v2 Phase 3 gate passed: reserve/settle budgets in a Durable Object, S-tiers and L3 behind recorded owner approvals, weekly explore share. Report: brain/build-reports/v2-phase-3.md.
 - 2026-11-16: v2 Phase 4 gate passed (test mode): claim this site (setup + monthly), fulfilment workflow with details form and publish approval, replay/cancel safety, post_reply (L0). Real Stripe subscription call deferred (docs blocked). Report: brain/build-reports/v2-phase-4.md.
+- 2026-11-16: **v2 Milestone A complete — STOPPED for Archie.** Report: brain/build-reports/v2-milestone-a.md (gates, config values needing real numbers, legal questions, updated cutover checklist). Milestone B frozen.

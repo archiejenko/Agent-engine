@@ -33,7 +33,7 @@ Production now has everything it needs to run on Cloudflare Workers (decision D3
 | Job handler | `apps/agent-runner/src/jobs.ts` | one `handleJob` for Worker and Node; `LocalJobQueue` copies the retry/DLQ rules |
 | Workflow engine | `packages/infra/src/workflow.ts` | one step contract; Cloudflare adapter `EngineWorkflow`; local runner persists steps in `workflow_steps` |
 | No repeated external actions (rule 17) | `packages/infra/src/tools.ts`, table `external_effects` | recorded before the call; done → result replayed; unknown → refused until a person settles it |
-| Change feed | `ChangeFeed` Durable Object + `change-feed.ts` | holds the feed position; delivers before moving it; **source not connected yet** (see below) |
+| Change feed | `ChangeFeed` Durable Object + `change-feed.ts` | holds the feed position; delivers before moving it; reads the existing stream client when `CH_STREAM_KEY` is set (to verify at cutover) |
 | Polling fallback | `pollFallback` | takes over when the feed is missing or quiet for 30 min; refreshes leads and watched companies in rotation and turns changes into the same events |
 | Trigger rules | `packages/config/src/triggers.json`, `triggers.ts` | 5 rules; only `explain` calls the model; counts per rule per day in `trigger_stats` |
 | Health page | `/api/runtime`, Controls → Runtime health | heartbeats, feed state, failed jobs, uncertain actions (with "It happened" / "It didn't happen"), paused or errored workflows, trigger counts |
@@ -64,18 +64,15 @@ into several messages).
 
 ## What's NOT done, and why
 
-1. **The Companies House streaming adapter isn't built.** Its documentation host and the stream host are
-   both blocked by this build environment's network policy. The rule is to check current docs before
-   using an API, not to write it from memory. The Durable Object, feed position, delivery and trigger
-   path are all built and tested against a test source. Until the adapter exists, the health page says
-   "change feed: not connected" and polling does the work.
-   **To unblock, one of:**
-   - allow `developer-specs.company-information.service.gov.uk` and `stream.companieshouse.gov.uk` in
-     the build environment; or
-   - paste the streaming API docs into a session.
+1. **The Companies House stream isn't verified yet.** *(Corrected after Phase 4.)* An earlier phase had
+   already built a stream client, `HttpChangeStream`, with its host, paths, auth and event shape flagged
+   "to verify at cutover". The change feed now uses it, through `streamFeedSource`, whenever the
+   `CH_STREAM_KEY` Worker secret is set. Without the key, the health page says "change feed: not
+   connected" and polling does the work.
 
-   The stream also needs its own **stream key** from Companies House (a different key from the REST API
-   key). It goes in as a Worker secret; it's never written down anywhere else.
+   I couldn't re-check the streaming docs here: the docs host and the stream host are both blocked by
+   this build environment's network policy. Verifying them stays on the cutover checklist. The stream
+   needs its own **stream key** from Companies House, which is different from the REST API key.
 2. **Cloudflare delivery itself hasn't run for real.** Queue retries, Workflow scheduling and Durable
    Object alarms are configuration plus thin adapters. They're checked by the Worker build, and get their
    first real run when you deploy (in the cutover checklist). The logic they call is tested locally.

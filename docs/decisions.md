@@ -361,8 +361,9 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   never silently turns into a simulation. Dry-run instances can't act externally, so they continue.
 - **Trigger rules are config**; only the `explain` action may call the model (enforced by the config
   schema). Every event given is processed; batch size is applied when putting events on the queue.
-- **Companies House streaming adapter deferred**: its docs were unreachable from the build environment;
-  per CLAUDE.md we don't build an API client from memory. Polling is the fallback meanwhile.
+- **Change feed source = the existing `HttpChangeStream` client** (built in an earlier phase, flagged to
+  verify at cutover), wired via `streamFeedSource` when `CH_STREAM_KEY` is set. The docs couldn't be
+  re-checked from this build environment (blocked); polling is the fallback meanwhile.
 - **The Worker uses the fake model unless `MODEL_LIVE=1` and the `ANTHROPIC_API_KEY` secret are both
   set** (cutover switch; models unchanged).
 

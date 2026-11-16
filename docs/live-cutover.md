@@ -12,7 +12,9 @@ switch off; the global kill switch defaults to ON.
 | 3 Anthropic | real extraction, explanations and drafts | — |
 | 4 Ingestion | the real Greater Manchester universe, websites, verified facts | — |
 | 5 Real drafts + prompt tests | the first 50 real drafts; model choice per role | website outreach |
+| 0 Legal groundwork (v2) | lawful basis, ICO fee, privacy notices, terms | everything that contacts people |
 | 6 Email and letters | first real emails and the first printed letter batch | website outreach (**first cash**) |
+| 6b Claim this site (v2) | setup fee + monthly subscriptions from sample pages | website outreach (**recurring cash**) |
 | 7 x402 | paid company checks for AI agents | x402 |
 | 8 Stripe | monitoring alerts and the £9 human report | monitoring, human check |
 
@@ -21,6 +23,22 @@ Out of scope: **phone outreach**. If it's ever added, every number must be scree
 call, with the screen date stored per number, like the email suppression list.
 
 ---
+
+## Stage 0 — Legal groundwork (v2; before Stage 6, can run in parallel with 1–5)
+
+- [ ] **Legitimate interests assessment (LIA)** for B2B outreach by email and post: purpose, necessity,
+  balancing test, the opt-out on every message, the 90-day per-company cooldown, the random holdout (15%
+  of each outreach cohort is chosen at random rather than ranked: same rules, same opt-out). Keep it on file.
+- [ ] **ICO registration**: pay the data protection fee for EJTECH Ltd (tier 1 unless turnover/staff
+  say otherwise) and note the registration number in `infra.json` → `sender` if you want it shown.
+- [ ] **Privacy notice** on ejtech.co.uk covering: where company and director data comes from
+  (Companies House, the company's own website), what we keep and for how long, the suppression list,
+  how to object. Link it from every email footer, letter and demo page.
+- [ ] **Demo-page privacy line** (already on every sample page): "records that it was opened and for how
+  long. No cookies… no IP address or device details". Confirm it matches the notice above.
+- [ ] **Claim-this-site terms**: solicitor's read of `products.json` → `claim_site.terms` (draft): B2B
+  only, setup fee + monthly, cancel any time, 14-day refund if work hasn't started, domain as a separate
+  proposal. Bump `terms_version` when it changes (it's recorded on each claim).
 
 ## Stage 1 — Cloudflare
 
@@ -31,6 +49,15 @@ Keys and accounts
 
 Live run
 - [ ] `pnpm cf:deploy`, enable Access, redeploy; open the URL logged out (blocked) and logged in (health ok)
+
+v2 runtime (all in `apps/api/wrangler.jsonc`; `wrangler deploy` creates the queues and Durable Objects)
+- [ ] D1 migrations 0010–0013 applied (`pnpm cf:deploy` applies them); `/api/health` shows 13
+- [ ] Queues `ae-jobs` and `ae-jobs-dlq` exist; the Cron Trigger (every 5 min) appears on the Worker
+- [ ] Durable Objects `ChangeFeed` and `BudgetObject` (SQLite-backed) and the `ae-engine` Workflow exist
+- [ ] Controls → Runtime health: "Scheduled trigger", "Agent loop" and "Job queue" ran in the last 10 minutes
+- [ ] Force one failing job (e.g. a `reverify` for a made-up company with the CH key removed) and check it
+  lands in "Needs a person" after 3 retries, with an alert
+- [ ] Controls → Budgets shows today's spend against the caps; leave every playbook on S0 at first
 
 ## Stage 2 — Companies House
 
@@ -51,6 +78,7 @@ Verify against live docs
 - [ ] Which models accept server-side `fallbacks` (`SERVER_FALLBACK_MODELS` in `anthropic.ts`: Opus 5.5, Sonnet 5.5; **not Haiku 5.5**, which gets no `fallbacks` field — tested)
 - [ ] Prices in `packages/config/src/models.json` (Opus 5.5 $4/$20, Sonnet 5.5 $2/$10, Haiku 5.5 $0.10/$0.50 per Mtok, cached 2026-11-03; Haiku's price rises above 100K-token prompts, ours are far smaller) and the USD→GBP rate
 - [ ] Wire the real adapters in the agent runner (`AnthropicModelClient`, `HttpWebFetcher`, `DomainGuessFinder`) behind a `LIVE=1` switch; keep fakes as the default
+- [ ] On Workers (v2): Worker secret `ANTHROPIC_API_KEY` and var `MODEL_LIVE="1"` switch the runtime from the fake model to Claude (both are needed)
 
 ## Stage 4 — Ingestion
 
@@ -59,7 +87,8 @@ Live runs
 - [ ] Decide the website User-Agent contact URL (e.g. a page on ejtech.co.uk explaining the crawler) → `HttpWebFetcher` option
 - [ ] Website ingestion on the real universe: start with 100 companies; check quarantine and rejected extractions
 - [ ] Site-level website facts (site exists, last updated, HTTPS/mobile, contact email) now hold their confidence for 90 days, then go stale. Schedule the re-crawl every ~90 days (no more often); check `pnpm gate:phase2`'s shelf-life line on real data
-- [ ] Optional, any time after this: Companies House Streaming API key → runner secret `CH_STREAM_KEY`; check host, paths, auth, event shape and `timepoint` resume (`packages/verification/src/sources/companies-house/stream.ts`); start the consumer and check re-verification requests appear
+- [ ] Optional, any time after this: Companies House Streaming API key → **Worker secret** `CH_STREAM_KEY` (v2: the `ChangeFeed` Durable Object reads it on an alarm). Check host, paths, auth, event shape (incl. `data.category` on filings and `data.company_status` on companies, used by the trigger rules) and `timepoint` resume (`packages/verification/src/sources/companies-house/stream.ts`); Controls → Runtime health should then say "change feed: connected" and polling stops
+- [ ] Read the trigger rules in `packages/config/src/triggers.json` (which changes act; only "a lead filed accounts" calls the model)
 
 ## Stage 5 — Real drafts and prompt tests (model comparison)
 
@@ -99,11 +128,48 @@ Verify against current guidance
 - [ ] Letters: post isn't covered by PECR, but GDPR's right to object is; confirm the letter opt-out wording, and how you'll record "no more letters" (add the company to the suppression list as `entity:<company number>`)
 - [ ] Email provider API and inbound reply format for the real adapters
 
+- [ ] **Sending-domain warm-up**: a dedicated sending subdomain (never the claim-sites domain, D6); start
+  at ~10 emails/day for the first week, double weekly while bounces stay < 2% and complaints < 0.1%;
+  watch DMARC reports. The per-playbook spend tier (S0) and daily caps already keep volume low.
+- [ ] Note that each outreach approval adds a **random holdout** (15%, same compliance checks, looks the
+  same in Review): that's how Metrics can say whether ranking beats random. Rejecting holdout drafts is
+  fine; it's reported separately.
+
 Live run
 - [ ] First 5 real emails: turn the global kill switch off, approve each by hand, check each arrives with sender details + opt-out; reply "no thanks" from a test inbox and confirm suppression
 - [ ] Before the first batch: print one letter and check the opt-out line is readable, type its short URL on a phone and opt out (check `entity:<number>` appears in suppressions), and email the code to your inbox address and check the same. Then remove the test suppression
 - [ ] First print batch: open Letters, read the flagged letters (registered office looks like an accountant's: see `docs/known-biases.md`), leave out any you don't want, approve, download the PDF, print and post. Turn the kill switch off for `sme_letter` so the demo links work; scan one QR from the printed page
 - [ ] Zero guardrail breaches over the first 50 tasks (Controls page); only then consider L2
+
+## Stage 6b — Claim this site (v2: setup fee + monthly subscription)
+
+Keys and accounts (Stripe in **test mode only**: a live key switches card payments off, v2 rule 9)
+- [ ] Stripe test-mode secret key → Worker secret `STRIPE_SECRET_KEY`; webhook signing secret →
+  `STRIPE_WEBHOOK_SECRET`; var `PUBLIC_BASE_URL` (the claim-sites host)
+- [ ] Webhook endpoint `https://<public host>/webhooks/stripe` with events `checkout.session.completed`,
+  `invoice.paid`, `customer.subscription.deleted`, `charge.refunded`
+- [ ] Your prices → `products.json` → `claim_site.setup_fee_gbp`, `monthly_gbp`; the claim-sites host →
+  `claim_site.base_url` (a subdomain of ejtech.co.uk that never sends email, D6)
+- [ ] Route `/claim/*`, `/public/claim/*` and `/s/*` on that host to the Worker **without** Access
+
+Verify against live docs (not possible from the build environment: Stripe's docs were blocked)
+- [ ] **Build** `StripeCheckout.createSubscriptionCheckout` (`packages/ports/src/payments.ts`): Checkout
+  Session in subscription mode with a recurring monthly price plus a one-off setup line item. It refuses
+  to run until this is done
+- [ ] Check every field in `toSubscriptionEvent` (same file, marked UNVERIFIED): `mode`, `subscription`,
+  `amount_total`, `invoice.amount_paid`, `billing_reason` (`subscription_create` for the first invoice),
+  how a refunded charge links back to its subscription (we use `metadata.subscription_id`; Stripe may
+  need the invoice/payment intent instead)
+
+Live runs (test mode)
+- [ ] Turn the kill switch off for `sme_letter` and `claim_site`; open a sample page, "Claim this site",
+  pay with a test card; check the claim appears (Letters → Claimed sites), the details-form email in the
+  outbox, the `paid` row in the outcome ledger attributed to the letter
+- [ ] Fill the details form; read the draft on the dashboard; approve; check the site at `/s/<slug>` and
+  the domain-proposal email
+- [ ] Replay the payment webhook from the Stripe dashboard: no second fulfilment
+- [ ] Cancel the test subscription: the claim shows cancelled, fulfilment stops, the site comes down
+- [ ] Your minutes for that claim vs the 30-minute target (Claimed sites)
 
 ## Stage 7 — x402 (paid checks for AI agents)
 

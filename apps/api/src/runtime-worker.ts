@@ -32,6 +32,7 @@ import {
   type ReserveResult,
   runFeedOnce,
   type ScopeLimit,
+  streamFeedSource,
   type WorkflowDef,
   type WorkflowPort,
   workflowMayProceed,
@@ -39,7 +40,7 @@ import {
 import { AnthropicModelClient } from "@ae/ports/anthropic";
 import { liveRefresh } from "@ae/products";
 import { createD1Storage, type Storage } from "@ae/storage";
-import { CompaniesHouseClient, defaultContext } from "@ae/verification";
+import { CompaniesHouseClient, defaultContext, HttpChangeStream } from "@ae/verification";
 
 /**
  * The v2 runtime on Cloudflare (decision D3): Cron → Queue → consumer, a dead-letter queue, Workflows,
@@ -118,12 +119,15 @@ export async function queue(batch: MessageBatch<Job>, env: Env) {
 
 /**
  * The Companies House change feed. Holds the feed position (timepoint) in its own strongly consistent
- * storage and reads on an alarm. No source is configured yet (the streaming adapter waits for its
- * documentation to be checked), so it reports "not configured" and the cron's polling fallback runs.
+ * storage and reads on an alarm. With the CH_STREAM_KEY secret it reads the stream (client flagged to
+ * verify at cutover); without it, it reports "not configured" and the cron's polling fallback runs.
  */
 export class ChangeFeed extends DurableObject<Env> {
   private source(): ChangeFeedSource | null {
-    return null;
+    const key = (this.env as unknown as Vars).CH_STREAM_KEY;
+    return key
+      ? streamFeedSource(new HttpChangeStream(key), ["companies", "filings", "officers"])
+      : null;
   }
 
   async ensureRunning() {

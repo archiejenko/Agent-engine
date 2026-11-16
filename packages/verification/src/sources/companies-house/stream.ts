@@ -25,6 +25,8 @@ export interface StreamEvent {
   published_at: string;
   resource_uri: string;
   company_number: string | null;
+  /** The event's resource body as sent (field names to verify at cutover). */
+  data?: Record<string, unknown>;
 }
 
 export interface ChangeStream {
@@ -62,6 +64,7 @@ export function parseStreamLine(stream: StreamName, line: string): StreamEvent |
   if (!line.trim()) return null;
   const j = JSON.parse(line) as {
     resource_uri?: string;
+    data?: Record<string, unknown>;
     event?: { timepoint?: number; type?: string; published_at?: string };
   };
   const uri = j.resource_uri ?? "";
@@ -72,6 +75,7 @@ export function parseStreamLine(stream: StreamName, line: string): StreamEvent |
     published_at: j.event?.published_at ?? new Date().toISOString(),
     resource_uri: uri,
     company_number: companyFromUri(uri),
+    ...(j.data ? { data: j.data } : {}),
   };
 }
 

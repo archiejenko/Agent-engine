@@ -1,8 +1,9 @@
 import { loadInfraConfig, loadTriggersConfig, TriggersConfig } from "@ae/config";
 import type { Storage } from "@ae/storage";
 import { openSqliteStorage } from "@ae/storage/sqlite";
+import { FakeChangeStream } from "@ae/verification";
 import { beforeEach, describe, expect, it } from "vitest";
-import { type ChangeFeedSource, runFeedOnce } from "../change-feed.ts";
+import { type ChangeFeedSource, runFeedOnce, streamFeedSource } from "../change-feed.ts";
 import { K } from "../controls.ts";
 import { effectKeyFor } from "../tools.ts";
 import { type CompanyEvent, chunkEvents } from "../triggers.ts";
@@ -137,5 +138,34 @@ describe("triggers config and feed", () => {
     ).rejects.toThrow("queue down");
     const next = await runFeedOnce(source, start, async () => {}, { budgetMs: 10 });
     expect(next.timepoint).toBe("42");
+  });
+});
+
+describe("Companies House stream as the change feed", () => {
+  it("reads each stream, resumes per stream, and keeps the filing category for the rules", async () => {
+    const ev = (stream: "companies" | "filings", tp: number, data: Record<string, unknown>) => ({
+      stream,
+      timepoint: tp,
+      type: "changed",
+      published_at: "2026-11-16T00:00:00Z",
+      resource_uri: `/company/0123456${tp % 10}`,
+      company_number: `0123456${tp % 10}`,
+      data,
+    });
+    const fake = new FakeChangeStream([
+      ev("companies", 1, { company_status: "liquidation" }),
+      ev("filings", 2, { category: "accounts" }),
+      ev("filings", 3, { category: "officers" }),
+    ]);
+    const src = streamFeedSource(fake, ["companies", "filings"]);
+    const first = await src.read(null, 2000);
+    expect(first.events.map((e) => [e.kind, e.data])).toEqual([
+      ["company", { company_status: "liquidation" }],
+      ["filing", { category: "accounts" }],
+      ["filing", { category: "officers" }],
+    ]);
+    expect(JSON.parse(first.timepoint as string)).toEqual({ companies: 1, filings: 3 });
+    const again = await src.read(first.timepoint, 2000);
+    expect(again.events).toEqual([]); // resumed past everything already read
   });
 });
