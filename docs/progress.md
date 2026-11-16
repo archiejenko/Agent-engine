@@ -32,3 +32,4 @@ phase; commit + push per phase with CI green. Branch: `claude/nifty-curie-91l1nq
 - 2026-11-10: last pre-cutover fixes — cooldown shown on leads (approve disabled with dates), one daily digest alert for blocked duplicates, Overview "Today" panel; then feature freeze.
 - 2026-11-16: v2 plan approved (D1–D7); Milestone A build started.
 - 2026-11-16: v2 Phase 1 gate passed (synthetic): outcome ledger, cohorts + blind holdout, EV gate on priors, demo-page visits, unit economics with review minutes. Report: brain/build-reports/v2-phase-1.md.
+- 2026-11-16: v2 Phase 2 gate passed: Workers runtime (cron → queue + DLQ, workflow engine, recorded external effects, change-feed DO with polling fallback, trigger rules, health page). CH streaming adapter deferred (docs blocked). Report: brain/build-reports/v2-phase-2.md.

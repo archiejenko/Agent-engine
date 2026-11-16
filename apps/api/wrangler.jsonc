@@ -23,10 +23,36 @@
       "migrations_dir": "../../packages/storage/migrations"
     }
   ],
+  // v2 runtime (decision D3). The cron enqueues jobs; the queue consumer runs them; failures retry 3
+  // times then land on the dead-letter queue, whose consumer records them and raises an alert.
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "queues": {
+    "producers": [{ "binding": "JOBS", "queue": "ae-jobs" }],
+    "consumers": [
+      {
+        "queue": "ae-jobs",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "retry_delay": 60,
+        "dead_letter_queue": "ae-jobs-dlq"
+      },
+      { "queue": "ae-jobs-dlq", "max_batch_size": 10, "max_retries": 10 }
+    ]
+  },
+  // The Companies House change feed: one Durable Object holds the feed position (strongly consistent).
+  "durable_objects": {
+    "bindings": [{ "name": "CHANGE_FEED", "class_name": "ChangeFeed" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ChangeFeed"] }],
+  // Multi-step work over time (fulfilment, experiments, weekly loops) runs as Cloudflare Workflows.
+  "workflows": [{ "name": "ae-engine", "binding": "ENGINE", "class_name": "EngineWorkflow" }],
   // Not secret. Filled in after Access is enabled (see docs/runbooks/deploy.md).
   // While empty, the Worker refuses every /api request (fails closed).
   "vars": {
     "ACCESS_TEAM_DOMAIN": "",
-    "ACCESS_POLICY_AUD": ""
+    "ACCESS_POLICY_AUD": "",
+    // "1" (with the ANTHROPIC_API_KEY secret) switches the runtime from the fake model to Claude.
+    "MODEL_LIVE": ""
   }
 }

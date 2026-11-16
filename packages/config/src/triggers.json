@@ -1,0 +1,50 @@
+{
+  "_note": "Reactive triggers (v2 Phase 2). Each change-feed or polling event is checked against these rules by a cheap, deterministic filter: event kind, company scope and simple field matches. Only matched events act, and only rules with model: true may call the model. Business choices, not code: edit here.",
+  "max_events_per_batch": 500,
+  "fallback_poll": {
+    "feed_stale_minutes": 30,
+    "entities_per_poll": 50
+  },
+  "rules": [
+    {
+      "id": "accounts_filed",
+      "kind": "filing",
+      "scope": "universe",
+      "match": { "category": ["accounts"] },
+      "action": "reverify",
+      "model": false
+    },
+    {
+      "id": "office_moved",
+      "kind": "company",
+      "scope": "universe",
+      "match": { "changed": ["registered_office_address"] },
+      "action": "reverify",
+      "model": false
+    },
+    {
+      "id": "status_changed",
+      "kind": "company",
+      "scope": "watched_or_opportunity",
+      "match": { "company_status": ["liquidation", "administration", "dissolved", "receivership"] },
+      "action": "reverify_and_alert",
+      "model": false
+    },
+    {
+      "id": "officer_change_lead",
+      "kind": "officers",
+      "scope": "opportunity",
+      "match": {},
+      "action": "reverify",
+      "model": false
+    },
+    {
+      "id": "accounts_filed_lead",
+      "kind": "filing",
+      "scope": "opportunity",
+      "match": { "category": ["accounts"] },
+      "action": "explain",
+      "model": true
+    }
+  ]
+}

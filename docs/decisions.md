@@ -349,3 +349,19 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **Review time** = visible dashboard time since the previous decision, charged to the next decision;
   a print batch's time is split across its letters.
 - **P(paid) is one estimate per playbook** (Beta-binomial on priors) until real outcomes support more.
+
+## 2026-11-16 — v2 Phase 2 build decisions
+
+- **One job handler for Workers and Node** (`handleJob`); the local queue copies Cloudflare's retry and
+  dead-letter rules (3 retries, then dead letter + alert).
+- **External actions are recorded before they run** (`external_effects`). A retry replays the recorded
+  result; an action with an unknown outcome is refused until a person marks it happened / didn't.
+- **Live vs dry-run workflows**: an instance is live if external actions were allowed when it started.
+  Live instances check the kill switch before every step and wait while it's on, so a paid fulfilment
+  never silently turns into a simulation. Dry-run instances can't act externally, so they continue.
+- **Trigger rules are config**; only the `explain` action may call the model (enforced by the config
+  schema). Every event given is processed; batch size is applied when putting events on the queue.
+- **Companies House streaming adapter deferred**: its docs were unreachable from the build environment;
+  per CLAUDE.md we don't build an API client from memory. Polling is the fallback meanwhile.
+- **The Worker uses the fake model unless `MODEL_LIVE=1` and the `ANTHROPIC_API_KEY` secret are both
+  set** (cutover switch; models unchanged).

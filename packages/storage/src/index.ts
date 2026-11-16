@@ -7,6 +7,7 @@ export type * from "./phase2.ts";
 export type * from "./phase3.ts";
 export type * from "./phase4.ts";
 export type * from "./phase5.ts";
+export type * from "./runtime.ts";
 export { SqlStorage } from "./sql-storage.ts";
 export type * from "./storage.ts";
 export type * from "./v2.ts";

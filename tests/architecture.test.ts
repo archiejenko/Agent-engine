@@ -28,6 +28,8 @@ const ADAPTER_ALLOWED = [
   /^packages\/storage\//,
   /^apps\/api\/src\/node\.ts$/,
   /^apps\/api\/src\/worker\.ts$/,
+  // The Worker's runtime entry (cron, queue consumer, Durable Object, Workflow): a composition root.
+  /^apps\/api\/src\/runtime-worker\.ts$/,
   /^apps\/api\/src\/app\.test\.ts$/,
   /^apps\/agent-runner\/src\/main\.ts$/,
   /^apps\/[a-z-]+\/src\/.*\.test\.ts$/,

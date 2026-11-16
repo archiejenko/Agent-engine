@@ -102,13 +102,44 @@ export class ToolRegistry {
     const dryRun = reg.external
       ? !(await externalActionsAllowed(this.storage, this.cfg, ctx.task.playbook))
       : false;
+    // No repeated external actions (v2 rule 17): an external call is recorded BEFORE it runs. A retried
+    // or resumed step with the same task, tool and arguments gets the first result back, or is refused
+    // while the first attempt's outcome is unknown (until a person checks, or the tool confirms it didn't
+    // happen). A dry run and a live run of the same call are different effects.
+    let effectKey: string | null = null;
+    if (reg.external) {
+      effectKey = await effectKeyFor(ctx.task.task_id, name, args, dryRun);
+      const prior = await this.storage.effects.get(effectKey);
+      if (prior?.status === "done") {
+        this.calls.push({ tool: name, args, result: prior.result, blocked: false, error: null });
+        return { result: prior.result, untrusted: false, dry_run: prior.dry_run };
+      }
+      if (prior && prior.status !== "not_happened")
+        await refuse(
+          `an earlier attempt's outcome is unknown (${prior.status}); not repeating it until someone checks`,
+          false,
+        );
+      if (prior?.status === "not_happened")
+        await this.storage.effects.finish(effectKey, "unknown", null, "retrying");
+      else
+        await this.storage.effects.start({
+          key: effectKey,
+          task_id: ctx.task.task_id,
+          tool: name,
+          dry_run: dryRun,
+        });
+    }
     try {
       const out = await t.handler(args, { task: ctx.task, dryRun });
+      if (effectKey) await this.storage.effects.finish(effectKey, "done", out.result);
       if (reg.cost_gbp_per_call > 0)
         await this.storage.tasks.addCost(ctx.task.task_id, reg.cost_gbp_per_call);
       this.calls.push({ tool: name, args, result: out.result, blocked: false, error: null });
       return { result: out.result, untrusted: out.untrusted ?? false, dry_run: dryRun };
     } catch (e) {
+      // We can't tell whether the action happened before the error: leave it for a person to check.
+      if (effectKey)
+        await this.storage.effects.finish(effectKey, "unknown", null, (e as Error).message);
       this.calls.push({
         tool: name,
         args,
@@ -123,4 +154,24 @@ export class ToolRegistry {
   drainCalls(): ToolCallRecord[] {
     return this.calls.splice(0);
   }
+}
+
+/** Stable key for one external call: task + tool + canonical arguments + dry-run flag. */
+export async function effectKeyFor(taskId: string, tool: string, args: unknown, dryRun: boolean) {
+  const canon = (v: unknown): unknown =>
+    Array.isArray(v)
+      ? v.map(canon)
+      : v && typeof v === "object"
+        ? Object.fromEntries(
+            Object.keys(v as object)
+              .sort()
+              .map((k) => [k, canon((v as Record<string, unknown>)[k])]),
+          )
+        : v;
+  const bytes = new TextEncoder().encode(JSON.stringify(canon(args)) ?? "null");
+  const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
+    .slice(0, 12)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `${taskId}:${tool}:${dryRun ? "dry" : "live"}:${hash}`;
 }

@@ -12,6 +12,7 @@ import infraJson from "./infra.json" with { type: "json" };
 import modelsJson from "./models.json" with { type: "json" };
 import productsJson from "./products.json" with { type: "json" };
 import sicSectorsJson from "./sic-sectors.json" with { type: "json" };
+import triggersJson from "./triggers.json" with { type: "json" };
 import universeJson from "./universe.lead_gen.json" with { type: "json" };
 import verificationJson from "./verification.json" with { type: "json" };
 
@@ -334,6 +335,7 @@ export const rawConfig = {
   confidence: confidenceJson,
   registry: registryJson,
   verification: verificationJson,
+  triggers: triggersJson,
 };
 
 /** The company number used until Archie sets the real one (real sends refuse to run with it). */
@@ -378,4 +380,35 @@ export function sectorFor(sicCodes: string[], sectors: SicSectors = loadSicSecto
     if (hit) return hit;
   }
   return sectors.default;
+}
+
+/** Reactive trigger rules (v2 Phase 2): which change events act, and which may call the model. */
+export const TriggerRule = z.object({
+  id: z.string().regex(/^[a-z][a-z0-9_]*$/),
+  kind: z.enum(["company", "filing", "officers", "psc", "charges", "insolvency"]),
+  scope: z.enum(["universe", "opportunity", "watched_or_opportunity"]),
+  /** Every key must match: the event's value (or any of its values) is one of the listed values. */
+  match: z.record(z.string(), z.array(z.string()).min(1)),
+  action: z.enum(["reverify", "reverify_and_alert", "explain"]),
+  model: z.boolean(),
+});
+export type TriggerRule = z.infer<typeof TriggerRule>;
+export const TriggersConfig = z
+  .object({
+    max_events_per_batch: z.number().int().min(1).max(10_000),
+    fallback_poll: z.object({
+      feed_stale_minutes: z.number().int().min(1),
+      entities_per_poll: z.number().int().min(1).max(1000),
+    }),
+    rules: z.array(TriggerRule).min(1),
+  })
+  .refine((c) => new Set(c.rules.map((r) => r.id)).size === c.rules.length, {
+    message: "rule ids must be unique",
+  })
+  .refine((c) => c.rules.every((r) => r.model === (r.action === "explain")), {
+    message: "only the explain action calls the model, and it must say model: true",
+  });
+export type TriggersConfig = z.infer<typeof TriggersConfig>;
+export function loadTriggersConfig(raw: unknown = triggersJson): TriggersConfig {
+  return TriggersConfig.parse(raw);
 }

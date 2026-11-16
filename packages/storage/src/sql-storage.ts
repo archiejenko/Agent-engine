@@ -5,6 +5,7 @@ import { phase2 } from "./phase2.ts";
 import { phase3 } from "./phase3.ts";
 import { phase4 } from "./phase4.ts";
 import { phase5 } from "./phase5.ts";
+import { runtimeStorage } from "./runtime.ts";
 import type {
   EntityRow,
   FactListQuery,
@@ -144,6 +145,7 @@ export class SqlStorage implements Storage {
       phase5(db),
       lettersStorage(db),
       v2Storage(db),
+      runtimeStorage(db),
     );
   }
   declare signals: Storage["signals"];
@@ -178,6 +180,11 @@ export class SqlStorage implements Storage {
   declare cohorts: Storage["cohorts"];
   declare demoVisits: Storage["demoVisits"];
   declare reviewSessions: Storage["reviewSessions"];
+  declare effects: Storage["effects"];
+  declare workflows: Storage["workflows"];
+  declare deadLetters: Storage["deadLetters"];
+  declare triggerStats: Storage["triggerStats"];
+  declare runtimeStatus: Storage["runtimeStatus"];
 
   private async batchChunked(statements: SqlStatement[]) {
     for (const part of chunk(statements, BATCH)) await this.db.batch(part);

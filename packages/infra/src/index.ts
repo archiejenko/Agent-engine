@@ -1,6 +1,7 @@
 // Agent infrastructure layer: tasks, routing, tool registry, controls, playbook runner, playbooks.
 
 export * from "./autonomy.ts";
+export * from "./change-feed.ts";
 export * from "./cohort.ts";
 export * from "./contact.ts";
 export * from "./controls.ts";
@@ -18,3 +19,6 @@ export * from "./runner.ts";
 export * from "./standard-tools.ts";
 export * from "./tasks.ts";
 export * from "./tools.ts";
+export * from "./triggers.ts";
+export * from "./workflow.ts";
+export * from "./workflows.ts";

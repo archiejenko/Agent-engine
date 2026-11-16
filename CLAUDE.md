@@ -151,14 +151,19 @@ pnpm ingest:accounts ...      # step 2: staff numbers (no key)
 pnpm ingest:companies         # step 3: CH API (needs CH_API_KEY in .dev.vars), resumable
 pnpm gate:phase1              # gate evidence (AE_DB=... to point at another database)
 pnpm rollback <run_id>        # withdraw a run; facts recomputed
+
+# v2 (Milestone A)
+pnpm gate:v2-phase1           # simulator: cohorts, holdout, ledger, EV gate (synthetic sandbox)
+pnpm gate:v2-phase2           # runtime: workflows, kill/resume, effects, triggers, DLQ + Worker build
+pnpm --filter @ae/agent-runner tick   # one scheduled run locally (same jobs the Worker's cron enqueues)
 ```
 
 ## 7. Repo map
 
 ```
-apps/api            Hono app; src/app.ts shared, src/node.ts local, src/worker.ts Cloudflare
+apps/api            Hono app; src/app.ts shared, src/node.ts local, src/worker.ts + runtime-worker.ts Cloudflare
 apps/dashboard      React + Vite
-apps/agent-runner   Node service for the Claude Agent SDK (Phase 2)
+apps/agent-runner   agent service + job handler (runtime-neutral); Node runner and gates for local dev
 packages/contracts  Zod schemas + types
 packages/config     JSON config + loaders (universe, confidence, field registry)
 packages/storage    Storage interface, SQLite + D1 adapters, migrations

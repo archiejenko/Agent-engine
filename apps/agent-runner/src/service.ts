@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   type InfraConfig,
   loadInfraConfig,
@@ -24,7 +22,6 @@ import {
   outreachRoutes,
   type PlaybookImpl,
   PlaybookRunner,
-  parsePlaybook,
   processInbox,
   QUEUE_ORDER,
   recordBreach,
@@ -60,24 +57,6 @@ import {
 } from "@ae/products";
 import type { Storage, StoredTask } from "@ae/storage";
 import { defaultContext, fakeWebsiteExtractor, type VerificationContext } from "@ae/verification";
-
-/** Load every playbooks/<name>/SKILL.md. */
-export async function loadPlaybooks(dir: string): Promise<Map<string, LoadedPlaybook>> {
-  const out = new Map<string, LoadedPlaybook>();
-  for (const name of readdirSync(dir)) {
-    try {
-      const pb = await parsePlaybook(readFileSync(join(dir, name, "SKILL.md"), "utf8"));
-      out.set(pb.spec.playbook, pb);
-    } catch (e) {
-      if (
-        (e as NodeJS.ErrnoException).code !== "ENOTDIR" &&
-        (e as NodeJS.ErrnoException).code !== "ENOENT"
-      )
-        throw e;
-    }
-  }
-  return out;
-}
 
 export const PLAYBOOK_IMPLS = new Map<string, PlaybookImpl>([
   ["sme_outreach", SME_OUTREACH],

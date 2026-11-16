@@ -1,8 +1,14 @@
-import { loadInfraConfig, loadProductsConfig, loadUniverseConfig } from "@ae/config";
+import {
+  loadInfraConfig,
+  loadProductsConfig,
+  loadTriggersConfig,
+  loadUniverseConfig,
+} from "@ae/config";
 import type { Autonomy, Claim } from "@ae/contracts";
 import {
   type ContactStatus,
   contactStatus,
+  feedIsStale,
   K,
   lastOutreachTask,
   liftReport,
@@ -398,6 +404,67 @@ export function createApp(deps: AppDeps) {
       synthetic: false,
     });
     return c.json({ ok: true }, 201);
+  });
+
+  // ---- v2 Phase 2: runtime health (cron, queue, dead letters, workflows, change feed, triggers).
+  app.get("/api/runtime", async (c) => {
+    const s = deps.storage(c.env);
+    const triggers = loadTriggersConfig();
+    const beats = await s.runtimeStatus.all();
+    const now = Date.now();
+    const age = (name: string) => {
+      const b = beats.find((x) => x.name === name);
+      return b ? Math.round((now - Date.parse(b.at)) / 60_000) : null;
+    };
+    const feed = beats.find((b) => b.name === "change_feed");
+    const weekAgo = new Date(now - 7 * 86_400_000).toISOString().slice(0, 10);
+    const killed =
+      (await s.controls.get<boolean>(K.global)) ?? loadInfraConfig().kill_switch_default_on;
+    return c.json({
+      kill_switch_on: killed,
+      heartbeats: beats
+        .filter((b) => b.name !== "poll_cursor")
+        .map((b) => ({ ...b, minutes_ago: age(b.name) })),
+      change_feed: {
+        configured: Boolean((feed?.detail as { configured?: boolean } | null)?.configured),
+        polling_fallback_active: feedIsStale(feed, triggers),
+      },
+      dead_letters: await s.deadLetters.list({ open: true, limit: 20 }),
+      uncertain_effects: await s.effects.unresolved(20),
+      workflows: {
+        counts: await s.workflows.counts(),
+        attention: [
+          ...(await s.workflows.list({ status: "paused", limit: 10 })),
+          ...(await s.workflows.list({ status: "errored", limit: 10 })),
+        ],
+      },
+      triggers_7d: await s.triggerStats.since(weekAgo),
+    });
+  });
+
+  // A person settles an external action whose outcome was unknown (rule 17): it happened (keep it,
+  // never repeat) or it didn't (the step may try once more).
+  app.post("/api/effects/resolve", async (c) => {
+    const body = z
+      .object({ key: z.string().min(1).max(300), happened: z.boolean() })
+      .safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "bad_request" }, 400);
+    const s = deps.storage(c.env);
+    const e = await s.effects.get(body.data.key);
+    if (!e) return c.json({ error: "not_found" }, 404);
+    if (e.status === "done") return c.json({ error: "already_done" }, 409);
+    await s.effects.finish(
+      e.key,
+      body.data.happened ? "done" : "not_happened",
+      e.result,
+      `settled by a person: ${body.data.happened ? "it happened" : "it did not happen"}`,
+    );
+    return c.json({ ok: true });
+  });
+
+  app.post("/api/dead-letters/:id/resolve", async (c) => {
+    await deps.storage(c.env).deadLetters.resolve(c.req.param("id"));
+    return c.json({ ok: true });
   });
 
   app.get("/api/golden/next", async (c) => {

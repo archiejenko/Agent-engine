@@ -5,7 +5,8 @@ import type { CompanyBrief, EmailDraft } from "@ae/infra";
 import { explainOpportunity, parseFramework, runModule } from "@ae/opportunity";
 import type { Storage } from "@ae/storage";
 import { getVerifiedFacts } from "@ae/verification";
-import { AgentService, fakeModel, loadPlaybooks } from "../service.ts";
+import { loadPlaybooks } from "../load-playbooks.ts";
+import { AgentService, fakeModel } from "../service.ts";
 import { buildSyntheticWorld } from "./synthetic-world.ts";
 
 export type GateStatus = "passed (synthetic)" | "passed" | "failed" | "live pending";
