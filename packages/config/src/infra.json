@@ -6,7 +6,11 @@
       "default": 5,
       "sme_outreach": 5
     },
-    "exclude_steps": ["print_and_post"]
+    "exclude_steps": ["print_and_post"],
+    "_tiers_note": "S0 = the per-playbook cap above. Raising a playbook to S1-S3 needs Archie's recorded approval. explore_share = most of the weekly budget (global daily cap x 7) that exploratory work (experiments, explore-flagged leads) may use. step_reservation_gbp = what's held back before each model step and settled at the real cost (assumption).",
+    "spend_tiers": { "S1": 10, "S2": 25, "S3": 60 },
+    "explore_share": 0.1,
+    "step_reservation_gbp": 0.25
   },
   "kill_switch_default_on": true,
   "task_timeout_minutes": 30,

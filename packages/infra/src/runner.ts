@@ -2,6 +2,7 @@ import type { InfraConfig, ModelsConfig } from "@ae/config";
 import type { Role } from "@ae/contracts";
 import { costGbp, type ModelClient } from "@ae/ports";
 import type { Storage, StoredTask } from "@ae/storage";
+import { type BudgetPort, releaseStep, reserveForStep, settleStep } from "./budget.ts";
 import { checkSpend, queuePaused, SpendCapError } from "./controls.ts";
 import type { LoadedPlaybook } from "./playbook.ts";
 import type { ToolCallRecord, ToolRegistry, ToolResult } from "./tools.ts";
@@ -58,6 +59,8 @@ export interface RunnerDeps {
   playbooks: Map<string, LoadedPlaybook>;
   impls: Map<string, PlaybookImpl>;
   now?: () => Date;
+  /** Hard budgets (v2 Phase 3): reserve before each step, settle at the real cost. */
+  budget?: BudgetPort;
 }
 
 async function hash01(text: string): Promise<number> {
@@ -233,12 +236,29 @@ export class PlaybookRunner {
       })),
       retryReason,
     };
-    const res = await roleImpl(ctx);
+    // Hold back the most this step may spend (never more than the task has left) before it runs.
+    const hold = Math.max(
+      0,
+      Math.min(this.d.infra.caps.step_reservation_gbp, fresh.budget_gbp - fresh.cost_gbp),
+    );
+    const reservation = this.d.budget
+      ? await reserveForStep(this.d.storage, this.d.infra, this.d.budget, fresh, hold, this.now())
+      : null;
+    let res: Awaited<ReturnType<typeof roleImpl>>;
+    try {
+      res = await roleImpl(ctx);
+    } catch (e) {
+      if (reservation && this.d.budget)
+        await releaseStep(this.d.storage, this.d.budget, reservation, fresh, hold);
+      throw e;
+    }
     const usage = res.usage ?? { input_tokens: 0, output_tokens: 0 };
     const price = res.model
       ? (this.d.models.prices[res.model] ?? this.d.models.prices["fake-model"])
       : undefined;
     const cost = price ? costGbp(usage, price, this.d.models.usd_to_gbp) : 0;
+    if (reservation && this.d.budget)
+      await settleStep(this.d.storage, this.d.budget, reservation, fresh, hold, cost);
     if (cost > 0) await checkSpend(this.d.storage, this.d.infra, fresh, cost, this.now());
     state.outputs[step.output] = res.output;
     const calls = this.d.tools

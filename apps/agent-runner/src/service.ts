@@ -8,6 +8,7 @@ import {
 } from "@ae/config";
 import {
   assessCandidates,
+  type BudgetPort,
   type Candidate,
   type Channel,
   createPrintBatch,
@@ -19,6 +20,7 @@ import {
   fakeOutreachWriter,
   holdoutSize,
   type LoadedPlaybook,
+  LocalBudgetPort,
   outreachRoutes,
   type PlaybookImpl,
   PlaybookRunner,
@@ -92,6 +94,8 @@ export interface ServiceDeps {
   now?: () => Date;
   /** Simulator runs: every task this service creates is marked synthetic (never learned from). */
   synthetic?: boolean;
+  /** Hard budgets: the Budget Durable Object on Cloudflare; a locked in-process book locally. */
+  budget?: BudgetPort;
 }
 
 interface OpenCohort {
@@ -157,6 +161,7 @@ export class AgentService {
       model: this.model,
       tools: this.tools,
       playbooks: d.playbooks,
+      budget: d.budget ?? new LocalBudgetPort(),
       impls: d.impls ?? PLAYBOOK_IMPLS,
       ...(d.now ? { now: d.now } : {}),
     });

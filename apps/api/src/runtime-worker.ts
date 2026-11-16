@@ -20,11 +20,15 @@ import {
   loadTriggersConfig,
 } from "@ae/config";
 import {
+  BudgetBook,
+  type BudgetPort,
   type ChangeFeedSource,
   chunkEvents,
   type FeedState,
   loadBundledPlaybooks,
+  type ReserveResult,
   runFeedOnce,
+  type ScopeLimit,
   WORKFLOWS,
   type WorkflowDef,
   workflowMayProceed,
@@ -53,6 +57,7 @@ async function runtimeFor(env: Env): Promise<JobRuntime> {
     storage,
     playbooks: await loadBundledPlaybooks(),
     model,
+    budget: budgetPort(env),
     models,
   });
   const ch = loadCompaniesHouseConfig();
@@ -208,4 +213,36 @@ export class EngineWorkflow extends WorkflowEntrypoint<Env, EngineParams> {
     });
     return out;
   }
+}
+
+/**
+ * Hard budgets (v2 Phase 3). One Budget Durable Object holds every reservation. Its methods use the
+ * SQLite-backed synchronous KV API, so each runs to completion before the next starts: parallel
+ * reservations can't jointly exceed a cap.
+ */
+export class BudgetObject extends DurableObject<Env> {
+  private book() {
+    return new BudgetBook(this.ctx.storage.kv);
+  }
+  reserve(id: string, amount: number, scopes: ScopeLimit[]): ReserveResult {
+    return this.book().reserve(id, amount, scopes);
+  }
+  settle(id: string, actual: number): { overrun: number } {
+    return this.book().settle(id, actual);
+  }
+  release(id: string): void {
+    this.book().release(id);
+  }
+}
+
+export function budgetPort(env: Env): BudgetPort {
+  const stub = () => env.BUDGET.getByName("global") as unknown as DurableObjectStub<BudgetObject>;
+  return {
+    reserve: async (id, amount, scopes) =>
+      (await stub().reserve(id, amount, scopes)) as ReserveResult,
+    settle: async (id, actual) => (await stub().settle(id, actual)) as { overrun: number },
+    release: async (id) => {
+      await stub().release(id);
+    },
+  };
 }

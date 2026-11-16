@@ -12,6 +12,7 @@ export const K = {
   playbook: (p: string) => `kill:playbook:${p}`,
   queuePaused: "queue:paused",
   autonomy: (p: string) => `autonomy:${p}`,
+  spendTier: (p: string) => `spend_tier:${p}`,
 };
 
 export async function externalActionsAllowed(

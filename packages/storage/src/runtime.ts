@@ -88,8 +88,121 @@ export interface TriggerStatRow {
   model_calls: number;
 }
 
+export interface OwnerApprovalRow {
+  id: string;
+  kind: "spend_tier" | "autonomy_l3";
+  subject: string;
+  value: unknown;
+  approved_by: string;
+  note: string | null;
+  created_at: string;
+  used_at: string | null;
+}
+
 export function runtimeStorage(db: SqlDriver) {
   return {
+    ownerApprovals: {
+      add: async (a: Omit<OwnerApprovalRow, "id" | "created_at" | "used_at">) => {
+        const id = crypto.randomUUID();
+        await db.run(
+          "INSERT INTO owner_approvals (id, kind, subject, value, approved_by, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          [id, a.kind, a.subject, j(a.value), a.approved_by, a.note, nowIso()],
+        );
+        return id;
+      },
+      get: async (id: string): Promise<OwnerApprovalRow | null> => {
+        const r = await first(db, "SELECT * FROM owner_approvals WHERE id = ?", [id]);
+        return r
+          ? {
+              id: r.id as string,
+              kind: r.kind as OwnerApprovalRow["kind"],
+              subject: r.subject as string,
+              value: pj(r.value),
+              approved_by: r.approved_by as string,
+              note: (r.note as string | null) ?? null,
+              created_at: r.created_at as string,
+              used_at: (r.used_at as string | null) ?? null,
+            }
+          : null;
+      },
+      /** Marks an approval used; false if it was already used (each approval works once). */
+      use: async (id: string) =>
+        (
+          await db.run("UPDATE owner_approvals SET used_at = ? WHERE id = ? AND used_at IS NULL", [
+            nowIso(),
+            id,
+          ])
+        ).changes === 1,
+      list: async (limit = 50) =>
+        (
+          await db.all<Row>("SELECT * FROM owner_approvals ORDER BY created_at DESC LIMIT ?", [
+            limit,
+          ])
+        ).map((r) => ({ ...r, value: pj(r.value) }) as unknown as OwnerApprovalRow),
+    },
+
+    budgetEvents: {
+      put: async (e: {
+        id: string;
+        task_id: string | null;
+        playbook: string | null;
+        explore: boolean;
+        reserved_gbp: number;
+        actual_gbp: number | null;
+        status: "reserved" | "settled" | "released" | "refused";
+        reason: string | null;
+      }) => {
+        const at = nowIso();
+        await db.run(
+          `INSERT INTO budget_events (id, task_id, playbook, explore, reserved_gbp, actual_gbp, status, reason, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (id) DO UPDATE SET actual_gbp = excluded.actual_gbp, status = excluded.status, reason = excluded.reason, updated_at = excluded.updated_at`,
+          [
+            e.id,
+            e.task_id,
+            e.playbook,
+            e.explore ? 1 : 0,
+            e.reserved_gbp,
+            e.actual_gbp,
+            e.status,
+            e.reason,
+            at,
+            at,
+          ],
+        );
+      },
+      /** Settled spend since a time, split into explore and exploit. */
+      spendSince: async (since: string) => {
+        const r = await first(
+          db,
+          "SELECT COALESCE(SUM(CASE WHEN explore = 1 THEN actual_gbp END), 0) AS explore, COALESCE(SUM(actual_gbp), 0) AS total FROM budget_events WHERE status = 'settled' AND created_at >= ?",
+          [since],
+        );
+        return { explore: Number(r?.explore ?? 0), total: Number(r?.total ?? 0) };
+      },
+      forTask: async (taskId: string) =>
+        (
+          await db.all<Row>(
+            "SELECT status, reserved_gbp, actual_gbp FROM budget_events WHERE task_id = ? ORDER BY created_at",
+            [taskId],
+          )
+        ).map((r) => ({
+          status: r.status as string,
+          reserved_gbp: Number(r.reserved_gbp),
+          actual_gbp: r.actual_gbp === null ? null : Number(r.actual_gbp),
+        })),
+      refusedSince: async (since: string) =>
+        Number(
+          (
+            await first(
+              db,
+              "SELECT COUNT(*) AS n FROM budget_events WHERE status = 'refused' AND created_at >= ?",
+              [since],
+            )
+          )?.n ?? 0,
+        ),
+    },
+
     effects: {
       get: async (key: string) => {
         const r = await first(db, "SELECT * FROM external_effects WHERE key = ?", [key]);

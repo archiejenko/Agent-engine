@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getJson } from "./api.ts";
+import { Budgets } from "./Budgets.tsx";
 import { EmptyRow } from "./format.tsx";
 import { Health } from "./Health.tsx";
 
@@ -151,6 +152,7 @@ export function Controls() {
         Promotion needs ≥ 90% success, ≥ 80% approved without edits and zero breaches over the last
         50 tasks. Any breach drops the playbook a level automatically. L3 is the top level.
       </p>
+      <Budgets />
       <Health />
       <h2>Alerts</h2>
       {d.alerts.length === 0 ? (

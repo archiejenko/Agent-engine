@@ -185,6 +185,8 @@ export class SqlStorage implements Storage {
   declare deadLetters: Storage["deadLetters"];
   declare triggerStats: Storage["triggerStats"];
   declare runtimeStatus: Storage["runtimeStatus"];
+  declare ownerApprovals: Storage["ownerApprovals"];
+  declare budgetEvents: Storage["budgetEvents"];
 
   private async batchChunked(statements: SqlStatement[]) {
     for (const part of chunk(statements, BATCH)) await this.db.batch(part);

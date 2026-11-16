@@ -14,12 +14,17 @@ import {
   liftReport,
   loadBundledPlaybooks,
   outreachRoutes,
+  playbookDailyCap,
   playbookStats,
   promotePlaybook,
   recordOutcome,
   setKillSwitch,
+  setSpendTier,
+  spendTier,
   unitEconomics,
+  weekStart,
 } from "@ae/infra";
+
 import { reviewQueue } from "@ae/opportunity";
 import {
   InMemoryQueue,
@@ -668,6 +673,9 @@ export function createApp(deps: AppDeps) {
   app.post("/api/playbooks/:name/promote", async (c) => {
     const pb = (await loadBundledPlaybooks()).get(c.req.param("name"));
     if (!pb) return c.json({ error: "not_found" }, 404);
+    const approvalId = z
+      .object({ approval_id: z.string().max(100).optional() })
+      .safeParse(await c.req.json().catch(() => ({}))).data?.approval_id;
     try {
       return c.json({
         ok: true,
@@ -677,11 +685,106 @@ export function createApp(deps: AppDeps) {
           pb.spec.autonomy,
           loadInfraConfig(),
           "archie (dashboard)",
+          approvalId,
         ),
       });
     } catch (e) {
       return c.json({ error: (e as Error).message }, 409);
     }
+  });
+
+  // ---- v2 Phase 3: hard budgets, spend tiers and owner approvals.
+  // Owner approvals are created ONLY here, behind Cloudflare Access (Archie). Agents have no other path
+  // to create one (a test checks no other source file calls ownerApprovals.add).
+  app.post("/api/owner-approvals", async (c) => {
+    const body = z
+      .discriminatedUnion("kind", [
+        z.object({
+          kind: z.literal("spend_tier"),
+          playbook: z.string().regex(/^[a-z][a-z0-9_]*$/),
+          tier: z.enum(["S1", "S2", "S3"]),
+          note: z.string().max(500).optional(),
+        }),
+        z.object({
+          kind: z.literal("autonomy_l3"),
+          playbook: z.string().regex(/^[a-z][a-z0-9_]*$/),
+          note: z.string().max(500).optional(),
+        }),
+      ])
+      .safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "bad_request", issues: body.error.issues }, 400);
+    const s = deps.storage(c.env);
+    const who = c.req.header("cf-access-authenticated-user-email") ?? "archie (local dashboard)";
+    const id = await s.ownerApprovals.add({
+      kind: body.data.kind,
+      subject: body.data.playbook,
+      value: body.data.kind === "spend_tier" ? { tier: body.data.tier } : { autonomy: "L3" },
+      approved_by: who,
+      note: body.data.note ?? null,
+    });
+    try {
+      if (body.data.kind === "spend_tier")
+        await setSpendTier(s, body.data.playbook, body.data.tier, { approvalId: id, by: who });
+      else {
+        const pb = (await loadBundledPlaybooks()).get(body.data.playbook);
+        if (!pb) return c.json({ error: "not_found" }, 404);
+        await promotePlaybook(s, pb.spec.playbook, pb.spec.autonomy, loadInfraConfig(), who, id);
+      }
+    } catch (e) {
+      return c.json({ error: (e as Error).message, approval_id: id }, 409);
+    }
+    return c.json({ ok: true, approval_id: id }, 201);
+  });
+
+  // Lowering a tier is always allowed (safer) and needs no approval.
+  app.post("/api/playbooks/:name/spend-tier", async (c) => {
+    const b = z
+      .object({ tier: z.enum(["S0", "S1", "S2", "S3"]) })
+      .safeParse(await c.req.json().catch(() => null));
+    if (!b.success) return c.json({ error: "bad_request" }, 400);
+    try {
+      await setSpendTier(deps.storage(c.env), c.req.param("name"), b.data.tier, {
+        by: "archie (dashboard)",
+      });
+      return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, 409);
+    }
+  });
+
+  app.get("/api/budgets", async (c) => {
+    const s = deps.storage(c.env);
+    const cfg = loadInfraConfig();
+    const now = new Date();
+    const day = `${now.toISOString().slice(0, 10)}T00:00:00.000Z`;
+    const wk = `${weekStart(now)}T00:00:00.000Z`;
+    const ex = cfg.caps.exclude_steps;
+    const week = await s.budgetEvents.spendSince(wk);
+    const playbooks = [];
+    for (const p of [...(await loadBundledPlaybooks()).keys()].sort()) {
+      const tier = await spendTier(s, p);
+      playbooks.push({
+        playbook: p,
+        tier,
+        cap_gbp: playbookDailyCap(cfg, p, tier),
+        spent_today_gbp: await s.runLog.spendSince(day, p, ex),
+      });
+    }
+    return c.json({
+      global: {
+        cap_gbp: cfg.caps.global_per_day_gbp,
+        spent_today_gbp: await s.runLog.spendSince(day, undefined, ex),
+      },
+      explore: {
+        share: cfg.caps.explore_share,
+        cap_gbp: cfg.caps.explore_share * cfg.caps.global_per_day_gbp * 7,
+        spent_this_week_gbp: week.explore,
+      },
+      tiers: cfg.caps.spend_tiers,
+      playbooks,
+      refused_today: await s.budgetEvents.refusedSince(day),
+      approvals: await s.ownerApprovals.list(20),
+    });
   });
 
   app.post("/api/alerts/:id/ack", async (c) => {

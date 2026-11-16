@@ -67,3 +67,40 @@ describe("architecture: database access only through the Storage interface", () 
     expect(entry).not.toMatch(/sqlite\.ts|migrations-fs\.ts|node:/);
   });
 });
+
+/**
+ * v2 rule 14: agents can never change the safety layer. Code that agents run (playbook roles and the
+ * tools they call) may not touch kill switches, spend caps or tiers, autonomy, queue pausing or owner
+ * approvals. Only Archie's dashboard routes and the runner's own guardrails do that.
+ */
+const AGENT_FACING = [
+  /^packages\/infra\/src\/playbooks\//,
+  /^packages\/infra\/src\/outreach\.ts$/,
+  /^packages\/infra\/src\/standard-tools\.ts$/,
+  /^packages\/products\/src\/product-playbooks\.ts$/,
+  /^playbooks\//,
+];
+const SAFETY_WRITES =
+  /\b(setKillSwitch|setSpendTier|promotePlaybook|ownerApprovals|controls\.set|K\.(global|queuePaused|spendTier|autonomy|playbook))\b/;
+
+describe("v2 rule 14: agents can't change the safety layer", () => {
+  it("agent-facing code never writes kill switches, caps, tiers, autonomy or approvals", () => {
+    const agentFiles = files.filter(
+      (f) => AGENT_FACING.some((a) => a.test(f)) && !f.includes("__tests__"),
+    );
+    expect(agentFiles.length).toBeGreaterThan(3);
+    const offenders = agentFiles.filter((f) =>
+      SAFETY_WRITES.test(readFileSync(join(ROOT, f), "utf8")),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("owner approvals are created only by the dashboard API (behind Access)", () => {
+    const creators = files.filter(
+      (f) =>
+        /ownerApprovals\.add\(/.test(readFileSync(join(ROOT, f), "utf8")) &&
+        !/(\.test\.ts$|__tests__|\/gates\/)/.test(f),
+    );
+    expect(creators).toEqual(["apps/api/src/app.ts"]);
+  });
+});

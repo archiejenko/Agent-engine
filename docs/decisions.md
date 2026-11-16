@@ -365,3 +365,15 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   per CLAUDE.md we don't build an API client from memory. Polling is the fallback meanwhile.
 - **The Worker uses the fake model unless `MODEL_LIVE=1` and the `ANTHROPIC_API_KEY` secret are both
   set** (cutover switch; models unchanged).
+
+## 2026-11-16 — v2 Phase 3 build decisions
+
+- **Reserve → settle budgets in one Durable Object** (SQLite-backed, synchronous KV): all-or-nothing
+  across task, playbook-day, global-day and explore-week scopes. Seeds from the run log so caps survive
+  a fresh object. The after-the-fact cap check stays as a second line of defence.
+- **Each step holds min(`step_reservation_gbp`, task budget left)**: holding a flat amount would block
+  playbooks whose whole task budget is pennies.
+- **Spend tiers S0–S3**: S0 = the existing per-playbook cap; raising needs a single-use owner approval
+  created only by the dashboard (Access identity recorded); lowering is free.
+- **L3 autonomy needs an owner approval** (rule 14).
+- **Explore share** = 10% of the weekly budget (global daily cap × 7) for experiment / explore tasks.

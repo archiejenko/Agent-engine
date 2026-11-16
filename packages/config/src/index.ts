@@ -171,6 +171,14 @@ export const InfraConfig = z.object({
      * when he approves a batch). They still count in task cost and margins.
      */
     exclude_steps: z.array(z.string()).default([]),
+    /** v2 Phase 3: daily cap per playbook at each tier above S0 (S0 = per_playbook_per_day_gbp). */
+    spend_tiers: z
+      .object({ S1: z.number().positive(), S2: z.number().positive(), S3: z.number().positive() })
+      .refine((t) => t.S1 < t.S2 && t.S2 < t.S3, { message: "tiers must increase" }),
+    /** Share of the weekly budget exploratory work may use (0–0.5). */
+    explore_share: z.number().min(0).max(0.5),
+    /** Held back before each model step, then settled at the real cost (labelled assumption). */
+    step_reservation_gbp: z.number().positive(),
   }),
   kill_switch_default_on: z.boolean(),
   task_timeout_minutes: z.number().int().positive(),

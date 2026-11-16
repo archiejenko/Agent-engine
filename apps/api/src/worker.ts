@@ -77,7 +77,7 @@ function build(env: Env) {
   return x402App;
 }
 
-export { ChangeFeed, EngineWorkflow } from "./runtime-worker.ts";
+export { BudgetObject, ChangeFeed, EngineWorkflow } from "./runtime-worker.ts";
 
 export default {
   fetch(request, env, ctx) {

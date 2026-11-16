@@ -42,9 +42,16 @@
   },
   // The Companies House change feed: one Durable Object holds the feed position (strongly consistent).
   "durable_objects": {
-    "bindings": [{ "name": "CHANGE_FEED", "class_name": "ChangeFeed" }]
+    "bindings": [
+      { "name": "CHANGE_FEED", "class_name": "ChangeFeed" },
+      // Hard budgets: one object holds every reservation, so parallel work can't overspend a cap.
+      { "name": "BUDGET", "class_name": "BudgetObject" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ChangeFeed"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ChangeFeed"] },
+    { "tag": "v2", "new_sqlite_classes": ["BudgetObject"] }
+  ],
   // Multi-step work over time (fulfilment, experiments, weekly loops) runs as Cloudflare Workflows.
   "workflows": [{ "name": "ae-engine", "binding": "ENGINE", "class_name": "EngineWorkflow" }],
   // Not secret. Filled in after Access is enabled (see docs/runbooks/deploy.md).
