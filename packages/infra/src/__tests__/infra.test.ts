@@ -664,9 +664,11 @@ describe("Phase 5: sending under guardrails, follow-ups, replies, autonomy", () 
         in_reply_to: m?.id ?? null,
       },
     ]);
+    // An opt-out is counted, and gets no drafted answer (post_reply).
     expect(await processInbox(storage, infra, inbox, "2000-01-01")).toEqual({
       replies: 1,
       opt_outs: 1,
+      to_answer: [],
     });
     expect(await storage.suppressions.isSuppressed("info@acme.example")).toBe(true);
     expect(

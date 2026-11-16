@@ -137,9 +137,15 @@ export class ToolRegistry {
       this.calls.push({ tool: name, args, result: out.result, blocked: false, error: null });
       return { result: out.result, untrusted: out.untrusted ?? false, dry_run: dryRun };
     } catch (e) {
-      // We can't tell whether the action happened before the error: leave it for a person to check.
+      // A tool that refuses BEFORE acting throws ToolBlockedError: nothing happened, a retry may run.
+      // Any other error: we can't tell whether the action happened, so a person must check.
       if (effectKey)
-        await this.storage.effects.finish(effectKey, "unknown", null, (e as Error).message);
+        await this.storage.effects.finish(
+          effectKey,
+          e instanceof ToolBlockedError ? "not_happened" : "unknown",
+          null,
+          (e as Error).message,
+        );
       this.calls.push({
         tool: name,
         args,

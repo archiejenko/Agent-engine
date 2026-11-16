@@ -181,6 +181,13 @@ export async function processInbox(
 ) {
   let replies = 0;
   let optOuts = 0;
+  /** Replies to outreach that aren't opt-outs: each gets a post_reply draft (L0). */
+  const toAnswer: {
+    message: { id: string; from: string; subject: string; body: string; received_at: string };
+    entity_id: string;
+    thread_id: string;
+    synthetic: boolean;
+  }[] = [];
   for (const m of await inbox.poll(since)) {
     // A reply to a LETTER quotes its printed opt-out code (letters aren't email threads).
     let letterOptOut = false;
@@ -245,7 +252,22 @@ export async function processInbox(
           dry_run: dryRun,
         });
     }
+    if (!optOut && original.entity_id && !original.thread_id.startsWith("claim:"))
+      toAnswer.push({
+        message: {
+          id: m.id,
+          from: m.from,
+          subject: m.subject,
+          body: m.body,
+          received_at: m.received_at,
+        },
+        entity_id: original.entity_id,
+        thread_id: original.thread_id,
+        synthetic: original.task_id
+          ? ((await storage.tasks.get(original.task_id))?.synthetic ?? false)
+          : false,
+      });
     replies++;
   }
-  return { replies, opt_outs: optOuts };
+  return { replies, opt_outs: optOuts, to_answer: toAnswer };
 }

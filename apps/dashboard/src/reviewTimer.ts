@@ -15,7 +15,13 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-export type ReviewItemType = "opportunity" | "draft" | "print_batch" | "conflict" | "quarantine";
+export type ReviewItemType =
+  | "opportunity"
+  | "draft"
+  | "print_batch"
+  | "conflict"
+  | "quarantine"
+  | "claim";
 
 /** Records a review session for a decision; never blocks or fails the decision itself. */
 export function recordReview(itemType: ReviewItemType, itemId: string, taskIds: string[] = []) {

@@ -9,6 +9,7 @@ import {
 import {
   assessCandidates,
   type BudgetPort,
+  buildWorkflows,
   type Candidate,
   type Channel,
   createPrintBatch,
@@ -18,16 +19,21 @@ import {
   evGate,
   fakeLetterWriter,
   fakeOutreachWriter,
+  fakeReplyWriter,
+  fakeSiteWriter,
   holdoutSize,
   type LoadedPlaybook,
   LocalBudgetPort,
+  LocalWorkflowEngine,
   outreachRoutes,
   type PlaybookImpl,
   PlaybookRunner,
+  POST_REPLY,
   processInbox,
   QUEUE_ORDER,
   recordBreach,
   recordContactBlocked,
+  registerClaimTools,
   registerLetterTools,
   registerOutreachTools,
   registerStandardTools,
@@ -66,6 +72,7 @@ export const PLAYBOOK_IMPLS = new Map<string, PlaybookImpl>([
   ["human_report", HUMAN_REPORT],
   ["watch_alert", WATCH_ALERT],
   ["monitoring_subscription", MONITORING_SUBSCRIPTION],
+  ["post_reply", POST_REPLY],
 ]);
 
 /** The deterministic fake model used everywhere until cutover. */
@@ -75,6 +82,8 @@ export function fakeModel(): FakeModel {
     opportunity_explain: fakeExplainer,
     sme_outreach_draft: fakeOutreachWriter,
     sme_letter_draft: fakeLetterWriter,
+    post_reply_draft: fakeReplyWriter,
+    claim_site_draft: fakeSiteWriter,
   });
 }
 
@@ -122,6 +131,8 @@ export class AgentService {
   readonly inbox: Inbox;
   readonly ctx: VerificationContext;
   readonly synthetic: boolean;
+  /** Local workflow engine (claim fulfilment); on Cloudflare, Workflows runs them instead. */
+  readonly workflows: LocalWorkflowEngine;
 
   constructor(d: ServiceDeps) {
     this.storage = d.storage;
@@ -143,6 +154,12 @@ export class AgentService {
     });
     registerOutreachTools(this.tools, { storage: d.storage, cfg: this.infra, email: this.email });
     registerLetterTools(this.tools, { storage: d.storage, cfg: this.infra });
+    registerClaimTools(this.tools, {
+      storage: d.storage,
+      cfg: this.infra,
+      products: loadProductsConfig(),
+      email: this.email,
+    });
     registerProductTools(this.tools, {
       storage: d.storage,
       ctx,
@@ -165,6 +182,18 @@ export class AgentService {
       impls: d.impls ?? PLAYBOOK_IMPLS,
       ...(d.now ? { now: d.now } : {}),
     });
+    this.workflows = new LocalWorkflowEngine(
+      d.storage,
+      this.infra,
+      buildWorkflows({
+        storage: d.storage,
+        cfg: this.infra,
+        products: loadProductsConfig(),
+        tools: this.tools,
+        model: this.model,
+        playbooks: d.playbooks,
+      }),
+    );
   }
 
   /** Approved opportunities become tasks (idempotent on the opportunity id). */
@@ -438,6 +467,18 @@ export class AgentService {
     const lastInbox =
       (await this.storage.controls.get<string>("inbox:last_poll")) ?? "1970-01-01T00:00:00Z";
     const inbox = await processInbox(this.storage, this.infra, this.inbox, lastInbox);
+    // Each reply to our outreach (not an opt-out) gets a drafted answer for Archie (post_reply, L0).
+    for (const r of inbox.to_answer)
+      if (this.playbooks.has("post_reply"))
+        await createTask(this.storage, this.infra, this.playbooks, this.queue, {
+          idempotency_key: `reply:${r.message.id}`,
+          playbook: "post_reply",
+          revenue_path: "sme_outreach",
+          source_ref: `reply:${r.message.id}:entity:${r.entity_id}`,
+          lane: "open",
+          state: { reply: r.message, thread_id: r.thread_id },
+          synthetic: r.synthetic,
+        });
     await this.storage.controls.set("inbox:last_poll", now.toISOString(), "runner");
     const followups = await this.processFollowups(now);
     const intake = await this.intakeApproved();

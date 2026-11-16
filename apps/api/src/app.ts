@@ -22,6 +22,7 @@ import {
   setSpendTier,
   spendTier,
   unitEconomics,
+  type WorkflowPort,
   weekStart,
 } from "@ae/infra";
 
@@ -44,6 +45,7 @@ import {
 } from "@ae/verification";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
+import { claimWebhook, mountClaims } from "./claim-route.ts";
 import { mountLetters } from "./letters-route.ts";
 import { mountX402, type X402Deps } from "./x402-route.ts";
 
@@ -66,6 +68,8 @@ export interface AppDeps {
   x402?: X402Deps;
   /** Card payments for the human report and monitoring. Public endpoints; absent = disabled. */
   payments?: { provider: PaymentProvider; webhookSecret: string; publicBaseUrl: string };
+  /** Starting workflows and sending them events (claim fulfilment). Absent = claims disabled. */
+  workflows?: (env: unknown) => WorkflowPort;
 }
 
 const Decision = z.object({ decision: z.enum(["approve", "reject"]) });
@@ -117,7 +121,7 @@ function blindTask(t: StoredTask): StoredTask {
 }
 
 const ReviewSession = z.object({
-  item_type: z.enum(["opportunity", "draft", "print_batch", "conflict", "quarantine"]),
+  item_type: z.enum(["opportunity", "draft", "print_batch", "conflict", "quarantine", "claim"]),
   item_id: z.string().min(1).max(200),
   task_ids: z.array(z.string().max(100)).max(1000).default([]),
   started_at: z.iso.datetime({ offset: true }),
@@ -553,6 +557,11 @@ export function createApp(deps: AppDeps) {
 
   // ---- sme_letter: print queue (dashboard) and demo pages (public, noindex).
   mountLetters(app, deps.storage, deps.decide);
+  mountClaims(app, {
+    storage: deps.storage,
+    ...(deps.payments ? { payments: deps.payments } : {}),
+    ...(deps.workflows ? { workflows: deps.workflows } : {}),
+  });
 
   // ---- Phase 5: card payments (public), controls and autonomy (dashboard, behind Access).
   const CheckoutBody = z.object({
@@ -608,6 +617,15 @@ export function createApp(deps: AppDeps) {
     if (!deps.payments) return c.json({ error: "payments_disabled" }, 404);
     const raw = await c.req.text();
     try {
+      // Subscription events for "claim this site" first; anything else goes to the one-off handler.
+      const claimed = await claimWebhook(
+        deps.storage(c.env),
+        deps.workflows?.(c.env),
+        raw,
+        c.req.header("stripe-signature") ?? null,
+        deps.payments.webhookSecret,
+      );
+      if (claimed) return c.json({ received: true, ...claimed });
       const ev = await verifyStripeWebhook(
         raw,
         c.req.header("stripe-signature") ?? null,

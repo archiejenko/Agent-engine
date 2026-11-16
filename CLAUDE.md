@@ -156,6 +156,7 @@ pnpm rollback <run_id>        # withdraw a run; facts recomputed
 pnpm gate:v2-phase1           # simulator: cohorts, holdout, ledger, EV gate (synthetic sandbox)
 pnpm gate:v2-phase2           # runtime: workflows, kill/resume, effects, triggers, DLQ + Worker build
 pnpm gate:v2-phase3           # hard budgets: parallel reservations, S-tiers, L3 approval, explore share
+pnpm gate:v2-phase4           # claim this site (test mode), fulfilment workflow, replay, cancel, post_reply
 pnpm --filter @ae/agent-runner tick   # one scheduled run locally (same jobs the Worker's cron enqueues)
 ```
 

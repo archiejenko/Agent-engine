@@ -20,11 +20,22 @@ import { externalActionsAllowed } from "./controls.ts";
 export interface WorkflowStep {
   do<T>(name: string, fn: () => Promise<T>): Promise<T>;
   sleep(name: string, ms: number): Promise<void>;
+  /**
+   * Waits for an event sent to this instance (`type`: letters, digits, - and _ only). Returns its
+   * payload, or null if `timeoutMs` passes first. Events sent before the wait are kept until read.
+   */
+  waitForEvent<T>(name: string, type: string, timeoutMs: number): Promise<T | null>;
 }
 
 export interface WorkflowContext {
   instanceId: string;
   dryRun: boolean;
+}
+
+/** Starting workflows and sending them events, whichever engine runs them (Cloudflare or local). */
+export interface WorkflowPort {
+  start(workflow: string, params: unknown, o: { id: string; synthetic?: boolean }): Promise<void>;
+  sendEvent(id: string, type: string, payload: unknown): Promise<void>;
 }
 
 export interface WorkflowDef<P = unknown, R = unknown> {
@@ -132,6 +143,28 @@ export class LocalWorkflowEngine {
           throw new Halt("sleeping", `sleeping until ${wake}`, wake);
         await this.storage.workflows.putStep(id, key, wake);
       },
+      waitForEvent: async <T>(name: string, type: string, timeoutMs: number): Promise<T | null> => {
+        if (!/^[A-Za-z0-9_-]{1,100}$/.test(type)) throw new Error(`invalid event type ${type}`);
+        const key = `wait:${name}`;
+        const done = await this.storage.workflows.step(id, key);
+        if (done) return done.output as T | null;
+        const startKey = `wait-start:${name}`;
+        const started = await this.storage.workflows.step(id, startKey);
+        const deadline = started
+          ? (started.output as string)
+          : new Date(this.now().getTime() + timeoutMs).toISOString();
+        if (!started) await this.storage.workflows.putStep(id, startKey, deadline);
+        const ev = await this.storage.workflowEvents.take(id, type);
+        if (ev) {
+          await this.storage.workflows.putStep(id, key, ev.payload ?? null);
+          return (ev.payload ?? null) as T | null;
+        }
+        if (this.now().toISOString() >= deadline) {
+          await this.storage.workflows.putStep(id, key, null);
+          return null;
+        }
+        throw new Halt("sleeping", `waiting for "${type}" until ${deadline}`, deadline);
+      },
     };
     try {
       const output = await def.run(inst.params as never, step, {
@@ -152,6 +185,13 @@ export class LocalWorkflowEngine {
     return (await this.storage.workflows.get(id)) as WorkflowInstanceRow;
   }
 
+  /** Sends an event to an instance and lets it continue (if it was waiting for that event). */
+  async sendEvent(id: string, type: string, payload: unknown): Promise<WorkflowInstanceRow | null> {
+    if (!(await this.storage.workflows.get(id))) return null;
+    await this.storage.workflowEvents.add(id, type, payload);
+    return this.advance(id);
+  }
+
   /** Resumes sleeping instances that are due, and paused ones whose kill switch is now off. */
   async tick(): Promise<number> {
     let n = 0;
@@ -165,3 +205,13 @@ export class LocalWorkflowEngine {
     return n;
   }
 }
+
+/** The local engine as a WorkflowPort. */
+export const localWorkflowPort = (engine: LocalWorkflowEngine): WorkflowPort => ({
+  start: async (workflow, params, o) => {
+    await engine.start(workflow, params, o);
+  },
+  sendEvent: async (id, type, payload) => {
+    await engine.sendEvent(id, type, payload);
+  },
+});

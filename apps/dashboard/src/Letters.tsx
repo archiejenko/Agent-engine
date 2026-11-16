@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getJson } from "./api.ts";
+import { Claims } from "./Claims.tsx";
 import { recordReview } from "./reviewTimer.ts";
 
 interface Letter {
@@ -185,6 +186,7 @@ export function Letters() {
           )}
         </div>
       ))}
+      <Claims />
     </section>
   );
 }

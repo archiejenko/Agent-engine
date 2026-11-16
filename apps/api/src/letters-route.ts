@@ -161,13 +161,13 @@ export function mountLetters(
     const headers = {
       "X-Robots-Tag": "noindex, nofollow, noarchive",
       "Cache-Control": "no-store",
-      "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; img-src 'none'; script-src '${await demoBeaconHash()}'; connect-src 'self'`,
+      "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; img-src 'none'; script-src '${await demoBeaconHash()}'; connect-src 'self'; form-action 'self'`,
       "Referrer-Policy": "no-referrer",
     };
     if (!page) return c.html(SIMPLE("This page isn't available."), 404, headers);
     if (page.state === "expired") return c.html(SIMPLE("This sample has expired."), 410, headers);
     await recordDemoVisit(s, cfg, slug, c.req.query("s") === "qr" ? "qr" : "link");
-    return c.html(instrumentDemoHtml(page.html), 200, headers);
+    return c.html(instrumentDemoHtml(page.html, slug), 200, headers);
   });
   app.post("/demo/:slug/t", async (c) => {
     const ms = Number((await c.req.text()).slice(0, 20));

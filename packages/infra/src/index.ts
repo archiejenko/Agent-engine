@@ -3,6 +3,7 @@
 export * from "./autonomy.ts";
 export * from "./budget.ts";
 export * from "./change-feed.ts";
+export * from "./claim.ts";
 export * from "./cohort.ts";
 export * from "./contact.ts";
 export * from "./controls.ts";
@@ -14,6 +15,7 @@ export * from "./letters/render.ts";
 export * from "./lift.ts";
 export * from "./outreach.ts";
 export * from "./playbook.ts";
+export * from "./playbooks/post_reply.ts";
 export * from "./playbooks/sme_letter.ts";
 export * from "./playbooks/sme_outreach.ts";
 export * from "./runner.ts";

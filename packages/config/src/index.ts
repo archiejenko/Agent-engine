@@ -321,6 +321,17 @@ export const ProductsConfig = z.object({
     per_alert_gbp: z.number().positive(),
   }),
   human_check: z.object({ price_gbp: z.number().positive() }),
+  /** v2 Phase 4: "claim this site" (setup fee + monthly subscription). Prices are Archie's to set. */
+  claim_site: z.object({
+    setup_fee_gbp: z.number().positive(),
+    monthly_gbp: z.number().positive(),
+    details_wait_days: z.number().int().min(1).max(365),
+    publish_wait_days: z.number().int().min(1).max(365),
+    human_minutes_target: z.number().positive(),
+    base_url: z.string().url(),
+    terms_version: z.string().min(1),
+    terms: z.array(z.string().min(1)).min(3),
+  }),
   blind_verifier: z.object({
     base_rate: z.number().gt(0).max(1),
     min_rate: z.number().gt(0).max(1),

@@ -377,3 +377,18 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   created only by the dashboard (Access identity recorded); lowering is free.
 - **L3 autonomy needs an owner approval** (rule 14).
 - **Explore share** = 10% of the weekly budget (global daily cap × 7) for experiment / explore tasks.
+
+## 2026-11-16 — v2 Phase 4 build decisions
+
+- **Claim = setup fee + monthly subscription**, B2B only (the company on the sample page); prices and
+  terms are placeholders in `products.json` pending Archie and legal review.
+- **Fulfilment is a workflow** with two human waits (customer details, Archie's publish approval) using
+  `waitForEvent`; the anchor task (`claim_site`) is owned by the workflow, not the queue.
+- **Cancellation/refund stops fulfilment at the next step** (checked before every step; waiting steps are
+  woken with a cancelled event); the site comes down.
+- **Attribution**: claim payments and renewals are attributed to the outreach task behind the sample page.
+- **Stripe subscription call deferred**: docs unreachable; the real call refuses to run; event mapping
+  is isolated in `toSubscriptionEvent` and marked unverified.
+- **Tools that refuse before acting throw ToolBlockedError** → effect recorded as "didn't happen".
+- **post_reply at L0**: triage in code; the reply is untrusted input to the writer; complaints get no
+  sales follow-up.

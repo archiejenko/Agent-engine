@@ -27,8 +27,11 @@ export function demoBeaconHash(): Promise<string> {
 }
 
 /** Adds the privacy line and the beacon to a stored demo page at serve time. */
-export function instrumentDemoHtml(html: string): string {
-  const privacy = `<p class="legal">${DEMO_PRIVACY_LINE}</p>`;
+export function instrumentDemoHtml(html: string, slug?: string): string {
+  const claim = slug
+    ? `<p><a class="cta" href="/claim/${encodeURIComponent(slug)}">Like it? Claim this site</a></p>`
+    : "";
+  const privacy = `${claim}<p class="legal">${DEMO_PRIVACY_LINE}</p>`;
   const withPrivacy = html.includes("</footer>")
     ? html.replace("</div></footer>", `${privacy}</div></footer>`)
     : html;

@@ -17,20 +17,23 @@ import {
   loadCompaniesHouseConfig,
   loadInfraConfig,
   loadModelsConfig,
+  loadProductsConfig,
   loadTriggersConfig,
 } from "@ae/config";
 import {
   BudgetBook,
   type BudgetPort,
+  buildWorkflows,
   type ChangeFeedSource,
   chunkEvents,
+  externalActionsAllowed,
   type FeedState,
   loadBundledPlaybooks,
   type ReserveResult,
   runFeedOnce,
   type ScopeLimit,
-  WORKFLOWS,
   type WorkflowDef,
+  type WorkflowPort,
   workflowMayProceed,
 } from "@ae/infra";
 import { AnthropicModelClient } from "@ae/ports/anthropic";
@@ -169,9 +172,15 @@ interface EngineParams {
 export class EngineWorkflow extends WorkflowEntrypoint<Env, EngineParams> {
   override async run(event: WorkflowEvent<EngineParams>, step: WorkflowStep) {
     const { workflow, params, instance_id } = event.payload;
-    const def = WORKFLOWS.find((w) => w.name === workflow) as
-      | WorkflowDef<unknown, unknown>
-      | undefined;
+    const rt = await runtimeFor(this.env);
+    const def = buildWorkflows({
+      storage: rt.service.storage,
+      cfg: rt.service.infra,
+      products: loadProductsConfig(),
+      tools: rt.service.tools,
+      model: rt.service.model,
+      playbooks: rt.service.playbooks,
+    }).find((w) => w.name === workflow) as WorkflowDef<unknown, unknown> | undefined;
     if (!def) throw new Error(`unknown workflow ${workflow}`);
     const storage: Storage = createD1Storage(this.env.DB);
     const cfg = loadInfraConfig();
@@ -204,6 +213,17 @@ export class EngineWorkflow extends WorkflowEntrypoint<Env, EngineParams> {
           })) as T;
         },
         sleep: (name, ms) => step.sleep(name, ms),
+        waitForEvent: async <T>(name: string, type: string, timeoutMs: number) => {
+          try {
+            const ev = await step.waitForEvent<Rpc.Serializable<unknown>>(name, {
+              type,
+              timeout: timeoutMs,
+            });
+            return (ev as unknown as { payload?: T }).payload ?? null;
+          } catch {
+            return null; // timed out
+          }
+        },
       },
       { instanceId: instance_id, dryRun: inst.dry_run },
     );
@@ -243,6 +263,33 @@ export function budgetPort(env: Env): BudgetPort {
     settle: async (id, actual) => (await stub().settle(id, actual)) as { overrun: number },
     release: async (id) => {
       await stub().release(id);
+    },
+  };
+}
+
+/** Workflows on Cloudflare: a row for the dashboard, then the Workflow instance (idempotent on id). */
+export function cloudflareWorkflowPort(env: Env): WorkflowPort {
+  const storage = createD1Storage(env.DB);
+  return {
+    start: async (workflow, params, o) => {
+      if (await storage.workflows.get(o.id)) return; // already started (webhook replay)
+      await storage.workflows.create({
+        id: o.id,
+        workflow,
+        playbook: "claim_site",
+        params,
+        dry_run: !(await externalActionsAllowed(storage, loadInfraConfig(), "claim_site")),
+        synthetic: o.synthetic,
+      });
+      await env.ENGINE.create({ id: o.id, params: { workflow, params, instance_id: o.id } });
+    },
+    sendEvent: async (id, type, payload) => {
+      await storage.workflowEvents.add(id, type, payload);
+      try {
+        await (await env.ENGINE.get(id)).sendEvent({ type, payload });
+      } catch (e) {
+        console.error("sendEvent failed", id, type, (e as Error).message);
+      }
     },
   };
 }

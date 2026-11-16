@@ -343,7 +343,10 @@ export class PlaybookRunner {
     const cutoff = new Date(
       this.now().getTime() - this.d.infra.task_timeout_minutes * 60_000,
     ).toISOString();
-    const stuck = await this.d.storage.tasks.stuck(cutoff);
+    // Tasks owned by a workflow (claim fulfilment) wait for days by design: not stuck.
+    const stuck = (await this.d.storage.tasks.stuck(cutoff)).filter(
+      (t) => !(t.state as { workflow_instance?: string }).workflow_instance,
+    );
     for (const t of stuck)
       await this.d.storage.tasks.update(t.task_id, {
         status: "failed",

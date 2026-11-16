@@ -1,4 +1,5 @@
 import { Claim, VerifiedFact, VerifiedFactVersion } from "@ae/contracts";
+import { claimsStorage } from "./claims.ts";
 import type { SqlDriver, SqlStatement, SqlValue } from "./driver.ts";
 import { lettersStorage } from "./letters.ts";
 import { phase2 } from "./phase2.ts";
@@ -146,6 +147,7 @@ export class SqlStorage implements Storage {
       lettersStorage(db),
       v2Storage(db),
       runtimeStorage(db),
+      claimsStorage(db),
     );
   }
   declare signals: Storage["signals"];
@@ -187,6 +189,8 @@ export class SqlStorage implements Storage {
   declare runtimeStatus: Storage["runtimeStatus"];
   declare ownerApprovals: Storage["ownerApprovals"];
   declare budgetEvents: Storage["budgetEvents"];
+  declare siteClaims: Storage["siteClaims"];
+  declare workflowEvents: Storage["workflowEvents"];
 
   private async batchChunked(statements: SqlStatement[]) {
     for (const part of chunk(statements, BATCH)) await this.db.batch(part);

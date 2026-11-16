@@ -1,4 +1,6 @@
 // Runtime-neutral entry: safe to import from a Cloudflare Worker (no Node-only modules).
+
+export type * from "./claims.ts";
 export { type D1Like, d1Driver } from "./d1.ts";
 export type { SqlDriver, SqlStatement, SqlValue } from "./driver.ts";
 export type * from "./letters.ts";

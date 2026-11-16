@@ -30,5 +30,23 @@
   },
   "human_check": {
     "price_gbp": 9
+  },
+  "claim_site": {
+    "_note": "PLACEHOLDERS for Archie to set: setup fee, monthly price, how long to wait for the details form, the minutes-of-Archie target per site. Terms text is a DRAFT pending legal review (see the Milestone A report).",
+    "setup_fee_gbp": 149,
+    "monthly_gbp": 15,
+    "details_wait_days": 14,
+    "publish_wait_days": 30,
+    "human_minutes_target": 30,
+    "base_url": "https://sites.ejtech.example",
+    "terms_version": "draft-2026-11-16",
+    "terms": [
+      "This is a business-to-business service for the company named on the sample page.",
+      "You pay a one-off setup fee now and a monthly fee from today, billed monthly by card through Stripe.",
+      "We build your site from the details you send us. Nothing goes live until you have seen it and we have checked it.",
+      "Cancel any time from the link in your receipt or by replying to any email from us; the site comes down at the end of the month you've paid for.",
+      "If we haven't started work, you can cancel within 14 days for a full refund of the setup fee.",
+      "Your own domain name, if you want one, is a separate proposal we send you after launch."
+    ]
   }
 }
