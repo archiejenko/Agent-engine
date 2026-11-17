@@ -63,7 +63,7 @@ v3 dashboard (Milestone C)
 - [ ] D1 migrations 0014–0018 applied (decisions, mailbox, Vault versions, key registry, ideas backlog); `/api/health` shows 18
 - [ ] Open the root URL: it goes straight to the dashboard (Home). There is no public landing page
 - [ ] Needs you shows decisions; the daily digest appears on Home after the first 06:00 UTC run
-- [ ] Vault lists `brain/` (bundled at deploy by `pnpm gen:brain`, which `pnpm cf:deploy` runs). Add
+- [ ] Vault lists `brain/` (bundled at deploy by `pnpm gen:brain`, which `pnpm cf:deploy` runs). Then
   check Vault → Ideas sheet shows the 500 ideas labelled "estimate", then press "Import into the backlog"
 
 ### Stage 1b — Keys (v3, decision D4; runbook `docs/runbooks/keys.md`)
