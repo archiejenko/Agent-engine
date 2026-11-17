@@ -393,3 +393,16 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **Tools that refuse before acting throw ToolBlockedError** → effect recorded as "didn't happen".
 - **post_reply at L0**: triage in code; the reply is untrusted input to the writer; complaints get no
   sales follow-up.
+
+## 2026-11-17 — v3 plan approved (Archie)
+
+- **Milestone C** (Phases 1–5) approved; build without stopping, stop at `brain/build-reports/v3-milestone-c.md`. Milestone D waits.
+- **D1 Mail**: replies via Cloudflare Email Routing to a dedicated address on the sending domain (never Archie's inbox). Sending provider chosen later; when shortlisting, check its terms allow B2B cold outreach.
+- **D2** `OWNER_HOURLY_GBP` = £40 placeholder, labelled an assumption.
+- **D3** Pass on an idea: queued; a test auto-starts only if budget ≤ `AUTO_START_TEST_GBP`, inside the weekly explore share, within the playbook's spend tier, and the card has kill criteria and a sample size. Otherwise a budget decision.
+- **D4** Keys in Cloudflare Secrets Store, written through a narrow edit-only token; values never in D1, `brain/`, logs or any agent.
+- **D5** Build-request cards now. If Claude Code ever runs from GitHub: only from Archie's label or comment (never a schedule), narrow permissions, CODEOWNERS + branch protection on safety-layer files, code changes never auto-merge. CODEOWNERS and branch protection go on the manual settings list.
+- **D6** Mailbox tools (list, read, draft; no send) through the tool registry; an MCP endpoint wraps them, marked unverified.
+- **Page mapping** approved: verification golden set → CRM "Verify" tab. The *playbook* golden set (Milestone D, captured from Archie's decisions) belongs with the Needs-you queue.
+- **Ideas sheet** `brain/ideas/seed-500.csv` (Archie adds it): shown in the Vault (Phase 4); the starting hypothesis backlog and Board tiles in Phase 6. Every score in it is an estimate, labelled assumed, never an outcome, never used to train scoring.
+- **`/thanks`** (frozen human-report checkout) stays flagged and unchanged.

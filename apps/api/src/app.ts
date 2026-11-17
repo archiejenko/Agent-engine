@@ -6,8 +6,10 @@ import {
 } from "@ae/config";
 import type { Autonomy, Claim } from "@ae/contracts";
 import {
+  blindTask,
   type ContactStatus,
   contactStatus,
+  entityOfRef,
   feedIsStale,
   K,
   lastOutreachTask,
@@ -35,7 +37,7 @@ import {
   WebhookSignatureError,
 } from "@ae/ports";
 import { handleCheckoutCompleted } from "@ae/products";
-import type { Storage, StoredTask } from "@ae/storage";
+import type { Storage } from "@ae/storage";
 import {
   accuracyReport,
   defaultContext,
@@ -47,6 +49,7 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { claimWebhook, mountClaims } from "./claim-route.ts";
 import { mountLetters } from "./letters-route.ts";
+import { mountV3 } from "./v3-routes.ts";
 import { mountX402, type X402Deps } from "./x402-route.ts";
 
 export const SERVICE_NAME = "agent-engine-api";
@@ -110,15 +113,6 @@ const FactsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });
-
-const entityOfRef = (ref: string) => ref.split(":").pop() ?? ref;
-
-/** While a draft waits for review, hide which arm (ranked or random holdout) it came from. */
-function blindTask(t: StoredTask): StoredTask {
-  const { cohort: _cohort, ...state } = t.state as Record<string, unknown>;
-  const ref = `entity:${entityOfRef(t.source_ref)}`;
-  return { ...t, source_ref: ref, idempotency_key: ref, state };
-}
 
 const ReviewSession = z.object({
   item_type: z.enum(["opportunity", "draft", "print_batch", "conflict", "quarantine", "claim"]),
@@ -557,6 +551,7 @@ export function createApp(deps: AppDeps) {
 
   // ---- sme_letter: print queue (dashboard) and demo pages (public, noindex).
   mountLetters(app, deps.storage, deps.decide);
+  mountV3(app, deps.storage);
   mountClaims(app, {
     storage: deps.storage,
     ...(deps.payments ? { payments: deps.payments } : {}),

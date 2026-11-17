@@ -170,7 +170,7 @@ export function Review() {
           {data.opportunities.length === 0 && <p className="empty">No leads waiting.</p>}
           {slice(data.opportunities).map((q) => (
             <div key={q.entity_id} className="card">
-              <b>{q.name}</b> <a href={`#/company/${q.entity_id}`}>{q.entity_id}</a> · score{" "}
+              <b>{q.name}</b> <a href={`#/crm/${q.entity_id}`}>{q.entity_id}</a> · score{" "}
               {q.best_score.toFixed(2)} · EV £{q.best_expected_value_gbp.toFixed(0)}{" "}
               {q.explore && <em>(exploration pick)</em>}
               {q.opportunities.map((o) => (
@@ -266,7 +266,7 @@ export function Review() {
           )}
           {slice(data.conflicts).map((f) => (
             <p key={`${f.entity_id}.${f.field}`} className="card">
-              <a href={`#/company/${f.entity_id}`}>{f.entity_id}</a> · {label(f.field)}:{" "}
+              <a href={`#/crm/${f.entity_id}`}>{f.entity_id}</a> · {label(f.field)}:{" "}
               <FactValue field={f.field} value={f.value} max={2} /> (since {day(f.valid_from)}).
               Open the company to compare the claims.
             </p>

@@ -291,3 +291,53 @@ details > summary {
   font-size: 0.78rem;
   color: #5b6470;
 }
+
+/* v3: filters row, kind badges on figures, tab links. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  margin: 0.5rem 0 1rem;
+}
+.filters input[type="search"] {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+.kind {
+  align-self: flex-start;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 4px;
+  background: #e8f0e8;
+  color: #285c2c;
+}
+.kind-estimated,
+.kind-assumed {
+  background: #fff3d6;
+  color: #6b4b00;
+}
+.kind-dry_run,
+.kind-synthetic {
+  background: #f1e4f7;
+  color: #5b2b72;
+}
+div.tabs a {
+  border: 1px solid #ccd3db;
+  border-radius: 6px;
+  padding: 4px 10px;
+  text-decoration: none;
+}
+div.tabs a.active {
+  background: #1f5fbf;
+  border-color: #1f5fbf;
+  color: #fff;
+}
+details > summary {
+  cursor: pointer;
+  margin: 1.2rem 0 0.4rem;
+  font-weight: 600;
+}

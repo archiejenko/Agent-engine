@@ -12,6 +12,11 @@
     "explore_share": 0.1,
     "step_reservation_gbp": 0.25
   },
+  "owner": {
+    "_note": "v3 decision D2: the value of Archie's time, used wherever cost includes Archie's review minutes. PLACEHOLDER (assumption) until Archie sets it.",
+    "hourly_gbp": 40,
+    "hourly_is_assumption": true
+  },
   "kill_switch_default_on": true,
   "task_timeout_minutes": 30,
   "max_attempts": 3,

@@ -46,7 +46,7 @@ function TodayPanel({ t }: { t: Today }) {
       {
         label: "Drafts waiting",
         value: String(t.drafts_waiting),
-        href: "#/review",
+        href: "#/inbox",
         attention: t.drafts_waiting > 0,
       },
       {
@@ -55,13 +55,13 @@ function TodayPanel({ t }: { t: Today }) {
         note: t.letters_waiting_for_next_batch
           ? `+${t.letters_waiting_for_next_batch} for the next batch`
           : undefined,
-        href: "#/letters",
+        href: "#/inbox/letters",
         attention: t.letters_awaiting_batch_approval > 0,
       },
       {
         label: "Open conflicts",
         value: String(t.open_conflicts),
-        href: "#/review",
+        href: "#/inbox",
         attention: t.open_conflicts > 0,
       },
       {
@@ -73,19 +73,19 @@ function TodayPanel({ t }: { t: Today }) {
       {
         label: "Revenue (7 days)",
         value: gbp(t.last_7_days.revenue_gbp),
-        href: "#/metrics",
+        href: "#/",
         attention: false,
       },
       {
         label: "Cost (7 days)",
         value: gbp(t.last_7_days.cost_gbp),
-        href: "#/metrics",
+        href: "#/",
         attention: false,
       },
       {
         label: "Margin (7 days)",
         value: gbp(t.last_7_days.margin_gbp),
-        href: "#/metrics",
+        href: "#/",
         attention: t.last_7_days.margin_gbp < 0,
       },
     ];

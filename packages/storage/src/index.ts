@@ -13,6 +13,7 @@ export type * from "./runtime.ts";
 export { SqlStorage } from "./sql-storage.ts";
 export type * from "./storage.ts";
 export type * from "./v2.ts";
+export type * from "./v3.ts";
 
 import { type D1Like, d1Driver } from "./d1.ts";
 import { SqlStorage } from "./sql-storage.ts";

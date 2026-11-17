@@ -29,7 +29,7 @@ export interface LedgerRow {
   dry_run: boolean;
 }
 
-const toLedger = (r: Row): LedgerRow => ({
+export const toLedger = (r: Row): LedgerRow => ({
   id: Number(r.id),
   event: r.event as string,
   entity_id: r.entity_id as string,

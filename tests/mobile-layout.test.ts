@@ -20,7 +20,19 @@ import { runPhase5Gate } from "../apps/api/src/gates/phase5.ts";
  */
 const ROOT = join(import.meta.dirname, "..");
 const DIST = join(ROOT, "apps/dashboard/dist");
-const PAGES = ["/", "/review", "/letters", "/facts", "/metrics", "/golden", "/controls"];
+// Every page and tab in the v3 navigation (the nav list is checked against App.tsx below).
+const PAGES = [
+  "/",
+  "/ideas",
+  "/board",
+  "/vault",
+  "/crm",
+  "/crm/facts",
+  "/crm/verify",
+  "/inbox",
+  "/inbox/letters",
+  "/controls",
+];
 const TYPES: Record<string, string> = {
   ".html": "text/html",
   ".js": "text/javascript",
@@ -99,6 +111,13 @@ async function sidewaysScroll(base: string, hash: string, width: number) {
 }
 
 describe("no sideways scroll on any page", () => {
+  it("covers every page in the navigation", () => {
+    const app = readFileSync(join(ROOT, "apps/dashboard/src/App.tsx"), "utf8");
+    const nav = [...app.matchAll(/\["(\/[a-z]*)", "[A-Za-z ]+"\]/g)].map((m) => m[1]);
+    expect(nav.length).toBe(7);
+    for (const p of nav) expect(PAGES).toContain(p);
+  });
+
   it("the measurement catches overflow (negative control)", async () => {
     const page = await browser.newPage({ viewport: { width: 390, height: 800 } });
     await page.goto(`${seededUrl}/#/`);
@@ -118,7 +137,7 @@ describe("no sideways scroll on any page", () => {
 
   for (const width of [390, 1440]) {
     it(`seeded data at ${width}px`, async () => {
-      const pages = [...PAGES, `/company/${companyId}`, "/company/99999999"];
+      const pages = [...PAGES, `/crm/${companyId}`, "/crm/99999999"];
       const over: string[] = [];
       for (const p of pages) {
         const x = await sidewaysScroll(seededUrl, p, width);

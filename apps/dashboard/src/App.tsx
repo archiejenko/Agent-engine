@@ -1,15 +1,12 @@
 import { useEffect, useState } from "react";
-import { Company } from "./Company.tsx";
 import { Controls } from "./Controls.tsx";
-import { Facts } from "./Facts.tsx";
+import { Crm } from "./Crm.tsx";
 import { useTableLabels } from "./format.tsx";
-import { Golden } from "./Golden.tsx";
-import { Letters } from "./Letters.tsx";
-import { Metrics } from "./Metrics.tsx";
-import { Overview } from "./Overview.tsx";
-import { Review } from "./Review.tsx";
+import { Home } from "./Home.tsx";
+import { Inbox } from "./Inbox.tsx";
+import { Placeholder } from "./Placeholder.tsx";
 
-/** Tiny hash router: #/, #/facts, #/company/01234567. Functional, not pretty (Phase 1). */
+/** Tiny hash router. v3: seven pages; old links redirect to where their content moved. */
 function useRoute() {
   const [hash, setHash] = useState(window.location.hash || "#/");
   useEffect(() => {
@@ -20,20 +17,39 @@ function useRoute() {
   return hash.slice(1);
 }
 
-const NAV: [string, string][] = [
-  ["/", "Overview"],
-  ["/review", "Review"],
-  ["/letters", "Letters"],
-  ["/facts", "Facts"],
-  ["/metrics", "Metrics"],
-  ["/golden", "Golden set"],
+export const NAV: [string, string][] = [
+  ["/", "Home"],
+  ["/ideas", "Ideas"],
+  ["/board", "Board"],
+  ["/vault", "Vault"],
+  ["/crm", "CRM"],
+  ["/inbox", "Inbox"],
   ["/controls", "Controls"],
 ];
 
-export function App() {
-  const route = useRoute();
-  useTableLabels();
+/** Old (v2) routes → new homes. */
+export function redirectOf(route: string): string | null {
   const company = route.match(/^\/company\/([A-Za-z0-9]{8})/)?.[1];
+  if (company) return `/crm/${company}`;
+  const map: Record<string, string> = {
+    "/overview": "/",
+    "/metrics": "/",
+    "/facts": "/crm/facts",
+    "/golden": "/crm/verify",
+    "/review": "/inbox",
+    "/letters": "/inbox/letters",
+  };
+  return map[route] ?? null;
+}
+
+export function App() {
+  const raw = useRoute();
+  useTableLabels();
+  const to = redirectOf(raw);
+  useEffect(() => {
+    if (to) window.location.replace(`#${to}`);
+  }, [to]);
+  const route = to ?? raw;
   const active = (path: string) =>
     path === "/" ? route === "/" || route === "" : route.startsWith(path);
   return (
@@ -46,22 +62,26 @@ export function App() {
           </a>
         ))}
       </nav>
-      {company ? (
-        <Company id={company} />
-      ) : route.startsWith("/review") ? (
-        <Review />
-      ) : route.startsWith("/letters") ? (
-        <Letters />
-      ) : route.startsWith("/metrics") ? (
-        <Metrics />
-      ) : route.startsWith("/golden") ? (
-        <Golden />
+      {route.startsWith("/crm") ? (
+        <Crm route={route} />
+      ) : route.startsWith("/inbox") ? (
+        <Inbox route={route} />
       ) : route.startsWith("/controls") ? (
         <Controls />
-      ) : route.startsWith("/facts") ? (
-        <Facts />
+      ) : route.startsWith("/ideas") ? (
+        <Placeholder
+          title="Ideas"
+          text="Idea cards from the research agents arrive in Milestone D (Phase 6)."
+        />
+      ) : route.startsWith("/board") ? (
+        <Placeholder
+          title="Board"
+          text="Markets and industries as tiles arrive in Milestone D (Phase 6)."
+        />
+      ) : route.startsWith("/vault") ? (
+        <Placeholder title="Vault" text="The brain/ browser arrives in Phase 4." />
       ) : (
-        <Overview />
+        <Home />
       )}
     </main>
   );

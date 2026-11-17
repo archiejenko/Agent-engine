@@ -54,6 +54,16 @@ Three layers, in dependency order:
   5 Agent House lead gen, 6 M&A target briefs. Build nothing new on them; the built monitoring and
   human check stay as they are. Path 2 (x402) isn't frozen but isn't in v2 scope.
 
+### v3 (approved 2026-11-17, plan: `brain/build-reports/v3-plan.md`)
+
+- **Goal: Archie acts only as a judge.** One internal dashboard (behind Access, single user): Home,
+  Ideas, Board, Vault, CRM, Inbox, Controls. **No landing page, marketing site or public homepage**; no
+  cookie banners, consent flows or new legal/privacy features. Public routes stay exactly as they are.
+- **Milestone C (v3 Phases 1–5)** — dashboard over existing data: shell + Home + CRM, the Needs-you
+  queue + digest, Inbox + mailbox port, Vault, Keys. Stop at `brain/build-reports/v3-milestone-c.md`.
+- **Milestone D (v3 Phases 6–10)** — agents and autonomy. Waits for Archie after Milestone C. Replaces
+  the v2 Milestone B plan.
+
 ## 2. Stack (approved)
 
 - TypeScript 5.9 everywhere, Node 22, pnpm workspaces. Biome for lint + format. Vitest 4.1.
@@ -125,6 +135,22 @@ Every contract is a Zod schema with tests. Change the schema → change the test
 16. **Compliance gates apply to every send**, including holdout and experiment sends: PECR recipient rules, suppression list, 90-day cooldown, trading disclosures.
 17. **No repeated external actions.** An external tool call is recorded before it runs; a retried or resumed step never repeats it unless the tool confirms the first attempt didn't happen.
 
+### v3 rules (added 2026-11-17, each enforced in code with a test)
+
+18. **One decisions queue.** Everything that needs Archie is a `decision` (type, money at stake,
+    options, recommended option, safe default, deadline). No page holds its own approval list; every
+    decision resolves through the one recorded-approval path (`owner_approvals`).
+19. **Safe defaults spend nothing and send nothing**, and a defaulted decision is recorded as
+    "defaulted", never as Archie's approval.
+20. **Keys are write-only.** Values live in Cloudflare Secrets Store (fake locally), are injected inside
+    the tool registry, and never reach a model request, log line, D1, `brain/` or an agent. A failing key
+    pauses only the playbooks that use it.
+21. **Agents write the Vault as new versions.** Nothing Archie wrote is overwritten; every agent note
+    carries provenance (who, when, which sources/ledger rows; licensed/untrusted labels).
+22. **The holdout stays hidden** in every company, task and message view (CRM and Inbox included).
+23. **Assumed numbers stay assumed.** Seeded idea scores (`brain/ideas/seed-500.csv`) and config
+    placeholders are labelled assumed and never used as outcomes or to train scoring.
+
 ## 5. Approved Phase 1 decisions (2026-11-07)
 
 - Universe: active, non-dormant companies, registered office in the 10 Greater Manchester boroughs (ONS LAD codes E08000001–E08000010), 5–100 staff. Excluded SIC codes (config): 64209, 68209, 74990, 99999. Estate/letting agents (68310, 68320) are kept.
@@ -158,6 +184,9 @@ pnpm gate:v2-phase2           # runtime: workflows, kill/resume, effects, trigge
 pnpm gate:v2-phase3           # hard budgets: parallel reservations, S-tiers, L3 approval, explore share
 pnpm gate:v2-phase4           # claim this site (test mode), fulfilment workflow, replay, cancel, post_reply
 pnpm --filter @ae/agent-runner tick   # one scheduled run locally (same jobs the Worker's cron enqueues)
+
+# v3 (Milestone C)
+pnpm gate:v3 --phase N         # v3 gate N (1–5) → docs/gates/v3-phaseN.md
 ```
 
 ## 7. Repo map

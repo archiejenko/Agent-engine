@@ -161,7 +161,7 @@ export function Letters() {
                     </td>
                   )}
                   <td>
-                    <a href={`#/company/${l.entity_id}`}>{l.company_name}</a>
+                    <a href={`#/crm/${l.entity_id}`}>{l.company_name}</a>
                   </td>
                   <td>{l.address.join(", ")}</td>
                   <td>{l.flags.map((f) => f.detail).join("; ") || "—"}</td>

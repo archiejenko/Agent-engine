@@ -19,6 +19,7 @@ import type {
   UsableClaim,
 } from "./storage.ts";
 import { v2Storage } from "./v2.ts";
+import { v3Storage } from "./v3.ts";
 
 type Row = Record<string, unknown>;
 
@@ -148,6 +149,7 @@ export class SqlStorage implements Storage {
       v2Storage(db),
       runtimeStorage(db),
       claimsStorage(db),
+      v3Storage(db),
     );
   }
   declare signals: Storage["signals"];
@@ -191,6 +193,9 @@ export class SqlStorage implements Storage {
   declare budgetEvents: Storage["budgetEvents"];
   declare siteClaims: Storage["siteClaims"];
   declare workflowEvents: Storage["workflowEvents"];
+  declare crm: Storage["crm"];
+  declare ledgerRange: Storage["ledgerRange"];
+  declare ledgerForEntity: Storage["ledgerForEntity"];
 
   private async batchChunked(statements: SqlStatement[]) {
     for (const part of chunk(statements, BATCH)) await this.db.batch(part);

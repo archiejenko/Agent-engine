@@ -103,7 +103,7 @@ export function Facts() {
               {data.rows.map((f) => (
                 <tr key={`${f.entity_id}.${f.field}`} style={{ borderBottom: "1px solid #eee" }}>
                   <td>
-                    <a href={`#/company/${f.entity_id}`}>{f.entity_id}</a>
+                    <a href={`#/crm/${f.entity_id}`}>{f.entity_id}</a>
                   </td>
                   <td>{label(f.field)}</td>
                   <td>

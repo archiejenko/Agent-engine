@@ -33,7 +33,7 @@ export function Company({ id }: { id: string }) {
           Manchester universe, not ingested yet, or the number may be mistyped.
         </p>
         <p>
-          <a href="#/facts">Search the facts</a> or check the number on Companies House.
+          <a href="#/crm/facts">Search the facts</a> or check the number on Companies House.
         </p>
       </>
     );

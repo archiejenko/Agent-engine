@@ -180,6 +180,8 @@ export const InfraConfig = z.object({
     /** Held back before each model step, then settled at the real cost (labelled assumption). */
     step_reservation_gbp: z.number().positive(),
   }),
+  /** v3 D2: value of Archie's time (OWNER_HOURLY_GBP). Labelled an assumption until Archie sets it. */
+  owner: z.object({ hourly_gbp: z.number().positive(), hourly_is_assumption: z.boolean() }),
   kill_switch_default_on: z.boolean(),
   task_timeout_minutes: z.number().int().positive(),
   max_attempts: z.number().int().positive(),
