@@ -60,11 +60,11 @@ v2 runtime (all in `apps/api/wrangler.jsonc`; `wrangler deploy` creates the queu
 - [ ] Controls → Budgets shows today's spend against the caps; leave every playbook on S0 at first
 
 v3 dashboard (Milestone C)
-- [ ] D1 migrations 0014–0017 applied (decisions, mailbox, Vault versions, key registry); `/api/health` shows 17
+- [ ] D1 migrations 0014–0018 applied (decisions, mailbox, Vault versions, key registry, ideas backlog); `/api/health` shows 18
 - [ ] Open the root URL: it goes straight to the dashboard (Home). There is no public landing page
 - [ ] Needs you shows decisions; the daily digest appears on Home after the first 06:00 UTC run
 - [ ] Vault lists `brain/` (bundled at deploy by `pnpm gen:brain`, which `pnpm cf:deploy` runs). Add
-  `brain/ideas/seed-500.csv` and check Vault → Ideas shows every score labelled "assumed"
+  check Vault → Ideas sheet shows the 500 ideas labelled "estimate", then press "Import into the backlog"
 
 ### Stage 1b — Keys (v3, decision D4; runbook `docs/runbooks/keys.md`)
 - [ ] Secrets Store created; store ID copied. **Check that Secrets Store is out of beta, or that its beta
