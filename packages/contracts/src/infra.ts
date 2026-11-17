@@ -105,6 +105,8 @@ export const ToolRegistration = z
     allowed_roles: z.array(Role).min(1),
     rate_limit_per_min: z.number().int().positive(),
     cost_gbp_per_call: Gbp,
+    /** v3 rule 20: API keys this tool needs, by catalogue name. Injected by the registry on live calls only. */
+    keys: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{2,63}$/)).optional(),
   })
   .superRefine((t, ctx) => {
     if ((t.external || t.serves_customer) && t.allowed_lanes.includes("licensed")) {

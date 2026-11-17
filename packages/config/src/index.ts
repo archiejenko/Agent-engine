@@ -10,6 +10,7 @@ import confidenceJson from "./confidence.json" with { type: "json" };
 import decisionsJson from "./decisions.json" with { type: "json" };
 import registryJson from "./field-registry.json" with { type: "json" };
 import infraJson from "./infra.json" with { type: "json" };
+import keysJson from "./keys.json" with { type: "json" };
 import modelsJson from "./models.json" with { type: "json" };
 import productsJson from "./products.json" with { type: "json" };
 import sicSectorsJson from "./sic-sectors.json" with { type: "json" };
@@ -359,6 +360,7 @@ export const rawConfig = {
   verification: verificationJson,
   triggers: triggersJson,
   decisions: decisionsJson,
+  keys: keysJson,
 };
 
 /** The company number used until Archie sets the real one (real sends refuse to run with it). */
@@ -443,6 +445,25 @@ export const DecisionsConfig = z.object({
   digest_hour_utc: z.number().int().min(0).max(23),
 });
 export type DecisionsConfig = z.infer<typeof DecisionsConfig>;
+/** v3 Phase 5: the key catalogue (names and dependants only; values never live in config). */
+export const KeyEntry = z.object({
+  name: z.string().regex(/^[A-Z][A-Z0-9_]{2,63}$/),
+  label: z.string().min(1),
+  host: z.string().min(1),
+  purpose: z.string().min(1),
+  model: z.boolean(),
+  playbooks: z.array(z.string()),
+  tools: z.array(z.string()),
+});
+export type KeyEntry = z.infer<typeof KeyEntry>;
+export const KeysConfig = z
+  .object({ keys: z.array(KeyEntry).min(1) })
+  .refine((c) => new Set(c.keys.map((k) => k.name)).size === c.keys.length, "duplicate key name");
+export type KeysConfig = z.infer<typeof KeysConfig>;
+export function loadKeysConfig(raw: unknown = keysJson): KeysConfig {
+  return KeysConfig.parse(raw);
+}
+
 export function loadDecisionsConfig(raw: unknown = decisionsJson): DecisionsConfig {
   return DecisionsConfig.parse(raw);
 }

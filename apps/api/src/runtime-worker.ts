@@ -28,6 +28,8 @@ import {
   chunkEvents,
   externalActionsAllowed,
   type FeedState,
+  KeyRing,
+  keyedModel,
   loadBundledPlaybooks,
   mailboxInbox,
   type ReserveResult,
@@ -39,6 +41,7 @@ import {
   type WorkflowPort,
   workflowMayProceed,
 } from "@ae/infra";
+import { SecretsStoreKeyStore } from "@ae/ports";
 import { AnthropicModelClient } from "@ae/ports/anthropic";
 import { liveRefresh } from "@ae/products";
 import { createD1Storage, type Storage } from "@ae/storage";
@@ -50,15 +53,38 @@ import { CompaniesHouseClient, defaultContext, HttpChangeStream } from "@ae/veri
  */
 type Vars = Record<string, string | undefined>;
 
+/**
+ * v3 rule 20: keys come from Cloudflare Secrets Store bindings (or a Worker secret of the same name during
+ * cutover). Writes from the Keys page use CF_SECRETS_TOKEN ("Account Secrets Store Edit" only).
+ */
+export function workerKeyStore(env: Env) {
+  const vars = env as unknown as Vars;
+  return new SecretsStoreKeyStore(env as unknown as Record<string, unknown>, {
+    accountId: vars.CF_ACCOUNT_ID,
+    storeId: vars.SECRETS_STORE_ID,
+    token: vars.CF_SECRETS_TOKEN,
+  });
+}
+
+/** Reads one key through the key ring (the only reader). Used for the clients built at start-up. */
+export async function keyFor(ring: KeyRing, name: string) {
+  try {
+    return (await ring.forTool([name])).keys[name] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function runtimeFor(env: Env): Promise<JobRuntime> {
   const vars = env as unknown as Vars;
   const storage = createD1Storage(env.DB);
   const models = loadModelsConfig();
+  const ring = new KeyRing(workerKeyStore(env), storage);
   // The real model only when explicitly switched on (cutover); otherwise the deterministic fake.
-  const model =
-    vars.MODEL_LIVE === "1" && vars.ANTHROPIC_API_KEY
-      ? new AnthropicModelClient(models.roles, { apiKey: vars.ANTHROPIC_API_KEY })
-      : fakeModel();
+  const modelKey = vars.MODEL_LIVE === "1" ? await ring.modelKey() : null;
+  const model = modelKey
+    ? keyedModel(new AnthropicModelClient(models.roles, { apiKey: modelKey }), ring, modelKey)
+    : fakeModel();
   const service = new AgentService({
     storage,
     // Replies arrive by Email Routing into the mailbox; the reply loop reads them from there.
@@ -67,11 +93,11 @@ async function runtimeFor(env: Env): Promise<JobRuntime> {
     model,
     budget: budgetPort(env),
     models,
+    keys: ring,
   });
   const ch = loadCompaniesHouseConfig();
-  const client = vars.CH_API_KEY
-    ? new CompaniesHouseClient({ apiKey: vars.CH_API_KEY, config: ch })
-    : null;
+  const chKey = await keyFor(ring, "CH_API_KEY");
+  const client = chKey ? new CompaniesHouseClient({ apiKey: chKey, config: ch }) : null;
   return {
     service,
     send: async (job) => {
@@ -134,8 +160,11 @@ export async function queue(batch: MessageBatch<Job>, env: Env) {
  * verify at cutover); without it, it reports "not configured" and the cron's polling fallback runs.
  */
 export class ChangeFeed extends DurableObject<Env> {
-  private source(): ChangeFeedSource | null {
-    const key = (this.env as unknown as Vars).CH_STREAM_KEY;
+  private async source(): Promise<ChangeFeedSource | null> {
+    const key = await keyFor(
+      new KeyRing(workerKeyStore(this.env), createD1Storage(this.env.DB)),
+      "CH_STREAM_KEY",
+    );
     return key
       ? streamFeedSource(new HttpChangeStream(key), ["companies", "filings", "officers"])
       : null;
@@ -148,7 +177,7 @@ export class ChangeFeed extends DurableObject<Env> {
 
   override async alarm() {
     const storage = createD1Storage(this.env.DB);
-    const source = this.source();
+    const source = await this.source();
     if (!source) {
       await storage.runtimeStatus.beat("change_feed", { configured: false, last_event_at: null });
       await this.ctx.storage.setAlarm(Date.now() + 60 * 60_000);

@@ -7,7 +7,7 @@ switch off; the global kill switch defaults to ON.
 
 | Stage | What it unlocks | Revenue path |
 |---|---|---|
-| 1 Cloudflare | the dashboard and API, behind Access | — |
+| 1 Cloudflare | the dashboard and API, behind Access; keys (1b), replies inbox (1c), GitHub settings (1d) | — |
 | 2 Companies House | real company data | — |
 | 3 Anthropic | real extraction, explanations and drafts | — |
 | 4 Ingestion | the real Greater Manchester universe, websites, verified facts | — |
@@ -58,6 +58,44 @@ v2 runtime (all in `apps/api/wrangler.jsonc`; `wrangler deploy` creates the queu
 - [ ] Force one failing job (e.g. a `reverify` for a made-up company with the CH key removed) and check it
   lands in "Needs a person" after 3 retries, with an alert
 - [ ] Controls → Budgets shows today's spend against the caps; leave every playbook on S0 at first
+
+v3 dashboard (Milestone C)
+- [ ] D1 migrations 0014–0017 applied (decisions, mailbox, Vault versions, key registry); `/api/health` shows 17
+- [ ] Open the root URL: it goes straight to the dashboard (Home). There is no public landing page
+- [ ] Needs you shows decisions; the daily digest appears on Home after the first 06:00 UTC run
+- [ ] Vault lists `brain/` (bundled at deploy by `pnpm gen:brain`, which `pnpm cf:deploy` runs). Add
+  `brain/ideas/seed-500.csv` and check Vault → Ideas shows every score labelled "assumed"
+
+### Stage 1b — Keys (v3, decision D4; runbook `docs/runbooks/keys.md`)
+- [ ] Secrets Store created; store ID copied. **Check that Secrets Store is out of beta, or that its beta
+  limits suit you**
+- [ ] Token with **Account Secrets Store Edit only** → `wrangler secret put CF_SECRETS_TOKEN`
+- [ ] `CF_ACCOUNT_ID` and `SECRETS_STORE_ID` in `wrangler.jsonc` vars; the `secrets_store_secrets` block added
+- [ ] Save one harmless key on Controls → Keys and confirm it shows "saved, not used yet". This first save
+  verifies the Secrets Store list and replace calls, which are marked unverified
+- [ ] From here on, keys go in through the Keys page, not `wrangler secret put` (Worker secrets still work
+  as a fallback)
+
+### Stage 1c — Replies inbox (v3, decision D1)
+- [ ] Choose a dedicated reply address on the sending domain, e.g. `replies@<sending domain>` (never your
+  own inbox)
+- [ ] Cloudflare Email Routing on that domain: route the address to **the Worker** (Email Workers). The
+  Worker's `email()` handler stores each message in the mailbox as untrusted, and never forwards it
+- [ ] Send a test email to it: it should appear in Inbox → Replies within a minute
+- [ ] When you shortlist a sending provider, **check its terms allow B2B cold outreach**, then add
+  `EMAIL_API_KEY` on the Keys page
+
+### Stage 1d — GitHub settings (v3, decision D5; manual)
+- [ ] **CODEOWNERS**: add `.github/CODEOWNERS` naming you as owner of the safety layer:
+  - `packages/infra/src/tools.ts`, `controls.ts`, `budget.ts`, `autonomy.ts`, `decisions.ts`, `keys.ts`;
+  - `packages/contracts/`, `packages/config/src/*.json`, `packages/storage/migrations/`;
+  - `tests/architecture.test.ts`, `.github/`.
+
+  Agents may never change these (rule 14).
+- [ ] **Branch protection** on `main`: require a pull request, require your review from code owners,
+  require the CI check (`pnpm check`), no force pushes, and **no auto-merge**
+- [ ] Only if Claude Code ever runs from GitHub (Milestone D): it triggers on your label or comment only,
+  never on a schedule, with narrow permissions, and code changes never auto-merge
 
 ## Stage 2 — Companies House
 

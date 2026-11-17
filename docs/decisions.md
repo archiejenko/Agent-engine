@@ -406,3 +406,25 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **Page mapping** approved: verification golden set → CRM "Verify" tab. The *playbook* golden set (Milestone D, captured from Archie's decisions) belongs with the Needs-you queue.
 - **Ideas sheet** `brain/ideas/seed-500.csv` (Archie adds it): shown in the Vault (Phase 4); the starting hypothesis backlog and Board tiles in Phase 6. Every score in it is an estimate, labelled assumed, never an outcome, never used to train scoring.
 - **`/thanks`** (frozen human-report checkout) stays flagged and unchanged.
+
+## 2026-11-17 — v3 Phases 4–5 build decisions
+
+- **Vault edits are versions in D1** (`note_versions`). `brain/` in git is the base, bundled into the
+  Worker at deploy. An edit made on the page shows "edited here, not yet in git" until it's committed. Agent
+  notes are refused without provenance (author, time, and at least one source or ledger row).
+- **Keys (rule 20)**:
+  - A tool declares the keys it needs (`ToolRegistration.keys`). The registry injects them on **live
+    calls only**, and scrubs every injected value from results, errors and the call log.
+  - Only `packages/infra/src/keys.ts` calls `KeyStore.reveal` (static test).
+  - `key_registry` holds status only, with no value column.
+- **Token permission name**: Cloudflare's docs call it "Account Secrets Store Edit" (some snippets say
+  "Secrets Store Write"). The plan said "Edit"; both names refer to the same permission.
+- **Secrets Store list call unverified**: create (POST) and replace (PATCH) follow the docs; the list call
+  that finds a secret's ID is marked unverified.
+- **Model key**: `@anthropic-ai/sdk` 1.6.0 sends the key in the `authorization` header. The leak test checks
+  it's in a header and never the body.
+- **A refused key** (401/403) → status failing, one `key_failing` decision (safe default: keep paused).
+  Only the dependants listed in `keys.json` pause; their tasks wait untouched and take no queue slot.
+  Saving a new value resumes them and supersedes the decision.
+- **The Worker rebuilds its app at most once a minute**, so a newly saved Stripe or Companies House key
+  takes effect without a deploy.

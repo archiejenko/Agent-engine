@@ -34,7 +34,9 @@ import {
 
 import { reviewQueue } from "@ae/opportunity";
 import {
+  FakeKeyStore,
   InMemoryQueue,
+  type KeyStore,
   type PaymentProvider,
   PaymentsPausedError,
   verifyStripeWebhook,
@@ -78,6 +80,8 @@ export interface AppDeps {
   payments?: { provider: PaymentProvider; webhookSecret: string; publicBaseUrl: string };
   /** brain/ for the Vault. Node reads it from disk; the Worker uses the deploy-time bundle (default). */
   vault?: () => Promise<{ path: string; body: string }[]>;
+  /** v3 Phase 5: where keys are saved and read (Secrets Store on Cloudflare; local env store on Node). */
+  keys?: (env: unknown) => KeyStore;
   /** Starting workflows and sending them events (claim fulfilment). Absent = claims disabled. */
   workflows?: (env: unknown) => WorkflowPort;
 }
@@ -599,7 +603,15 @@ export function createApp(deps: AppDeps) {
 
   // ---- sme_letter: print queue (dashboard) and demo pages (public, noindex).
   mountLetters(app, deps.storage, deps.decide, decisionDeps);
-  mountV3(app, deps.storage, decisionDeps, accessUser, deps.vault ?? (async () => BRAIN_NOTES));
+  const fallbackKeys = new FakeKeyStore();
+  mountV3(
+    app,
+    deps.storage,
+    decisionDeps,
+    accessUser,
+    deps.vault ?? (async () => BRAIN_NOTES),
+    deps.keys ?? (() => fallbackKeys),
+  );
   mountClaims(app, {
     storage: deps.storage,
     ...(deps.payments ? { payments: deps.payments } : {}),

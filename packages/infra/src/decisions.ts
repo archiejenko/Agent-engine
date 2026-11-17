@@ -278,6 +278,33 @@ export async function syncDecisions(d: DecisionDeps): Promise<number> {
       synthetic: false,
     });
 
+  // Keys a provider refused (v3 rule 20): only the dependants are paused until this is settled.
+  for (const k of await storage.keyRegistry.failing())
+    await open({
+      type: "key_failing",
+      source_ref: `key:${k.name}`,
+      summary: `The ${k.name} key was refused; ${k.used_by.length} playbook(s) paused`,
+      money_at_stake_gbp: 0,
+      money_kind: "none",
+      options: [
+        opt(
+          "keep_paused",
+          "Keep them paused",
+          "nothing runs that needs this key; save a new key to resume",
+        ),
+        opt(
+          "retry",
+          "Try the same key again",
+          "the paused playbooks resume; a new refusal pauses them again",
+        ),
+      ],
+      recommended: "keep_paused",
+      safe_default: "keep_paused",
+      deadline: deadline(d, "key_failing"),
+      context: { key: k.name, error: k.last_error, paused: k.used_by, since: k.last_used_at },
+      synthetic: false,
+    });
+
   await supersedeStale(d);
   return opened;
 }
@@ -299,6 +326,7 @@ async function supersedeStale(d: DecisionDeps) {
       live = (await storage.siteClaims.get(id))?.status === "awaiting_publish";
     else if (kind === "effect")
       live = ["started", "unknown"].includes((await storage.effects.get(id))?.status ?? "");
+    else if (kind === "key") live = (await storage.keyRegistry.get(id))?.status === "failing";
     if (!live)
       await storage.decisions.close(x.id, {
         status: "superseded",
@@ -555,6 +583,15 @@ async function apply(
       await promotePlaybook(storage, id, base, cfg, "archie (dashboard)", o.approvalId as string);
       return;
     }
+    case "key_failing":
+      // Only "retry" changes anything; it never touches the key's value.
+      if (option === "retry" && !o.defaulted)
+        await storage.keyRegistry.put(id, {
+          status: "set",
+          last_error: null,
+          updated_by: "archie (retry)",
+        });
+      return;
     default:
       throw new Error(`no handler for decision type ${x.type}`);
   }

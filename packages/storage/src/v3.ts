@@ -119,6 +119,19 @@ const toNoteVersion = (r: Row): NoteVersionRow => ({
   created_at: r.created_at as string,
 });
 
+export type KeyStatus = "unset" | "set" | "ok" | "failing";
+/** A key's status. There is deliberately no value field: values never reach the database. */
+export interface KeyRegistryRow {
+  name: string;
+  status: KeyStatus;
+  last_used_at: string | null;
+  last_ok_at: string | null;
+  last_error: string | null;
+  used_by: string[];
+  updated_at: string;
+  updated_by: string | null;
+}
+
 export function v3Storage(db: SqlDriver) {
   const all = (sql: string, args: SqlValue[] = []) => db.all<Row>(sql, args);
   const nowIso = () => new Date().toISOString();
@@ -320,6 +333,68 @@ export function v3Storage(db: SqlDriver) {
         ).map(toNoteVersion),
     },
 
+    audit: {
+      /**
+       * Leak checks (v3 rule 20): the names of tables with any row containing `needle`. Scans every table,
+       * so it's for tests and gates, not request paths.
+       */
+      tablesContaining: async (needle: string): Promise<string[]> => {
+        const tables = (
+          await all(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name",
+          )
+        ).map((r) => r.name as string);
+        const hits: string[] = [];
+        for (const t of tables) {
+          const rows = await all(`SELECT * FROM "${t.replace(/"/g, "")}"`);
+          if (rows.some((r) => JSON.stringify(r).includes(needle))) hits.push(t);
+        }
+        return hits;
+      },
+    },
+
+    keyRegistry: {
+      get: async (name: string): Promise<KeyRegistryRow | null> => {
+        const r = (await all("SELECT * FROM key_registry WHERE name = ?", [name]))[0];
+        return r ? toKey(r) : null;
+      },
+      list: async (): Promise<KeyRegistryRow[]> =>
+        (await all("SELECT * FROM key_registry ORDER BY name")).map(toKey),
+      failing: async (): Promise<KeyRegistryRow[]> =>
+        (await all("SELECT * FROM key_registry WHERE status = 'failing' ORDER BY name")).map(toKey),
+      /** Upserts status fields. Takes no value argument by design. */
+      put: async (
+        name: string,
+        p: Partial<Omit<KeyRegistryRow, "name" | "updated_at">>,
+      ): Promise<void> => {
+        const cur = (await all("SELECT * FROM key_registry WHERE name = ?", [name]))[0];
+        const base = cur
+          ? toKey(cur)
+          : {
+              status: "unset" as KeyStatus,
+              last_used_at: null,
+              last_ok_at: null,
+              last_error: null,
+              used_by: [],
+              updated_by: null,
+            };
+        const n = { ...base, ...p };
+        await db.run(
+          "INSERT INTO key_registry (name, status, last_used_at, last_ok_at, last_error, used_by, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (name) DO UPDATE SET status = excluded.status, last_used_at = excluded.last_used_at, last_ok_at = excluded.last_ok_at, last_error = excluded.last_error, used_by = excluded.used_by, updated_at = excluded.updated_at, updated_by = excluded.updated_by",
+          [
+            name,
+            n.status,
+            n.last_used_at,
+            n.last_ok_at,
+            n.last_error,
+            JSON.stringify(n.used_by ?? []),
+            nowIso(),
+            n.updated_by,
+          ],
+        );
+      },
+    },
+
     digests: {
       put: async (day: string, body: unknown) => {
         await db.run(
@@ -465,5 +540,16 @@ export function v3Storage(db: SqlDriver) {
     },
   };
 }
+
+const toKey = (r: Row): KeyRegistryRow => ({
+  name: r.name as string,
+  status: r.status as KeyStatus,
+  last_used_at: (r.last_used_at as string | null) ?? null,
+  last_ok_at: (r.last_ok_at as string | null) ?? null,
+  last_error: (r.last_error as string | null) ?? null,
+  used_by: r.used_by ? (JSON.parse(r.used_by as string) as string[]) : [],
+  updated_at: r.updated_at as string,
+  updated_by: (r.updated_by as string | null) ?? null,
+});
 
 export type V3Storage = ReturnType<typeof v3Storage>;

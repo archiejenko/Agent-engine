@@ -4,6 +4,7 @@ import { costGbp, type ModelClient } from "@ae/ports";
 import type { Storage, StoredTask } from "@ae/storage";
 import { type BudgetPort, releaseStep, reserveForStep, settleStep } from "./budget.ts";
 import { checkSpend, queuePaused, SpendCapError } from "./controls.ts";
+import { playbooksPausedByKeys } from "./keys.ts";
 import type { LoadedPlaybook } from "./playbook.ts";
 import type { ToolCallRecord, ToolRegistry, ToolResult } from "./tools.ts";
 
@@ -102,6 +103,9 @@ export class PlaybookRunner {
       task.status === "awaiting_approval"
     )
       return task;
+    // v3 rule 20: a failing key pauses only the playbooks that depend on it. The task waits, untouched.
+    const pausedBy = (await playbooksPausedByKeys(this.d.storage)).get(task.playbook);
+    if (pausedBy) return task;
     await this.d.storage.tasks.update(task.task_id, { status: "running" });
 
     const steps = pb.spec.steps;

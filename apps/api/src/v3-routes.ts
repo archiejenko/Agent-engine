@@ -11,6 +11,8 @@ import {
   decide,
   type GitNote,
   homeFigures,
+  KeyError,
+  KeyRing,
   needsYou,
   parseIdeasSheet,
   searchVault,
@@ -18,6 +20,7 @@ import {
   vaultNotes,
   writeArchieNote,
 } from "@ae/infra";
+import type { KeyStore } from "@ae/ports";
 
 /** The only mailbox tools on the MCP endpoint (no send, delete or forward). */
 export const MAILBOX_MCP_TOOLS = [
@@ -85,7 +88,31 @@ export function mountV3(
   // biome-ignore lint/suspicious/noExplicitAny: Hono context type is generic across runtimes.
   accessUser: (c: any) => string,
   vaultSource: () => Promise<GitNote[]>,
+  keyStoreFor: (env: unknown) => KeyStore,
 ) {
+  // ---- Phase 5: Keys (rule 20). Write-only: no route returns a value; responses are never cached.
+  const ring = (env: unknown) => new KeyRing(keyStoreFor(env), storageFor(env));
+  app.get("/api/keys", async (c) => {
+    c.header("cache-control", "no-store");
+    return c.json({ keys: await ring(c.env).list() });
+  });
+  app.put("/api/keys/:name", async (c) => {
+    c.header("cache-control", "no-store");
+    const b = z.object({ value: z.string() }).safeParse(await c.req.json().catch(() => null));
+    if (!b.success) return c.json({ error: "bad_request" }, 400);
+    try {
+      await ring(c.env).set(c.req.param("name"), b.data.value, accessUser(c));
+      return c.json({ ok: true, name: c.req.param("name"), status: "set" });
+    } catch (e) {
+      // KeyRing errors are already scrubbed of the value; anything else gets a generic message.
+      const msg = e instanceof KeyError ? e.message : "could_not_save";
+      return c.json(
+        { error: msg },
+        msg === "unknown_key" ? 404 : msg === "invalid_value" ? 400 : 502,
+      );
+    }
+  });
+
   // ---- Phase 4: the Vault (brain/ + versions). Archie edits are new versions; agents write via
   // writeAgentNote (provenance required), never through this route.
   const notes = async (env: unknown) => vaultNotes(storageFor(env), await vaultSource());

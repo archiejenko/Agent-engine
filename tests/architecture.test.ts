@@ -119,3 +119,35 @@ describe("v3 rule 23: assumed numbers stay assumed", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("v3 rule 20: keys are write-only and read in one place", () => {
+  const src = files.filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\.tsx?$|__tests__/.test(f));
+  it("only packages/infra/src/keys.ts calls KeyStore.reveal (the tool registry's injection point)", () => {
+    const callers = src.filter(
+      (f) =>
+        f !== "packages/ports/src/keys.ts" &&
+        /\.reveal\(/.test(readFileSync(join(ROOT, f), "utf8")),
+    );
+    expect(callers).toEqual(["packages/infra/src/keys.ts"]);
+  });
+  it("Worker code never reads a catalogue key straight from its environment", () => {
+    const names = (
+      JSON.parse(readFileSync(join(ROOT, "packages/config/src/keys.json"), "utf8")) as {
+        keys: { name: string }[];
+      }
+    ).keys.map((k) => k.name);
+    const offenders = src
+      .filter((f) => f.startsWith("apps/api/src/"))
+      .flatMap((f) => {
+        const t = readFileSync(join(ROOT, f), "utf8");
+        return names
+          .filter((n) => new RegExp(`(vars|env)\\)?\\.${n}\\b`).test(t))
+          .map((n) => `${f}: ${n}`);
+      });
+    expect(offenders).toEqual([]);
+  });
+  it("the key registry table has no value column", () => {
+    const sql = readFileSync(join(ROOT, "packages/storage/migrations/0017_v3_keys.sql"), "utf8");
+    expect(/\bvalue\b|ciphertext/i.test(sql.replace(/--.*$/gm, ""))).toBe(false);
+  });
+});

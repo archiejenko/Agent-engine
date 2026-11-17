@@ -78,6 +78,8 @@ export function registerOutreachTools(
       allowed_roles: ["operator"],
       rate_limit_per_min: 30,
       cost_gbp_per_call: 0,
+      // The sending provider's key, injected by the registry on live sends only (v3 rule 20).
+      keys: ["EMAIL_API_KEY"],
     },
     async (args, { task, dryRun }) => {
       const a = args as SendArgs;

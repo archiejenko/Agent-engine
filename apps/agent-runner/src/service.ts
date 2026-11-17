@@ -22,6 +22,7 @@ import {
   fakeReplyWriter,
   fakeSiteWriter,
   holdoutSize,
+  type KeyRing,
   type LoadedPlaybook,
   LocalBudgetPort,
   LocalWorkflowEngine,
@@ -29,6 +30,7 @@ import {
   type PlaybookImpl,
   PlaybookRunner,
   POST_REPLY,
+  playbooksPausedByKeys,
   processInbox,
   QUEUE_ORDER,
   recordBreach,
@@ -107,6 +109,8 @@ export interface ServiceDeps {
   synthetic?: boolean;
   /** Hard budgets: the Budget Durable Object on Cloudflare; a locked in-process book locally. */
   budget?: BudgetPort;
+  /** v3 rule 20: where tool keys come from (Secrets Store on Cloudflare). Absent = no keys (fakes). */
+  keys?: KeyRing;
 }
 
 interface OpenCohort {
@@ -143,6 +147,7 @@ export class AgentService {
     this.playbooks = d.playbooks;
     this.model = d.model ?? fakeModel();
     this.tools = new ToolRegistry(d.storage, this.infra);
+    this.tools.keys = d.keys ?? null;
     const ctx = d.ctx ?? defaultContext();
     this.ctx = ctx;
     this.synthetic = d.synthetic === true;
@@ -427,7 +432,10 @@ export class AgentService {
     const done: StoredTask[] = [];
     const queued = await this.storage.tasks.list({ status: "queued", limit: 5000, order: "asc" });
     const rank = (p: string) => QUEUE_ORDER.indexOf(p as (typeof QUEUE_ORDER)[number]);
-    for (const t of queued.sort((a, b) => rank(a.priority) - rank(b.priority)).slice(0, max)) {
+    // Tasks of playbooks paused by a failing key wait without taking a slot (v3 rule 20).
+    const paused = await playbooksPausedByKeys(this.storage);
+    const runnable = queued.filter((t) => !paused.has(t.playbook));
+    for (const t of runnable.sort((a, b) => rank(a.priority) - rank(b.priority)).slice(0, max)) {
       done.push(await this.runner.run(t.task_id));
     }
     for (const q of QUEUE_ORDER) await this.queue.receive(q, 10_000); // drained: the table is the source of truth locally

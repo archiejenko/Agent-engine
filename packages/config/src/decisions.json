@@ -10,7 +10,8 @@
     "data_conflict": 720,
     "quarantine": 720,
     "spend_tier": 72,
-    "autonomy": 72
+    "autonomy": 72,
+    "key_failing": 168
   },
   "max_open_leads": 50,
   "digest_hour_utc": 6

@@ -142,9 +142,11 @@ Every contract is a Zod schema with tests. Change the schema → change the test
     decision resolves through the one recorded-approval path (`owner_approvals`).
 19. **Safe defaults spend nothing and send nothing**, and a defaulted decision is recorded as
     "defaulted", never as Archie's approval.
-20. **Keys are write-only.** Values live in Cloudflare Secrets Store (fake locally), are injected inside
-    the tool registry, and never reach a model request, log line, D1, `brain/` or an agent. A failing key
-    pauses only the playbooks that use it.
+20. **Keys are write-only.** Values live in Cloudflare Secrets Store (fake locally; runbook
+    `docs/runbooks/keys.md`). They are injected inside the tool registry on live calls only, scrubbed from
+    every result, and never reach a model request, log line, D1, `brain/` or an agent. Only
+    `packages/infra/src/keys.ts` reads them. A failing key pauses only the playbooks that use it
+    (`packages/config/src/keys.json`).
 21. **Agents write the Vault as new versions.** Nothing Archie wrote is overwritten; every agent note
     carries provenance (who, when, which sources/ledger rows; licensed/untrusted labels).
 22. **The holdout stays hidden** in every company, task and message view (CRM and Inbox included).

@@ -7,6 +7,7 @@ import { runV3Phase1Gate } from "../apps/api/src/gates/v3-phase1.ts";
 import { runV3Phase2Gate } from "../apps/api/src/gates/v3-phase2.ts";
 import { runV3Phase3Gate } from "../apps/api/src/gates/v3-phase3.ts";
 import { runV3Phase4Gate } from "../apps/api/src/gates/v3-phase4.ts";
+import { runV3Phase5Gate } from "../apps/api/src/gates/v3-phase5.ts";
 import { ROOT } from "./lib.ts";
 
 // v3 gates: `pnpm gate:v3 --phase N` writes docs/gates/v3-phaseN.md.
@@ -19,6 +20,7 @@ const GATES: Record<
   "2": (s) => runV3Phase2Gate(s, ROOT),
   "3": (s) => runV3Phase3Gate(s, ROOT),
   "4": (s) => runV3Phase4Gate(s),
+  "5": (s) => runV3Phase5Gate(s, ROOT),
 };
 const run = GATES[values.phase as string];
 if (!run) throw new Error(`no gate for phase ${values.phase}`);

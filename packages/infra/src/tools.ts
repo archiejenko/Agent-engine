@@ -2,6 +2,7 @@ import type { InfraConfig } from "@ae/config";
 import { type Role, ToolRegistration } from "@ae/contracts";
 import type { Storage, StoredTask } from "@ae/storage";
 import { externalActionsAllowed } from "./controls.ts";
+import { KeyError, KeyFailedError, type KeyRing, scrub } from "./keys.ts";
 
 /**
  * Tool registry. Every tool call goes through `call`, which enforces (in code, not prompts):
@@ -9,7 +10,9 @@ import { externalActionsAllowed } from "./controls.ts";
  * - the role is allowed (only the operator may call external tools — guardrail 4);
  * - the task's lane is allowed (a licensed task can't call external/customer-serving tools — guardrail 1);
  * - kill switches: when external actions are off, external tools run in DRY-RUN (guardrail 7);
- * - per-tool rate limit; cost per call is added to the task.
+ * - per-tool rate limit; cost per call is added to the task;
+ * - keys (v3 rule 20): a tool's declared keys are injected here on LIVE calls only, and every injected
+ *   value is scrubbed from the result, the error and the call log before anyone else sees them.
  * A blocked call throws ToolBlockedError and is logged.
  */
 export interface ToolContext {
@@ -27,7 +30,7 @@ export interface ToolResult {
 
 export type ToolHandler = (
   args: unknown,
-  env: { task: StoredTask; dryRun: boolean },
+  env: { task: StoredTask; dryRun: boolean; keys?: Record<string, string> },
 ) => Promise<{ result: unknown; untrusted?: boolean }>;
 
 export class ToolBlockedError extends Error {
@@ -51,6 +54,8 @@ export class ToolRegistry {
   private readonly tools = new Map<string, { reg: ToolRegistration; handler: ToolHandler }>();
   private readonly recent = new Map<string, number[]>();
   readonly calls: ToolCallRecord[] = [];
+  /** Where keys come from. Production always sets it; without it, tools get no keys (local fakes). */
+  keys: KeyRing | null = null;
 
   constructor(
     private readonly storage: Storage,
@@ -102,6 +107,18 @@ export class ToolRegistry {
     const dryRun = reg.external
       ? !(await externalActionsAllowed(this.storage, this.cfg, ctx.task.playbook))
       : false;
+    // Keys: injected for live calls only (a dry run touches no provider). A failing or missing key is
+    // refused here, before anything is recorded or attempted.
+    let injected: { keys: Record<string, string>; secrets: string[] } | null = null;
+    if (reg.keys?.length && !dryRun && this.keys) {
+      try {
+        injected = await this.keys.forTool(reg.keys);
+      } catch (e) {
+        if (e instanceof KeyError) await refuse(e.message, false);
+        throw e;
+      }
+    }
+    const secrets = injected?.secrets ?? [];
     // No repeated external actions (v2 rule 17): an external call is recorded BEFORE it runs. A retried
     // or resumed step with the same task, tool and arguments gets the first result back, or is refused
     // while the first attempt's outcome is unknown (until a person checks, or the tool confirms it didn't
@@ -130,7 +147,13 @@ export class ToolRegistry {
         });
     }
     try {
-      const out = await t.handler(args, { task: ctx.task, dryRun });
+      const raw = await t.handler(args, {
+        task: ctx.task,
+        dryRun,
+        ...(injected ? { keys: injected.keys } : {}),
+      });
+      const out = { ...raw, result: scrub(raw.result, secrets) };
+      if (injected && this.keys) for (const k of reg.keys ?? []) await this.keys.used(k, true);
       if (effectKey) await this.storage.effects.finish(effectKey, "done", out.result);
       if (reg.cost_gbp_per_call > 0)
         await this.storage.tasks.addCost(ctx.task.task_id, reg.cost_gbp_per_call);
@@ -138,22 +161,24 @@ export class ToolRegistry {
       return { result: out.result, untrusted: out.untrusted ?? false, dry_run: dryRun };
     } catch (e) {
       // A tool that refuses BEFORE acting throws ToolBlockedError: nothing happened, a retry may run.
+      // A provider that refused the key (KeyFailedError) did nothing either; the key is marked failing.
       // Any other error: we can't tell whether the action happened, so a person must check.
+      const message = scrub((e as Error).message, secrets);
+      if (e instanceof KeyFailedError && this.keys)
+        await this.keys.used(e.key, false, message, secrets);
       if (effectKey)
         await this.storage.effects.finish(
           effectKey,
-          e instanceof ToolBlockedError ? "not_happened" : "unknown",
+          e instanceof ToolBlockedError || e instanceof KeyFailedError ? "not_happened" : "unknown",
           null,
-          (e as Error).message,
+          message,
         );
-      this.calls.push({
-        tool: name,
-        args,
-        result: null,
-        blocked: false,
-        error: (e as Error).message,
-      });
-      throw e;
+      this.calls.push({ tool: name, args, result: null, blocked: false, error: message });
+      if (secrets.length === 0) throw e;
+      if (e instanceof KeyFailedError) throw new KeyFailedError(e.key, message);
+      if (e instanceof ToolBlockedError)
+        throw new ToolBlockedError(e.tool, scrub(e.reason, secrets));
+      throw new Error(message);
     }
   }
 

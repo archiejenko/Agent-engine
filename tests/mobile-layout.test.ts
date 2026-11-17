@@ -37,6 +37,7 @@ const PAGES = [
   "/inbox/drafts",
   "/inbox/letters",
   "/controls",
+  "/controls/keys",
 ];
 const TYPES: Record<string, string> = {
   ".html": "text/html",

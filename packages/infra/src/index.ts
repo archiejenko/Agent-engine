@@ -15,6 +15,7 @@ export * from "./demo-visits.ts";
 export * from "./digest.ts";
 export * from "./economics.ts";
 export * from "./ev.ts";
+export * from "./keys.ts";
 export * from "./ledger.ts";
 export * from "./letters/render.ts";
 export * from "./lift.ts";

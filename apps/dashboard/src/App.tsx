@@ -4,6 +4,7 @@ import { Crm } from "./Crm.tsx";
 import { useTableLabels } from "./format.tsx";
 import { Home } from "./Home.tsx";
 import { Inbox } from "./Inbox.tsx";
+import { ControlsTabs, Keys } from "./Keys.tsx";
 import { Placeholder } from "./Placeholder.tsx";
 import { Vault } from "./Vault.tsx";
 
@@ -67,8 +68,13 @@ export function App() {
         <Crm route={route} />
       ) : route.startsWith("/inbox") ? (
         <Inbox route={route} />
+      ) : route.startsWith("/controls/keys") ? (
+        <Keys />
       ) : route.startsWith("/controls") ? (
-        <Controls />
+        <>
+          <ControlsTabs tab="controls" />
+          <Controls />
+        </>
       ) : route.startsWith("/ideas") ? (
         <Placeholder
           title="Ideas"

@@ -35,6 +35,7 @@ const TYPE: Record<string, string> = {
   quarantine: "Unmatched record",
   spend_tier: "Spend tier",
   autonomy: "Autonomy",
+  key_failing: "Key failing",
 };
 
 function due(deadline: string) {

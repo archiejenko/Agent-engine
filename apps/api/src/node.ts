@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { AgentService, loadPlaybooks } from "@ae/agent-runner";
-import { localWorkflowPort } from "@ae/infra";
-import { FakeStripe } from "@ae/ports";
+import { KeyRing, localWorkflowPort } from "@ae/infra";
+import { envKeyStore, FakeStripe } from "@ae/ports";
 import { FakeFacilitator } from "@ae/products";
 import { openSqliteStorage } from "@ae/storage/sqlite";
 import { serve } from "@hono/node-server";
@@ -15,9 +15,12 @@ const dbPath = process.env.AE_DB
 const port = Number(process.env.PORT ?? 8787);
 
 const storage = await openSqliteStorage(dbPath);
+// Keys locally: .dev.vars values (in the process env) plus anything saved on the Keys page this session.
+const keyStore = envKeyStore(process.env);
 // Locally the agent runner lives in the same process, so dashboard decisions apply immediately.
 const service = new AgentService({
   storage,
+  keys: new KeyRing(keyStore, storage),
   playbooks: await loadPlaybooks(resolve(import.meta.dirname, "../../../playbooks")),
 });
 const app = createApp({
@@ -25,6 +28,7 @@ const app = createApp({
   storage: () => storage,
   // The Vault reads brain/ live from disk locally.
   vault: fsBrain(resolve(import.meta.dirname, "../../..")),
+  keys: () => keyStore,
   // Claim fulfilment runs on the local workflow engine (Cloudflare Workflows in production).
   workflows: () => localWorkflowPort(service.workflows),
   decide: (taskId, decision, editedText) => service.decide(taskId, decision, editedText),

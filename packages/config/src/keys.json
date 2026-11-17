@@ -1,0 +1,74 @@
+{
+  "_note": "v3 Phase 5: the catalogue of API keys. NAMES ONLY, never values. Each key says what it is for and which playbooks and tools depend on it: a failing key pauses only those playbooks (rule 20). Values are written once from the Keys page into Cloudflare Secrets Store (locally: a fake store, or .dev.vars) and injected inside the tool registry.",
+  "keys": [
+    {
+      "name": "ANTHROPIC_API_KEY",
+      "label": "Claude API",
+      "host": "api.anthropic.com",
+      "purpose": "Drafting, checking and research steps (only once MODEL_LIVE is \"1\").",
+      "model": true,
+      "playbooks": [
+        "sme_outreach",
+        "sme_letter",
+        "post_reply",
+        "claim_site",
+        "human_report",
+        "monitoring_subscription",
+        "watch_alert"
+      ],
+      "tools": []
+    },
+    {
+      "name": "CH_API_KEY",
+      "label": "Companies House API",
+      "host": "api.company-information.service.gov.uk",
+      "purpose": "Refreshing company facts before a check or a lead.",
+      "model": false,
+      "playbooks": ["human_report", "monitoring_subscription"],
+      "tools": []
+    },
+    {
+      "name": "CH_STREAM_KEY",
+      "label": "Companies House streaming",
+      "host": "stream.companieshouse.gov.uk",
+      "purpose": "The change feed (polling covers it while unset).",
+      "model": false,
+      "playbooks": ["watch_alert"],
+      "tools": []
+    },
+    {
+      "name": "EMAIL_API_KEY",
+      "label": "Email sending provider",
+      "host": "not chosen yet",
+      "purpose": "Sending outreach and customer emails (provider chosen later, decision D1).",
+      "model": false,
+      "playbooks": [
+        "sme_outreach",
+        "post_reply",
+        "claim_site",
+        "human_report",
+        "monitoring_subscription",
+        "watch_alert"
+      ],
+      "tools": ["send_email"]
+    },
+    {
+      "name": "STRIPE_SECRET_KEY",
+      "label": "Stripe (test mode only)",
+      "host": "api.stripe.com",
+      "purpose": "Card checkout. Refused unless it is a TEST key (v2 rule 9).",
+      "model": false,
+      "playbooks": ["claim_site", "human_report", "monitoring_subscription"],
+      "tools": []
+    },
+    {
+      "name": "STRIPE_WEBHOOK_SECRET",
+      "label": "Stripe webhook signing secret",
+      "host": "api.stripe.com",
+      "purpose": "Checking that payment notifications really came from Stripe.",
+      "model": false,
+      "playbooks": ["claim_site", "human_report", "monitoring_subscription"],
+      "tools": []
+    }
+  ]
+}
