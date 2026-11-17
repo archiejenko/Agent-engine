@@ -30,6 +30,9 @@ const PAGES = [
   "/crm/facts",
   "/crm/verify",
   "/inbox",
+  "/inbox/sent",
+  "/inbox/replies",
+  "/inbox/drafts",
   "/inbox/letters",
   "/controls",
 ];

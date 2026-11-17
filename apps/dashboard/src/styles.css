@@ -359,3 +359,21 @@ details > summary {
   gap: 8px;
   margin-top: 0.4rem;
 }
+button.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #1f5fbf;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+pre.mail-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  background: #f6f7f9;
+  padding: 0.5rem;
+  border-radius: 6px;
+  margin: 0.3rem 0;
+}

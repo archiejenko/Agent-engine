@@ -29,7 +29,9 @@ import {
   externalActionsAllowed,
   type FeedState,
   loadBundledPlaybooks,
+  mailboxInbox,
   type ReserveResult,
+  receiveRawEmail,
   runFeedOnce,
   type ScopeLimit,
   streamFeedSource,
@@ -59,6 +61,8 @@ async function runtimeFor(env: Env): Promise<JobRuntime> {
       : fakeModel();
   const service = new AgentService({
     storage,
+    // Replies arrive by Email Routing into the mailbox; the reply loop reads them from there.
+    inbox: mailboxInbox(storage),
     playbooks: await loadBundledPlaybooks(),
     model,
     budget: budgetPort(env),
@@ -89,6 +93,12 @@ export async function scheduled(env: Env) {
     "companies-house",
   ) as unknown as DurableObjectStub<ChangeFeed>;
   await feed.ensureRunning();
+}
+
+/** Cloudflare Email Routing → the outreach mailbox (decision D1). Stored as untrusted; never forwarded. */
+export async function email(message: ForwardableEmailMessage, env: Env) {
+  const raw = await new Response(message.raw).text();
+  await receiveRawEmail(createD1Storage(env.DB), { from: message.from, to: message.to, raw });
 }
 
 export async function queue(batch: MessageBatch<Job>, env: Env) {

@@ -71,6 +71,37 @@ const toDecision = (r: Row): DecisionRow => ({
   decided_at: (r.decided_at as string | null) ?? null,
 });
 
+export interface MailRow {
+  id: string;
+  folder: "inbox" | "drafts";
+  from: string;
+  to: string;
+  subject: string;
+  body: string;
+  in_reply_to: string | null;
+  entity_id: string | null;
+  task_id: string | null;
+  untrusted: boolean;
+  author: string | null;
+  received_at: string;
+  synthetic: boolean;
+}
+const toMail = (r: Row): MailRow => ({
+  id: r.id as string,
+  folder: r.folder as MailRow["folder"],
+  from: r.from_addr as string,
+  to: r.to_addr as string,
+  subject: r.subject as string,
+  body: r.body as string,
+  in_reply_to: (r.in_reply_to as string | null) ?? null,
+  entity_id: (r.entity_id as string | null) ?? null,
+  task_id: (r.task_id as string | null) ?? null,
+  untrusted: Number(r.untrusted) === 1,
+  author: (r.author as string | null) ?? null,
+  received_at: r.received_at as string,
+  synthetic: Number(r.synthetic) === 1,
+});
+
 export function v3Storage(db: SqlDriver) {
   const all = (sql: string, args: SqlValue[] = []) => db.all<Row>(sql, args);
   const nowIso = () => new Date().toISOString();
@@ -182,6 +213,60 @@ export function v3Storage(db: SqlDriver) {
         (
           await all("SELECT * FROM decisions WHERE decided_at >= ? ORDER BY decided_at", [sinceIso])
         ).map(toDecision),
+    },
+
+    mail: {
+      add: async (m: {
+        id: string;
+        folder: "inbox" | "drafts";
+        from: string;
+        to: string;
+        subject: string;
+        body: string;
+        in_reply_to?: string | null;
+        entity_id?: string | null;
+        task_id?: string | null;
+        untrusted: boolean;
+        author?: string | null;
+        received_at: string;
+        synthetic?: boolean;
+      }) => {
+        await db.run(
+          `INSERT OR IGNORE INTO mail_messages (id, folder, from_addr, to_addr, subject, body, in_reply_to, entity_id, task_id, untrusted, author, received_at, synthetic)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            m.id,
+            m.folder,
+            m.from,
+            m.to,
+            m.subject,
+            m.body,
+            m.in_reply_to ?? null,
+            m.entity_id ?? null,
+            m.task_id ?? null,
+            m.untrusted ? 1 : 0,
+            m.author ?? null,
+            m.received_at,
+            m.synthetic ? 1 : 0,
+          ],
+        );
+      },
+      list: async (o: {
+        folder: "inbox" | "drafts";
+        limit: number;
+        since?: string;
+        includeSynthetic?: boolean;
+      }) =>
+        (
+          await all(
+            `SELECT * FROM mail_messages WHERE folder = ? AND received_at >= ?${o.includeSynthetic === false ? " AND synthetic = 0" : ""} ORDER BY received_at DESC LIMIT ?`,
+            [o.folder, o.since ?? "", o.limit],
+          )
+        ).map(toMail),
+      get: async (id: string) => {
+        const r = (await all("SELECT * FROM mail_messages WHERE id = ?", [id]))[0];
+        return r ? toMail(r) : null;
+      },
     },
 
     digests: {

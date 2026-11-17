@@ -18,6 +18,7 @@ export * from "./ev.ts";
 export * from "./ledger.ts";
 export * from "./letters/render.ts";
 export * from "./lift.ts";
+export * from "./mailbox.ts";
 export * from "./outreach.ts";
 export * from "./playbook.ts";
 export * from "./playbooks/post_reply.ts";

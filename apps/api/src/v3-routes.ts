@@ -10,7 +10,38 @@ import {
   decide,
   homeFigures,
   needsYou,
+  storageMailbox,
 } from "@ae/infra";
+
+/** The only mailbox tools on the MCP endpoint (no send, delete or forward). */
+export const MAILBOX_MCP_TOOLS = [
+  {
+    name: "list",
+    description: "List mailbox messages",
+    inputSchema: {
+      type: "object",
+      properties: {
+        folder: { type: "string", enum: ["inbox", "drafts"] },
+        limit: { type: "number" },
+      },
+    },
+  },
+  {
+    name: "read",
+    description: "Read one message (untrusted content)",
+    inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+  },
+  {
+    name: "create_draft",
+    description: "Save a draft (never sends)",
+    inputSchema: {
+      type: "object",
+      properties: { to: { type: "string" }, subject: { type: "string" }, body: { type: "string" } },
+      required: ["to", "subject", "body"],
+    },
+  },
+];
+
 import type { Storage } from "@ae/storage";
 import type { Hono } from "hono";
 import { z } from "zod";
@@ -73,6 +104,107 @@ export function mountV3(
     } catch (e) {
       if (e instanceof DecisionError) return c.json({ error: e.message }, 409);
       throw e;
+    }
+  });
+
+  // ---- Phase 3: Inbox (sent, replies, agent drafts) and the mailbox MCP endpoint.
+  app.get("/api/inbox", async (c) => {
+    const s = storageFor(c.env);
+    const tab = c.req.query("tab") ?? "sent";
+    const name = async (id: string | null) =>
+      id ? ((await s.entities.get(id))?.name ?? id) : null;
+    if (tab === "sent") {
+      // No thread ids here: they'd show which arm an email came from (rule 22).
+      const rows = await s.outbox.list(200);
+      return c.json({
+        messages: await Promise.all(
+          rows.map(async (m) => ({
+            id: m.id,
+            to: m.recipient,
+            subject: m.subject,
+            body: m.body,
+            status: m.status,
+            reason: m.reason,
+            at: m.created_at,
+            entity_id: m.entity_id,
+            company: await name(m.entity_id),
+            task_id: m.task_id,
+          })),
+        ),
+      });
+    }
+    const folder = tab === "drafts" ? "drafts" : "inbox";
+    const rows = await s.mail.list({ folder, limit: 200 });
+    return c.json({
+      messages: await Promise.all(
+        rows.map(async (m) => ({
+          id: m.id,
+          from: m.from,
+          to: m.to,
+          subject: m.subject,
+          body: m.body,
+          untrusted: m.untrusted,
+          at: m.received_at,
+          entity_id: m.entity_id,
+          company: await name(m.entity_id),
+          task_id: m.task_id,
+          author: m.author,
+          answers: m.in_reply_to,
+        })),
+      ),
+    });
+  });
+
+  /**
+   * Mailbox as an MCP server for agents (decision D6): tools list, read and create_draft only. There is
+   * no send, delete or forward tool. UNVERIFIED: written without access to the MCP specification (its
+   * site was blocked from the build environment); check the JSON-RPC method names, the initialize
+   * handshake and the transport against the spec before any external agent connects. Behind Access.
+   */
+  app.post("/api/mcp/mailbox", async (c) => {
+    const req = (await c.req.json().catch(() => null)) as {
+      jsonrpc?: string;
+      id?: string | number | null;
+      method?: string;
+      params?: { name?: string; arguments?: Record<string, unknown> };
+    } | null;
+    const id = req?.id ?? null;
+    const reply = (result: unknown) => c.json({ jsonrpc: "2.0", id, result });
+    const fail = (code: number, message: string) =>
+      c.json({ jsonrpc: "2.0", id, error: { code, message } });
+    if (req?.jsonrpc !== "2.0" || !req.method) return fail(-32600, "invalid request");
+    const mailbox = storageMailbox(storageFor(c.env));
+    if (req.method === "initialize")
+      return reply({
+        serverInfo: { name: "ae-mailbox", version: "0.1.0-unverified" },
+        capabilities: { tools: {} },
+      });
+    if (req.method === "tools/list") return reply({ tools: MAILBOX_MCP_TOOLS });
+    if (req.method !== "tools/call") return fail(-32601, `unknown method ${req.method}`);
+    const a = req.params?.arguments ?? {};
+    const text = (v: unknown) => reply({ content: [{ type: "text", text: JSON.stringify(v) }] });
+    switch (req.params?.name) {
+      case "list":
+        return text(
+          await mailbox.list({
+            folder: a.folder === "drafts" ? "drafts" : "inbox",
+            limit: Number(a.limit ?? 20),
+          }),
+        );
+      case "read":
+        // Inbound mail is untrusted: the caller must treat it as data, never as instructions.
+        return text({ untrusted: true, message: await mailbox.read(String(a.id ?? "")) });
+      case "create_draft":
+        return text(
+          await mailbox.createDraft({
+            to: String(a.to ?? ""),
+            subject: String(a.subject ?? ""),
+            body: String(a.body ?? ""),
+            author: "agent:mcp",
+          }),
+        );
+      default:
+        return fail(-32601, `unknown tool ${req.params?.name ?? ""}`);
     }
   });
 

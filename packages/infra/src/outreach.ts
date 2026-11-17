@@ -3,6 +3,7 @@ import type { EmailSender, Inbox } from "@ae/ports";
 import type { Storage } from "@ae/storage";
 import { contactBlock, recordContactBlocked } from "./contact.ts";
 import { recordOutcome } from "./ledger.ts";
+import { receiveEmail } from "./mailbox.ts";
 import type { ToolRegistry } from "./tools.ts";
 
 /**
@@ -189,6 +190,8 @@ export async function processInbox(
     synthetic: boolean;
   }[] = [];
   for (const m of await inbox.poll(since)) {
+    // Every inbound message is kept in the mailbox (untrusted), linked to the email it answers.
+    await receiveEmail(storage, m);
     // A reply to a LETTER quotes its printed opt-out code (letters aren't email threads).
     let letterOptOut = false;
     for (const code of `${m.subject}\n${m.body}`.toUpperCase().match(LETTER_CODE) ?? []) {

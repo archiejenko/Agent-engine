@@ -35,10 +35,12 @@ import {
   recordContactBlocked,
   registerClaimTools,
   registerLetterTools,
+  registerMailboxTools,
   registerOutreachTools,
   registerStandardTools,
   SME_LETTER,
   SME_OUTREACH,
+  storageMailbox,
   ToolRegistry,
 } from "@ae/infra";
 import { fakeExplainer, moduleStatus } from "@ae/opportunity";
@@ -154,6 +156,7 @@ export class AgentService {
     });
     registerOutreachTools(this.tools, { storage: d.storage, cfg: this.infra, email: this.email });
     registerLetterTools(this.tools, { storage: d.storage, cfg: this.infra });
+    registerMailboxTools(this.tools, { mailbox: storageMailbox(d.storage) });
     registerClaimTools(this.tools, {
       storage: d.storage,
       cfg: this.infra,

@@ -8,7 +8,7 @@ import { createD1Storage } from "@ae/storage";
 import { CompaniesHouseClient, defaultContext } from "@ae/verification";
 import { requireAccess } from "./access.ts";
 import { createApp } from "./app.ts";
-import { cloudflareWorkflowPort, queue, scheduled } from "./runtime-worker.ts";
+import { cloudflareWorkflowPort, email, queue, scheduled } from "./runtime-worker.ts";
 
 // Composition root for Cloudflare. Bindings and vars are declared in wrangler.jsonc; secrets
 // (CH_API_KEY) are Worker secrets. x402 switches on only when a REAL facilitator URL and a pay-to
@@ -102,6 +102,9 @@ export default {
   },
   async scheduled(_controller, env) {
     await scheduled(env);
+  },
+  async email(message, env) {
+    await email(message, env);
   },
   async queue(batch, env) {
     await queue(batch as MessageBatch<Job>, env);
