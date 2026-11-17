@@ -197,6 +197,7 @@ export class SqlStorage implements Storage {
   declare decisions: Storage["decisions"];
   declare digests: Storage["digests"];
   declare mail: Storage["mail"];
+  declare noteVersions: Storage["noteVersions"];
   declare ledgerRange: Storage["ledgerRange"];
   declare ledgerForEntity: Storage["ledgerForEntity"];
 

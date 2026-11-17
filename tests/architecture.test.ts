@@ -104,3 +104,18 @@ describe("v2 rule 14: agents can't change the safety layer", () => {
     expect(creators).toEqual(["packages/infra/src/decisions.ts"]);
   });
 });
+
+describe("v3 rule 23: assumed numbers stay assumed", () => {
+  it("scoring, targeting and learning code never reads the seeded ideas sheet", () => {
+    const scoring = files.filter(
+      (f) =>
+        /^packages\/opportunity\/src\//.test(f) ||
+        /^packages\/infra\/src\/(ev|cohort|ledger|lift|analytics)\.ts$/.test(f),
+    );
+    const offenders = scoring.filter((f) =>
+      /seed-500|parseIdeasSheet|brain\/ideas/.test(readFileSync(join(ROOT, f), "utf8")),
+    );
+    expect(scoring.length).toBeGreaterThan(5);
+    expect(offenders).toEqual([]);
+  });
+});

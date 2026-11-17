@@ -102,6 +102,23 @@ const toMail = (r: Row): MailRow => ({
   synthetic: Number(r.synthetic) === 1,
 });
 
+export interface NoteVersionRow {
+  path: string;
+  version: number;
+  body: string;
+  author: string;
+  provenance: unknown;
+  created_at: string;
+}
+const toNoteVersion = (r: Row): NoteVersionRow => ({
+  path: r.path as string,
+  version: Number(r.version),
+  body: r.body as string,
+  author: r.author as string,
+  provenance: pj(r.provenance),
+  created_at: r.created_at as string,
+});
+
 export function v3Storage(db: SqlDriver) {
   const all = (sql: string, args: SqlValue[] = []) => db.all<Row>(sql, args);
   const nowIso = () => new Date().toISOString();
@@ -267,6 +284,40 @@ export function v3Storage(db: SqlDriver) {
         const r = (await all("SELECT * FROM mail_messages WHERE id = ?", [id]))[0];
         return r ? toMail(r) : null;
       },
+    },
+
+    noteVersions: {
+      /** Appends a version (never updates one). Returns its number. */
+      add: async (v: { path: string; body: string; author: string; provenance: unknown }) => {
+        const last = Number(
+          (await all("SELECT MAX(version) AS v FROM note_versions WHERE path = ?", [v.path]))[0]
+            ?.v ?? 0,
+        );
+        await db.run(
+          "INSERT INTO note_versions (id, path, version, body, author, provenance, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          [
+            crypto.randomUUID(),
+            v.path,
+            last + 1,
+            v.body,
+            v.author,
+            v.provenance === undefined ? null : JSON.stringify(v.provenance),
+            nowIso(),
+          ],
+        );
+        return last + 1;
+      },
+      history: async (path: string) =>
+        (await all("SELECT * FROM note_versions WHERE path = ? ORDER BY version", [path])).map(
+          toNoteVersion,
+        ),
+      latestAll: async () =>
+        (
+          await all(
+            `SELECT n.* FROM note_versions n JOIN (SELECT path, MAX(version) AS v FROM note_versions GROUP BY path) m
+             ON m.path = n.path AND m.v = n.version`,
+          )
+        ).map(toNoteVersion),
     },
 
     digests: {

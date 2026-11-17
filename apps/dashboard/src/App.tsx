@@ -5,6 +5,7 @@ import { useTableLabels } from "./format.tsx";
 import { Home } from "./Home.tsx";
 import { Inbox } from "./Inbox.tsx";
 import { Placeholder } from "./Placeholder.tsx";
+import { Vault } from "./Vault.tsx";
 
 /** Tiny hash router. v3: seven pages; old links redirect to where their content moved. */
 function useRoute() {
@@ -79,7 +80,7 @@ export function App() {
           text="Markets and industries as tiles arrive in Milestone D (Phase 6)."
         />
       ) : route.startsWith("/vault") ? (
-        <Placeholder title="Vault" text="The brain/ browser arrives in Phase 4." />
+        <Vault route={route} />
       ) : (
         <Home />
       )}

@@ -29,5 +29,6 @@ export * from "./standard-tools.ts";
 export * from "./tasks.ts";
 export * from "./tools.ts";
 export * from "./triggers.ts";
+export * from "./vault.ts";
 export * from "./workflow.ts";
 export * from "./workflows.ts";

@@ -26,6 +26,8 @@ const PAGES = [
   "/ideas",
   "/board",
   "/vault",
+  "/vault/ideas",
+  "/vault/brain%2Ftaxonomy.md",
   "/crm",
   "/crm/facts",
   "/crm/verify",

@@ -1,5 +1,6 @@
 import { loadInfraConfig } from "@ae/config";
 import {
+  backlinksOf,
   buildDigest,
   CRM_STAGES,
   crmCompany,
@@ -8,9 +9,14 @@ import {
   type DecisionDeps,
   DecisionError,
   decide,
+  type GitNote,
   homeFigures,
   needsYou,
+  parseIdeasSheet,
+  searchVault,
   storageMailbox,
+  vaultNotes,
+  writeArchieNote,
 } from "@ae/infra";
 
 /** The only mailbox tools on the MCP endpoint (no send, delete or forward). */
@@ -78,7 +84,69 @@ export function mountV3(
   decisionDeps: (env: unknown) => DecisionDeps,
   // biome-ignore lint/suspicious/noExplicitAny: Hono context type is generic across runtimes.
   accessUser: (c: any) => string,
+  vaultSource: () => Promise<GitNote[]>,
 ) {
+  // ---- Phase 4: the Vault (brain/ + versions). Archie edits are new versions; agents write via
+  // writeAgentNote (provenance required), never through this route.
+  const notes = async (env: unknown) => vaultNotes(storageFor(env), await vaultSource());
+  app.get("/api/vault", async (c) => {
+    const all = await notes(c.env);
+    const text = c.req.query("search");
+    const tag = c.req.query("tag");
+    const found = searchVault(all, { ...(text ? { text } : {}), ...(tag ? { tag } : {}) });
+    return c.json({
+      tags: [...new Set(all.flatMap((n) => n.tags))].sort(),
+      notes: found.map((n) => ({
+        path: n.path,
+        title: n.title,
+        tags: n.tags,
+        author: n.author,
+        version: n.version,
+        updated_at: n.updated_at,
+        labels: n.provenance.labels,
+        edited_here: n.edited_here,
+      })),
+    });
+  });
+  app.get("/api/vault/note", async (c) => {
+    const path = c.req.query("path") ?? "";
+    const all = await notes(c.env);
+    const n = all.find((x) => x.path === path);
+    if (!n) return c.json({ error: "not_found" }, 404);
+    return c.json({
+      ...n,
+      backlinks: backlinksOf(all, path),
+      history: (await storageFor(c.env).noteVersions.history(path)).map((v) => ({
+        version: v.version,
+        author: v.author,
+        created_at: v.created_at,
+        provenance: v.provenance,
+      })),
+    });
+  });
+  app.put("/api/vault/note", async (c) => {
+    const b = z
+      .object({ path: z.string().min(7).max(300), body: z.string().max(500_000) })
+      .safeParse(await c.req.json().catch(() => null));
+    if (!b.success) return c.json({ error: "bad_request" }, 400);
+    try {
+      const version = await writeArchieNote(storageFor(c.env), b.data.path, b.data.body);
+      return c.json({ ok: true, version });
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, 400);
+    }
+  });
+  app.get("/api/vault/ideas", async (c) => {
+    const sheet = (await notes(c.env)).find((n) => n.path === "brain/ideas/seed-500.csv");
+    if (!sheet) return c.json({ present: false, path: "brain/ideas/seed-500.csv" });
+    const parsed = parseIdeasSheet(sheet.body);
+    return c.json({
+      present: true,
+      note: "Every score in this sheet is an estimate (assumed). It is never treated as an outcome or used to train scoring.",
+      ...parsed,
+    });
+  });
+
   // ---- Phase 2: the Needs-you queue (the only approval path) and the daily digest.
   app.get("/api/decisions", async (c) => {
     const type = c.req.query("type");

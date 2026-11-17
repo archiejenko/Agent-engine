@@ -6,6 +6,7 @@ import { FakeFacilitator } from "@ae/products";
 import { openSqliteStorage } from "@ae/storage/sqlite";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.ts";
+import { fsBrain } from "./brain-fs.ts";
 
 // Composition root for local development: same app, local SQLite file, bound to localhost only.
 const dbPath = process.env.AE_DB
@@ -22,6 +23,8 @@ const service = new AgentService({
 const app = createApp({
   runtime: "node",
   storage: () => storage,
+  // The Vault reads brain/ live from disk locally.
+  vault: fsBrain(resolve(import.meta.dirname, "../../..")),
   // Claim fulfilment runs on the local workflow engine (Cloudflare Workflows in production).
   workflows: () => localWorkflowPort(service.workflows),
   decide: (taskId, decision, editedText) => service.decide(taskId, decision, editedText),

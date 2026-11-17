@@ -51,6 +51,7 @@ import {
 } from "@ae/verification";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
+import { BRAIN_NOTES } from "./brain.generated.ts";
 import { claimWebhook, mountClaims } from "./claim-route.ts";
 import { mountLetters } from "./letters-route.ts";
 import { mountV3 } from "./v3-routes.ts";
@@ -75,6 +76,8 @@ export interface AppDeps {
   x402?: X402Deps;
   /** Card payments for the human report and monitoring. Public endpoints; absent = disabled. */
   payments?: { provider: PaymentProvider; webhookSecret: string; publicBaseUrl: string };
+  /** brain/ for the Vault. Node reads it from disk; the Worker uses the deploy-time bundle (default). */
+  vault?: () => Promise<{ path: string; body: string }[]>;
   /** Starting workflows and sending them events (claim fulfilment). Absent = claims disabled. */
   workflows?: (env: unknown) => WorkflowPort;
 }
@@ -596,7 +599,7 @@ export function createApp(deps: AppDeps) {
 
   // ---- sme_letter: print queue (dashboard) and demo pages (public, noindex).
   mountLetters(app, deps.storage, deps.decide, decisionDeps);
-  mountV3(app, deps.storage, decisionDeps, accessUser);
+  mountV3(app, deps.storage, decisionDeps, accessUser, deps.vault ?? (async () => BRAIN_NOTES));
   mountClaims(app, {
     storage: deps.storage,
     ...(deps.payments ? { payments: deps.payments } : {}),
