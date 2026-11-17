@@ -95,12 +95,12 @@ describe("v2 rule 14: agents can't change the safety layer", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("owner approvals are created only by the dashboard API (behind Access)", () => {
+  it("owner approvals are created only by the decisions path (v3 rule 18)", () => {
     const creators = files.filter(
       (f) =>
         /ownerApprovals\.add\(/.test(readFileSync(join(ROOT, f), "utf8")) &&
         !/(\.test\.ts$|__tests__|\/gates\/)/.test(f),
     );
-    expect(creators).toEqual(["apps/api/src/app.ts"]);
+    expect(creators).toEqual(["packages/infra/src/decisions.ts"]);
   });
 });

@@ -20,9 +20,191 @@ export interface CompanyActivity {
   synthetic: boolean;
 }
 
+export interface DecisionOption {
+  key: string;
+  label: string;
+  /** Plain-English effect, shown under the button. */
+  effect: string;
+}
+export type DecisionStatus = "open" | "decided" | "defaulted" | "superseded";
+export interface DecisionRow {
+  id: string;
+  type: string;
+  source_ref: string;
+  summary: string;
+  money_at_stake_gbp: number;
+  money_kind: "real" | "estimated" | "assumed" | "none";
+  options: DecisionOption[];
+  recommended: string;
+  safe_default: string;
+  deadline: string;
+  context: unknown;
+  status: DecisionStatus;
+  chosen_option: string | null;
+  decided_by: string | null;
+  approval_id: string | null;
+  error: string | null;
+  synthetic: boolean;
+  created_at: string;
+  decided_at: string | null;
+}
+const pj = (v: unknown) => (v === null || v === undefined ? null : JSON.parse(v as string));
+const toDecision = (r: Row): DecisionRow => ({
+  id: r.id as string,
+  type: r.type as string,
+  source_ref: r.source_ref as string,
+  summary: r.summary as string,
+  money_at_stake_gbp: Number(r.money_at_stake_gbp),
+  money_kind: r.money_kind as DecisionRow["money_kind"],
+  options: pj(r.options) as DecisionOption[],
+  recommended: r.recommended as string,
+  safe_default: r.safe_default as string,
+  deadline: r.deadline as string,
+  context: pj(r.context),
+  status: r.status as DecisionStatus,
+  chosen_option: (r.chosen_option as string | null) ?? null,
+  decided_by: (r.decided_by as string | null) ?? null,
+  approval_id: (r.approval_id as string | null) ?? null,
+  error: (r.error as string | null) ?? null,
+  synthetic: Number(r.synthetic) === 1,
+  created_at: r.created_at as string,
+  decided_at: (r.decided_at as string | null) ?? null,
+});
+
 export function v3Storage(db: SqlDriver) {
   const all = (sql: string, args: SqlValue[] = []) => db.all<Row>(sql, args);
+  const nowIso = () => new Date().toISOString();
   return {
+    decisions: {
+      /** Opens a decision unless one is already open for (type, source_ref). Returns the open one. */
+      open: async (
+        d: Omit<
+          DecisionRow,
+          | "id"
+          | "status"
+          | "chosen_option"
+          | "decided_by"
+          | "approval_id"
+          | "error"
+          | "created_at"
+          | "decided_at"
+        >,
+      ): Promise<DecisionRow> => {
+        await db.run(
+          `INSERT OR IGNORE INTO decisions (id, type, source_ref, summary, money_at_stake_gbp, money_kind, options, recommended, safe_default, deadline, context, status, synthetic, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
+          [
+            crypto.randomUUID(),
+            d.type,
+            d.source_ref,
+            d.summary,
+            d.money_at_stake_gbp,
+            d.money_kind,
+            JSON.stringify(d.options),
+            d.recommended,
+            d.safe_default,
+            d.deadline,
+            d.context === undefined ? null : JSON.stringify(d.context),
+            d.synthetic ? 1 : 0,
+            nowIso(),
+          ],
+        );
+        const r = (
+          await all(
+            "SELECT * FROM decisions WHERE type = ? AND source_ref = ? AND status = 'open'",
+            [d.type, d.source_ref],
+          )
+        )[0];
+        return toDecision(r as Row);
+      },
+      get: async (id: string) => {
+        const r = (await all("SELECT * FROM decisions WHERE id = ?", [id]))[0];
+        return r ? toDecision(r) : null;
+      },
+      openFor: async (type: string, sourceRef: string) => {
+        const r = (
+          await all(
+            "SELECT * FROM decisions WHERE type = ? AND source_ref = ? AND status = 'open'",
+            [type, sourceRef],
+          )
+        )[0];
+        return r ? toDecision(r) : null;
+      },
+      /** Open decisions, highest money at stake first, then the nearest deadline. */
+      list: async (o: { status?: DecisionStatus; type?: string; limit?: number } = {}) => {
+        const where: string[] = [];
+        const args: SqlValue[] = [];
+        if (o.status) {
+          where.push("status = ?");
+          args.push(o.status);
+        }
+        if (o.type) {
+          where.push("type = ?");
+          args.push(o.type);
+        }
+        return (
+          await all(
+            `SELECT * FROM decisions ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+             ORDER BY CASE status WHEN 'open' THEN 0 ELSE 1 END, money_at_stake_gbp DESC, deadline ASC, created_at ASC LIMIT ?`,
+            [...args, o.limit ?? 200],
+          )
+        ).map(toDecision);
+      },
+      /** Closes an open decision exactly once. False if it wasn't open (already decided elsewhere). */
+      close: async (
+        id: string,
+        c: {
+          status: Exclude<DecisionStatus, "open">;
+          chosen_option: string | null;
+          decided_by: string;
+          approval_id?: string | null;
+        },
+      ) =>
+        (
+          await db.run(
+            "UPDATE decisions SET status = ?, chosen_option = ?, decided_by = ?, approval_id = ?, decided_at = ? WHERE id = ? AND status = 'open'",
+            [c.status, c.chosen_option, c.decided_by, c.approval_id ?? null, nowIso(), id],
+          )
+        ).changes === 1,
+      setError: async (id: string, error: string) => {
+        await db.run("UPDATE decisions SET error = ? WHERE id = ?", [error, id]);
+      },
+      expired: async (now: string) =>
+        (
+          await all(
+            "SELECT * FROM decisions WHERE status = 'open' AND deadline <= ? ORDER BY deadline",
+            [now],
+          )
+        ).map(toDecision),
+      openCount: async () =>
+        Number((await all("SELECT COUNT(*) AS n FROM decisions WHERE status = 'open'"))[0]?.n ?? 0),
+      since: async (sinceIso: string) =>
+        (
+          await all("SELECT * FROM decisions WHERE decided_at >= ? ORDER BY decided_at", [sinceIso])
+        ).map(toDecision),
+    },
+
+    digests: {
+      put: async (day: string, body: unknown) => {
+        await db.run(
+          "INSERT INTO digests (day, body, created_at) VALUES (?, ?, ?) ON CONFLICT (day) DO UPDATE SET body = excluded.body, created_at = excluded.created_at",
+          [day, JSON.stringify(body), nowIso()],
+        );
+      },
+      get: async (day: string) => {
+        const r = (await all("SELECT * FROM digests WHERE day = ?", [day]))[0];
+        return r
+          ? { day: r.day as string, body: pj(r.body), created_at: r.created_at as string }
+          : null;
+      },
+      latest: async () => {
+        const r = (await all("SELECT * FROM digests ORDER BY day DESC LIMIT 1"))[0];
+        return r
+          ? { day: r.day as string, body: pj(r.body), created_at: r.created_at as string }
+          : null;
+      },
+    },
+
     crm: {
       /**
        * Every company with any outreach activity (or a live opportunity), with what the CRM needs to

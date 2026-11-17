@@ -1,5 +1,8 @@
 import { loadInfraConfig, loadProductsConfig, tradingDisclosure } from "@ae/config";
 import {
+  type DecisionDeps,
+  DecisionError,
+  decideSource,
   externalActionsAllowed,
   handleClaimEvent,
   loadBundledPlaybooks,
@@ -45,6 +48,7 @@ export interface ClaimDeps {
   storage: (env: unknown) => Storage;
   payments?: { provider: PaymentProvider; webhookSecret: string; publicBaseUrl: string };
   workflows?: (env: unknown) => WorkflowPort;
+  decisions?: (env: unknown) => DecisionDeps;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: the app's env type is generic across runtimes.
@@ -199,18 +203,28 @@ export function mountClaims(app: Hono<any>, deps: ClaimDeps) {
     });
   });
 
+  // Publishing is a decision in the one queue (rule 18); this route decides it.
   app.post("/api/claims/:id/publish", async (c) => {
     const b = z.object({ approve: z.boolean() }).safeParse(await c.req.json().catch(() => null));
     if (!b.success) return c.json({ error: "bad_request" }, 400);
     const s = deps.storage(c.env);
     const claim = await s.siteClaims.get(c.req.param("id"));
-    if (!claim?.workflow_id || !deps.workflows) return c.json({ error: "not_found" }, 404);
+    if (!claim?.workflow_id || !deps.decisions) return c.json({ error: "not_found" }, 404);
     if (claim.status !== "awaiting_publish")
       return c.json({ error: `claim is ${claim.status}` }, 409);
-    await deps
-      .workflows(c.env)
-      .sendEvent(claim.workflow_id, "publish_decision", { approve: b.data.approve });
-    return c.json({ ok: true });
+    try {
+      const x = await decideSource(
+        deps.decisions(c.env),
+        "claim_publish",
+        `claim:${claim.id}`,
+        b.data.approve ? "publish" : "not_yet",
+        c.req.header("cf-access-authenticated-user-email") ?? "archie (local dashboard)",
+      );
+      return c.json({ ok: !x.error, decision_id: x.id });
+    } catch (e) {
+      if (e instanceof DecisionError) return c.json({ error: e.message }, 409);
+      throw e;
+    }
   });
 }
 

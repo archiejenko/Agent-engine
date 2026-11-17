@@ -75,6 +75,7 @@ async function runtimeFor(env: Env): Promise<JobRuntime> {
     },
     refresh: async (id) =>
       client ? liveRefresh(storage, defaultContext(), client, ch, id) : false,
+    workflowPort: cloudflareWorkflowPort(env),
   };
 }
 

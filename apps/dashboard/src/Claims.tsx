@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getJson } from "./api.ts";
 import { EmptyRow } from "./format.tsx";
-import { recordReview } from "./reviewTimer.ts";
 
 interface Claim {
   id: string;
@@ -42,22 +41,7 @@ export function Claims() {
   }, []);
   useEffect(load, [load]);
   if (!d) return <p>{msg ?? "Loading…"}</p>;
-  const decide = async (c: Claim, approve: boolean) => {
-    recordReview("claim", c.id);
-    const r = await fetch(`/api/claims/${c.id}/publish`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ approve }),
-    });
-    setMsg(
-      r.ok
-        ? approve
-          ? "Approved: publishing."
-          : "Sent back."
-        : ((await r.json()).error ?? `HTTP ${r.status}`),
-    );
-    load();
-  };
+
   return (
     <>
       <h2>Claimed sites</h2>
@@ -88,12 +72,9 @@ export function Claims() {
                         Check: {(c.details.problems ?? []).join("; ")}
                       </p>
                     )}
-                    <button type="button" className="primary" onClick={() => decide(c, true)}>
-                      Approve and publish
-                    </button>{" "}
-                    <button type="button" onClick={() => decide(c, false)}>
-                      Not yet
-                    </button>
+                    <p>
+                      <a href="#/">Decide in Needs you</a>
+                    </p>
                   </div>
                 )}
               </td>

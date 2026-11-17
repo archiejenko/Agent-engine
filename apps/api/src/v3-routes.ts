@@ -1,5 +1,16 @@
 import { loadInfraConfig } from "@ae/config";
-import { CRM_STAGES, crmCompany, crmCsv, crmList, homeFigures } from "@ae/infra";
+import {
+  buildDigest,
+  CRM_STAGES,
+  crmCompany,
+  crmCsv,
+  crmList,
+  type DecisionDeps,
+  DecisionError,
+  decide,
+  homeFigures,
+  needsYou,
+} from "@ae/infra";
 import type { Storage } from "@ae/storage";
 import type { Hono } from "hono";
 import { z } from "zod";
@@ -23,8 +34,60 @@ const CrmQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
-// biome-ignore lint/suspicious/noExplicitAny: the app's env type is generic across runtimes.
-export function mountV3(app: Hono<any>, storageFor: (env: unknown) => Storage) {
+const Decide = z.object({
+  option: z.string().min(1).max(40),
+  edited_text: z.string().min(1).max(5000).nullable().optional(),
+  exclude: z.array(z.string().max(100)).max(1000).optional(),
+});
+
+export function mountV3(
+  // biome-ignore lint/suspicious/noExplicitAny: the app's env type is generic across runtimes.
+  app: Hono<any>,
+  storageFor: (env: unknown) => Storage,
+  decisionDeps: (env: unknown) => DecisionDeps,
+  // biome-ignore lint/suspicious/noExplicitAny: Hono context type is generic across runtimes.
+  accessUser: (c: any) => string,
+) {
+  // ---- Phase 2: the Needs-you queue (the only approval path) and the daily digest.
+  app.get("/api/decisions", async (c) => {
+    const type = c.req.query("type");
+    const d = decisionDeps(c.env);
+    const open = await needsYou(d, { ...(type ? { type } : {}) });
+    return c.json({
+      open,
+      recent: (await d.storage.decisions.list({ limit: 30 }))
+        .filter((x) => x.status !== "open")
+        .slice(0, 15),
+    });
+  });
+
+  app.post("/api/decisions/:id/decide", async (c) => {
+    const b = Decide.safeParse(await c.req.json().catch(() => null));
+    if (!b.success) return c.json({ error: "bad_request", issues: b.error.issues }, 400);
+    try {
+      const x = await decide(decisionDeps(c.env), c.req.param("id"), b.data.option, accessUser(c), {
+        ...(b.data.edited_text ? { edited_text: b.data.edited_text } : {}),
+        ...(b.data.exclude ? { exclude: b.data.exclude } : {}),
+      });
+      return c.json({ ok: !x.error, decision: x }, x.error ? 409 : 200);
+    } catch (e) {
+      if (e instanceof DecisionError) return c.json({ error: e.message }, 409);
+      throw e;
+    }
+  });
+
+  app.get("/api/digest", async (c) => {
+    const s = storageFor(c.env);
+    const day = c.req.query("day");
+    if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
+      const stored = await s.digests.get(day);
+      return c.json(stored?.body ?? (await buildDigest(s, loadInfraConfig(), { day })));
+    }
+    const latest = await s.digests.latest();
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    return c.json(latest?.body ?? (await buildDigest(s, loadInfraConfig(), { day: yesterday })));
+  });
+
   app.get("/api/home", async (c) => {
     const q = Range.safeParse(c.req.query());
     if (!q.success) return c.json({ error: "bad_request", issues: q.error.issues }, 400);

@@ -1,4 +1,5 @@
 import {
+  loadDecisionsConfig,
   loadInfraConfig,
   loadProductsConfig,
   loadTriggersConfig,
@@ -9,6 +10,9 @@ import {
   blindTask,
   type ContactStatus,
   contactStatus,
+  type DecisionDeps,
+  DecisionError,
+  decideSource,
   entityOfRef,
   feedIsStale,
   K,
@@ -18,8 +22,8 @@ import {
   outreachRoutes,
   playbookDailyCap,
   playbookStats,
-  promotePlaybook,
   recordOutcome,
+  requestAndDecide,
   setKillSwitch,
   setSpendTier,
   spendTier,
@@ -138,6 +142,43 @@ const LedgerBody = z.object({
 export function createApp(deps: AppDeps) {
   const app = new Hono();
   const universe = loadUniverseConfig();
+  // v3: every approval goes through the one decisions path (rule 18).
+  const decisionDeps = (env: unknown): DecisionDeps => ({
+    storage: deps.storage(env),
+    cfg: loadInfraConfig(),
+    dcfg: loadDecisionsConfig(),
+    ...(deps.decide ? { decideTask: deps.decide } : {}),
+    ...(deps.workflows ? { workflows: deps.workflows(env) } : {}),
+  });
+  // biome-ignore lint/suspicious/noExplicitAny: Hono context type is generic across runtimes.
+  const accessUser = (c: any): string =>
+    c.req.header("cf-access-authenticated-user-email") ?? "archie (local dashboard)";
+  const viaDecision = async (
+    // biome-ignore lint/suspicious/noExplicitAny: Hono context type is generic across runtimes.
+    c: any,
+    type: string,
+    sourceRef: string,
+    option: string,
+    payload: { edited_text?: string | null; exclude?: string[] } = {},
+  ) => {
+    try {
+      const x = await decideSource(
+        decisionDeps(c.env),
+        type,
+        sourceRef,
+        option,
+        accessUser(c),
+        payload,
+      );
+      return c.json(
+        { ok: !x.error, applied: true, decision_id: x.id, ...(x.error ? { error: x.error } : {}) },
+        x.error ? 409 : 200,
+      );
+    } catch (e) {
+      if (e instanceof DecisionError) return c.json({ error: e.message }, 409);
+      throw e;
+    }
+  };
   if (deps.auth) app.use("/api/*", deps.auth);
 
   app.get("/api/health", async (c) => {
@@ -290,11 +331,13 @@ export function createApp(deps: AppDeps) {
     // Only outreach modules can be approved; others (e.g. x402_discovery) are read-only.
     if (body.data.decision === "approve" && !loadInfraConfig().playbook_for_module[o.module])
       return c.json({ error: "read_only_module", module: o.module }, 409);
-    await s.opportunities.setStatus(
-      o.opportunity_id,
-      body.data.decision === "approve" ? "approved" : "rejected",
+    // Through the one decisions path (rule 18).
+    return viaDecision(
+      c,
+      "lead",
+      `opportunity:${o.opportunity_id}`,
+      body.data.decision === "approve" ? "approve" : "skip",
     );
-    return c.json({ ok: true });
   });
 
   app.post("/api/tasks/:id/decision", async (c) => {
@@ -304,14 +347,16 @@ export function createApp(deps: AppDeps) {
     const t = await s.tasks.get(c.req.param("id"));
     if (!t) return c.json({ error: "not_found" }, 404);
     if (t.status !== "awaiting_approval") return c.json({ error: "not_awaiting_approval" }, 409);
-    if (deps.decide) {
-      await deps.decide(t.task_id, body.data.decision, body.data.edited_text);
-      return c.json({ ok: true, applied: true });
-    }
-    await s.tasks.update(t.task_id, {
-      state: { ...t.state, pending_decision: { ...body.data, at: new Date().toISOString() } },
-    });
-    return c.json({ ok: true, applied: false });
+    // Through the one decisions path (rule 18).
+    return viaDecision(
+      c,
+      "draft",
+      `task:${t.task_id}`,
+      body.data.decision === "reject" ? "reject" : "approve",
+      {
+        edited_text: body.data.decision === "edit" ? body.data.edited_text : null,
+      },
+    );
   });
 
   app.get("/api/tasks/:id", async (c) => {
@@ -328,6 +373,9 @@ export function createApp(deps: AppDeps) {
   app.post("/api/quarantine/:id/resolve", async (c) => {
     const body = Resolve.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "bad_request" }, 400);
+    if (body.data.entity_id === null)
+      return viaDecision(c, "quarantine", `quarantine:${c.req.param("id")}`, "not_a_match");
+    // Linking a record to a company is a data correction (verification), not an approval.
     await deps.storage(c.env).quarantine.resolve(c.req.param("id"), body.data.entity_id);
     return c.json({ ok: true });
   });
@@ -452,23 +500,20 @@ export function createApp(deps: AppDeps) {
       .object({ key: z.string().min(1).max(300), happened: z.boolean() })
       .safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "bad_request" }, 400);
-    const s = deps.storage(c.env);
-    const e = await s.effects.get(body.data.key);
+    const e = await deps.storage(c.env).effects.get(body.data.key);
     if (!e) return c.json({ error: "not_found" }, 404);
     if (e.status === "done") return c.json({ error: "already_done" }, 409);
-    await s.effects.finish(
-      e.key,
-      body.data.happened ? "done" : "not_happened",
-      e.result,
-      `settled by a person: ${body.data.happened ? "it happened" : "it did not happen"}`,
+    return viaDecision(
+      c,
+      "uncertain_effect",
+      `effect:${e.key}`,
+      body.data.happened ? "happened" : "did_not_happen",
     );
-    return c.json({ ok: true });
   });
 
-  app.post("/api/dead-letters/:id/resolve", async (c) => {
-    await deps.storage(c.env).deadLetters.resolve(c.req.param("id"));
-    return c.json({ ok: true });
-  });
+  app.post("/api/dead-letters/:id/resolve", async (c) =>
+    viaDecision(c, "dead_letter", `dead_letter:${c.req.param("id")}`, "set_aside"),
+  );
 
   app.get("/api/golden/next", async (c) => {
     const s = deps.storage(c.env);
@@ -550,12 +595,13 @@ export function createApp(deps: AppDeps) {
   mountX402(app, deps.x402, deps.storage, vctx);
 
   // ---- sme_letter: print queue (dashboard) and demo pages (public, noindex).
-  mountLetters(app, deps.storage, deps.decide);
-  mountV3(app, deps.storage);
+  mountLetters(app, deps.storage, deps.decide, decisionDeps);
+  mountV3(app, deps.storage, decisionDeps, accessUser);
   mountClaims(app, {
     storage: deps.storage,
     ...(deps.payments ? { payments: deps.payments } : {}),
     ...(deps.workflows ? { workflows: deps.workflows } : {}),
+    decisions: decisionDeps,
   });
 
   // ---- Phase 5: card payments (public), controls and autonomy (dashboard, behind Access).
@@ -686,20 +732,30 @@ export function createApp(deps: AppDeps) {
   app.post("/api/playbooks/:name/promote", async (c) => {
     const pb = (await loadBundledPlaybooks()).get(c.req.param("name"));
     if (!pb) return c.json({ error: "not_found" }, 404);
-    const approvalId = z
-      .object({ approval_id: z.string().max(100).optional() })
-      .safeParse(await c.req.json().catch(() => ({}))).data?.approval_id;
     try {
+      const x = await requestAndDecide(
+        decisionDeps(c.env),
+        {
+          type: "autonomy",
+          source_ref: `autonomy:${pb.spec.playbook}`,
+          summary: `Promote ${pb.spec.playbook} one autonomy level`,
+          option: "promote",
+          options: [
+            {
+              key: "promote",
+              label: "Promote",
+              effect: "one level up (L3 needs this recorded approval)",
+            },
+            { key: "keep", label: "Keep", effect: "no change" },
+          ],
+          context: { base: pb.spec.autonomy },
+        },
+        accessUser(c),
+      );
+      if (x.error) return c.json({ error: x.error }, 409);
       return c.json({
         ok: true,
-        autonomy: await promotePlaybook(
-          deps.storage(c.env),
-          pb.spec.playbook,
-          pb.spec.autonomy,
-          loadInfraConfig(),
-          "archie (dashboard)",
-          approvalId,
-        ),
+        autonomy: await deps.storage(c.env).controls.get(`autonomy:${pb.spec.playbook}`),
       });
     } catch (e) {
       return c.json({ error: (e as Error).message }, 409);
@@ -709,6 +765,7 @@ export function createApp(deps: AppDeps) {
   // ---- v2 Phase 3: hard budgets, spend tiers and owner approvals.
   // Owner approvals are created ONLY here, behind Cloudflare Access (Archie). Agents have no other path
   // to create one (a test checks no other source file calls ownerApprovals.add).
+  // Raising a tier or reaching L3: a decision Archie makes in one tap (the one recorded-approval path).
   app.post("/api/owner-approvals", async (c) => {
     const body = z
       .discriminatedUnion("kind", [
@@ -726,27 +783,49 @@ export function createApp(deps: AppDeps) {
       ])
       .safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "bad_request", issues: body.error.issues }, 400);
-    const s = deps.storage(c.env);
-    const who = c.req.header("cf-access-authenticated-user-email") ?? "archie (local dashboard)";
-    const id = await s.ownerApprovals.add({
-      kind: body.data.kind,
-      subject: body.data.playbook,
-      value: body.data.kind === "spend_tier" ? { tier: body.data.tier } : { autonomy: "L3" },
-      approved_by: who,
-      note: body.data.note ?? null,
-    });
+    const pb = (await loadBundledPlaybooks()).get(body.data.playbook);
+    if (!pb) return c.json({ error: "not_found" }, 404);
     try {
-      if (body.data.kind === "spend_tier")
-        await setSpendTier(s, body.data.playbook, body.data.tier, { approvalId: id, by: who });
-      else {
-        const pb = (await loadBundledPlaybooks()).get(body.data.playbook);
-        if (!pb) return c.json({ error: "not_found" }, 404);
-        await promotePlaybook(s, pb.spec.playbook, pb.spec.autonomy, loadInfraConfig(), who, id);
-      }
+      const x =
+        body.data.kind === "spend_tier"
+          ? await requestAndDecide(
+              decisionDeps(c.env),
+              {
+                type: "spend_tier",
+                source_ref: `spend_tier:${body.data.playbook}:${body.data.tier}`,
+                summary: `Raise ${body.data.playbook} to ${body.data.tier}`,
+                option: "raise",
+                options: [
+                  {
+                    key: "raise",
+                    label: `Raise to ${body.data.tier}`,
+                    effect: "a higher daily cap",
+                  },
+                  { key: "keep", label: "Keep the current tier", effect: "no change" },
+                ],
+              },
+              accessUser(c),
+            )
+          : await requestAndDecide(
+              decisionDeps(c.env),
+              {
+                type: "autonomy",
+                source_ref: `autonomy:${body.data.playbook}`,
+                summary: `Promote ${body.data.playbook} (to L3 if it's at L2)`,
+                option: "promote",
+                options: [
+                  { key: "promote", label: "Promote", effect: "one level up" },
+                  { key: "keep", label: "Keep", effect: "no change" },
+                ],
+                context: { base: pb.spec.autonomy },
+              },
+              accessUser(c),
+            );
+      if (x.error) return c.json({ error: x.error, approval_id: x.approval_id }, 409);
+      return c.json({ ok: true, approval_id: x.approval_id, decision_id: x.id }, 201);
     } catch (e) {
-      return c.json({ error: (e as Error).message, approval_id: id }, 409);
+      return c.json({ error: (e as Error).message }, 409);
     }
-    return c.json({ ok: true, approval_id: id }, 201);
   });
 
   // Lowering a tier is always allowed (safer) and needs no approval.

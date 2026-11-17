@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { getJson } from "./api.ts";
+import { Digest } from "./Digest.tsx";
 import { Metrics } from "./Metrics.tsx";
+import { NeedsYou } from "./NeedsYou.tsx";
 import { Overview } from "./Overview.tsx";
 
 interface Figure {
@@ -56,6 +58,8 @@ export function Home() {
   }, [from, to, playbook, sim]);
   return (
     <>
+      <NeedsYou />
+      <Digest />
       <h2>Home</h2>
       <div className="filters">
         <label>

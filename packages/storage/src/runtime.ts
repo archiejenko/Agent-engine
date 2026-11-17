@@ -90,7 +90,7 @@ export interface TriggerStatRow {
 
 export interface OwnerApprovalRow {
   id: string;
-  kind: "spend_tier" | "autonomy_l3";
+  kind: "spend_tier" | "autonomy_l3" | "decision";
   subject: string;
   value: unknown;
   approved_by: string;
@@ -102,11 +102,22 @@ export interface OwnerApprovalRow {
 export function runtimeStorage(db: SqlDriver) {
   return {
     ownerApprovals: {
-      add: async (a: Omit<OwnerApprovalRow, "id" | "created_at" | "used_at">) => {
+      add: async (
+        a: Omit<OwnerApprovalRow, "id" | "created_at" | "used_at"> & { decision_id?: string },
+      ) => {
         const id = crypto.randomUUID();
         await db.run(
-          "INSERT INTO owner_approvals (id, kind, subject, value, approved_by, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-          [id, a.kind, a.subject, j(a.value), a.approved_by, a.note, nowIso()],
+          "INSERT INTO owner_approvals (id, kind, subject, value, approved_by, note, created_at, decision_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          [
+            id,
+            a.kind,
+            a.subject,
+            j(a.value),
+            a.approved_by,
+            a.note,
+            nowIso(),
+            a.decision_id ?? null,
+          ],
         );
         return id;
       },

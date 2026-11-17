@@ -3,15 +3,17 @@ import {
   type BlockedItem,
   batchPdf,
   createPrintBatch,
-  decidePrintBatch,
+  type DecisionDeps,
+  DecisionError,
+  decideSource,
   demoBeaconHash,
   demoUrl,
+  externalActionsAllowed,
   instrumentDemoHtml,
   letterSuppressionKey,
   optOutByCode,
   recordDemoTime,
   recordDemoVisit,
-  recordOutcome,
   renderPublicPage,
   servableDemo,
 } from "@ae/infra";
@@ -35,7 +37,8 @@ export function mountLetters(
   // biome-ignore lint/suspicious/noExplicitAny: the app's env type is generic across runtimes.
   app: Hono<any>,
   storageFor: (env: unknown) => Storage,
-  decide?: (taskId: string, d: "approve" | "reject", edited: string | null) => Promise<unknown>,
+  _decide?: (taskId: string, d: "approve" | "reject", edited: string | null) => Promise<unknown>,
+  decisions?: (env: unknown) => DecisionDeps,
 ) {
   app.get("/api/letters", async (c) => {
     const s = storageFor(c.env);
@@ -93,6 +96,7 @@ export function mountLetters(
     });
   });
 
+  // Approving a batch is a decision in the one queue (rule 18); this route decides it.
   app.post("/api/letters/batches/:id/decision", async (c) => {
     const body = BatchDecision.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "bad_request", issues: body.error.issues }, 400);
@@ -100,42 +104,31 @@ export function mountLetters(
     const b = await s.printBatches.get(c.req.param("id"));
     if (!b) return c.json({ error: "not_found" }, 404);
     if (b.status !== "pending") return c.json({ error: `already_${b.status}` }, 409);
-    const r = await decidePrintBatch(
-      s,
-      loadInfraConfig(),
-      b.id,
-      body.data.decision,
-      body.data.exclude,
-      async (taskId, d) => {
-        if (decide) return decide(taskId, d, null);
-        // On Cloudflare the runner applies it on its next tick (same as single decisions).
-        const t = await s.tasks.get(taskId);
-        if (t?.status === "awaiting_approval")
-          await s.tasks.update(taskId, {
-            state: {
-              ...t.state,
-              pending_decision: { decision: d, edited_text: null, at: new Date().toISOString() },
-            },
-          });
-      },
-    );
-    // Outcome ledger: each approved letter counts as sent (dry run while the kill switch is on).
-    if (body.data.decision === "approve")
-      for (const l of await s.letters.list({ batchId: b.id, status: "approved", limit: 1000 }))
-        await recordOutcome(s, loadInfraConfig(), {
-          event: "sent",
-          entity_id: l.entity_id,
-          task: await s.tasks.get(l.task_id),
-          source: "letters",
-          dedupe_key: `sent:letter:${l.task_id}`,
-          dry_run: !r.demo_links_live,
-        });
-    return c.json({
-      ...r,
-      note: r.demo_links_live
-        ? "Demo links are live."
-        : "Demo links stay offline while external actions are switched off for sme_letter (kill switch).",
-    });
+    if (!decisions) return c.json({ error: "decisions_unavailable" }, 503);
+    try {
+      const x = await decideSource(
+        decisions(c.env),
+        "print_batch",
+        `batch:${b.id}`,
+        body.data.decision,
+        c.req.header("cf-access-authenticated-user-email") ?? "archie (local dashboard)",
+        { exclude: body.data.exclude },
+      );
+      const letters = await s.letters.list({ batchId: b.id, limit: 1000 });
+      const live = await externalActionsAllowed(s, loadInfraConfig(), "sme_letter");
+      return c.json({
+        decision_id: x.id,
+        approved: letters.filter((l) => l.status === "approved").length,
+        rejected: letters.filter((l) => l.status === "rejected").length,
+        demo_links_live: live && body.data.decision === "approve",
+        note: live
+          ? "Demo links are live."
+          : "Demo links stay offline while external actions are switched off for sme_letter (kill switch).",
+      });
+    } catch (e) {
+      if (e instanceof DecisionError) return c.json({ error: e.message }, 409);
+      throw e;
+    }
   });
 
   // "No more letters" (a reply by post or email): adds the company to the shared suppression list.

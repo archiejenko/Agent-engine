@@ -1,5 +1,5 @@
 import { Letters } from "./Letters.tsx";
-import { Review } from "./Review.tsx";
+import { NeedsYou } from "./NeedsYou.tsx";
 
 /** Inbox (v3): outbound drafts, sent mail, replies and letters. Phase 3 completes it. */
 export function Inbox({ route }: { route: string }) {
@@ -14,7 +14,7 @@ export function Inbox({ route }: { route: string }) {
           aria-selected={tab === "drafts"}
           className={tab === "drafts" ? "active" : undefined}
         >
-          Drafts and review
+          Drafts
         </a>
         <a
           href="#/inbox/letters"
@@ -25,7 +25,7 @@ export function Inbox({ route }: { route: string }) {
           Letters
         </a>
       </div>
-      {tab === "letters" ? <Letters /> : <Review />}
+      {tab === "letters" ? <Letters /> : <NeedsYou type="draft" title="Drafts awaiting approval" />}
     </>
   );
 }

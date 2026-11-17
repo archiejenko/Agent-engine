@@ -157,8 +157,15 @@ export async function setSpendTier(
   const current = await spendTier(storage, playbook);
   if (TIERS.indexOf(tier) > TIERS.indexOf(current)) {
     const a = o.approvalId ? await storage.ownerApprovals.get(o.approvalId) : null;
-    const value = a?.value as { tier?: string } | undefined;
-    if (a?.kind !== "spend_tier" || a.subject !== playbook || value?.tier !== tier)
+    const value = a?.value as { tier?: string; type?: string; option?: string } | undefined;
+    // v3: the approval is a recorded decision for exactly this playbook and tier (or a v2 tier approval).
+    const okDecision =
+      a?.kind === "decision" &&
+      value?.type === "spend_tier" &&
+      a.subject === `spend_tier:${playbook}:${tier}` &&
+      value.option === "raise";
+    const okV2 = a?.kind === "spend_tier" && a.subject === playbook && value?.tier === tier;
+    if (!a || !(okDecision || okV2))
       throw new Error(
         `raising ${playbook} to ${tier} needs Archie's recorded approval for exactly that`,
       );

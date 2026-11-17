@@ -1,12 +1,21 @@
-import { loadTriggersConfig, loadUniverseConfig, type TriggersConfig } from "@ae/config";
+import {
+  loadDecisionsConfig,
+  loadTriggersConfig,
+  loadUniverseConfig,
+  type TriggersConfig,
+} from "@ae/config";
 import {
   type CompanyEvent,
   chunkEvents,
+  dailyDigest,
+  expireDecisions,
   feedIsStale,
   type LocalWorkflowEngine,
   loadTriggerScope,
   pollFallback,
   processEvents,
+  syncDecisions,
+  type WorkflowPort,
 } from "@ae/infra";
 import { explainOpportunity } from "@ae/opportunity";
 import type { Storage } from "@ae/storage";
@@ -23,7 +32,8 @@ export type Job =
   | { kind: "company_events"; source: string; events: CompanyEvent[] }
   | { kind: "poll_fallback" }
   | { kind: "reverify"; entity_id: string; reason: string }
-  | { kind: "workflows_tick" };
+  | { kind: "workflows_tick" }
+  | { kind: "decisions" };
 
 export interface JobRuntime {
   service: AgentService;
@@ -32,13 +42,20 @@ export interface JobRuntime {
   /** Re-fetches one company from Companies House; false when it couldn't (no key, not found). */
   refresh(entityId: string): Promise<boolean>;
   workflows?: LocalWorkflowEngine | null;
+  /** Telling workflows about decisions (claim publish); Cloudflare Workflows or the local engine. */
+  workflowPort?: WorkflowPort;
   triggers?: TriggersConfig;
   now?: () => Date;
 }
 
 /** What the scheduled trigger enqueues on each run. */
 export function scheduledJobs(): Job[] {
-  return [{ kind: "tick" }, { kind: "poll_fallback" }, { kind: "workflows_tick" }];
+  return [
+    { kind: "tick" },
+    { kind: "poll_fallback" },
+    { kind: "workflows_tick" },
+    { kind: "decisions" },
+  ];
 }
 
 export async function handleJob(rt: JobRuntime, job: Job): Promise<unknown> {
@@ -90,6 +107,26 @@ export async function handleJob(rt: JobRuntime, job: Job): Promise<unknown> {
       return rt.refresh(job.entity_id);
     case "workflows_tick":
       return rt.workflows ? rt.workflows.tick() : 0;
+    case "decisions": {
+      // Sync the Needs-you queue, apply safe defaults to expired decisions, build yesterday's digest.
+      const d = {
+        storage,
+        cfg: rt.service.infra,
+        dcfg: loadDecisionsConfig(),
+        decideTask: (id: string, x: "approve" | "edit" | "reject", t: string | null) =>
+          rt.service.decide(id, x, t),
+        ...(rt.workflowPort ? { workflows: rt.workflowPort } : {}),
+      };
+      const opened = await syncDecisions(d);
+      const defaulted = await expireDecisions(d);
+      const digest = await dailyDigest(storage, rt.service.infra, d.dcfg, now);
+      await storage.runtimeStatus.beat("decisions", {
+        opened,
+        defaulted,
+        digest: digest?.day ?? null,
+      });
+      return { opened, defaulted };
+    }
   }
 }
 

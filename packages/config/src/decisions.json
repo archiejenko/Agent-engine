@@ -1,0 +1,17 @@
+{
+  "_note": "v3 Needs-you queue. How long each kind of decision waits for Archie before its SAFE DEFAULT applies (the option that spends nothing and sends nothing; recorded as 'defaulted', never as Archie's approval). Hours.",
+  "deadline_hours": {
+    "lead": 168,
+    "draft": 72,
+    "print_batch": 168,
+    "claim_publish": 120,
+    "uncertain_effect": 336,
+    "dead_letter": 336,
+    "data_conflict": 720,
+    "quarantine": 720,
+    "spend_tier": 72,
+    "autonomy": 72
+  },
+  "max_open_leads": 50,
+  "digest_hour_utc": 6
+}

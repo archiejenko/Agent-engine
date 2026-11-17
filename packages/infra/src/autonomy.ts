@@ -68,7 +68,14 @@ export async function promotePlaybook(
   const next = LEVELS[Math.min(LEVELS.length - 1, LEVELS.indexOf(current) + 1)] as Autonomy;
   if (next === "L3" && current !== "L3") {
     const a = approvalId ? await storage.ownerApprovals.get(approvalId) : null;
-    if (a?.kind !== "autonomy_l3" || a.subject !== playbook)
+    const value = a?.value as { type?: string; option?: string } | undefined;
+    const okDecision =
+      a?.kind === "decision" &&
+      value?.type === "autonomy" &&
+      a.subject === `autonomy:${playbook}` &&
+      value.option === "promote";
+    const okV2 = a?.kind === "autonomy_l3" && a.subject === playbook;
+    if (!a || !(okDecision || okV2))
       throw new Error(`can't promote ${playbook} to L3: needs Archie's recorded approval`);
     if (!(await storage.ownerApprovals.use(a.id)))
       throw new Error("that approval was already used");

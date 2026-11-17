@@ -194,6 +194,8 @@ export class SqlStorage implements Storage {
   declare siteClaims: Storage["siteClaims"];
   declare workflowEvents: Storage["workflowEvents"];
   declare crm: Storage["crm"];
+  declare decisions: Storage["decisions"];
+  declare digests: Storage["digests"];
   declare ledgerRange: Storage["ledgerRange"];
   declare ledgerForEntity: Storage["ledgerForEntity"];
 

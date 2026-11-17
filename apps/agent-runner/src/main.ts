@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { localWorkflowPort } from "@ae/infra";
 import { openSqliteStorage } from "@ae/storage/sqlite";
 import {
   handleJob,
@@ -22,6 +23,8 @@ const rt: JobRuntime = {
   service,
   send: (job) => queue.send(job),
   refresh: async () => false, // no Companies House key locally
+  workflows: service.workflows,
+  workflowPort: localWorkflowPort(service.workflows),
 };
 const queue: LocalJobQueue = new LocalJobQueue(
   (job) => handleJob(rt, job),

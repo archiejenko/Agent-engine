@@ -341,3 +341,21 @@ details > summary {
   margin: 1.2rem 0 0.4rem;
   font-weight: 600;
 }
+.card.decision {
+  border: 1px solid #ccd3db;
+  border-radius: 8px;
+  padding: 0.7rem;
+  margin-bottom: 0.7rem;
+}
+.decision-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+.decision-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 0.4rem;
+}

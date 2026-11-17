@@ -48,7 +48,7 @@ const NAMES: Record<string, string> = {
   poll_fallback: "Polling fallback",
 };
 
-const post = (path: string, body: unknown) =>
+const _post = (path: string, body: unknown) =>
   fetch(path, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -100,30 +100,14 @@ export function Health() {
       {d.dead_letters.map((x) => (
         <p key={x.id} className="card">
           Failed job <b>{x.body?.kind ?? "job"}</b> ({x.attempts} attempts): {x.error}{" "}
-          <button
-            type="button"
-            onClick={() => post(`/api/dead-letters/${x.id}/resolve`, {}).then(load)}
-          >
-            Dealt with
-          </button>
+          <a href="#/">In Needs you</a>
         </p>
       ))}
       {d.uncertain_effects.map((e) => (
         <p key={e.key} className="card">
           <b>{e.tool}</b> for task {e.task_id.slice(0, 8)} may or may not have happened (
           {e.error ?? e.status}). It won't be repeated until you say.{" "}
-          <button
-            type="button"
-            onClick={() => post("/api/effects/resolve", { key: e.key, happened: true }).then(load)}
-          >
-            It happened
-          </button>{" "}
-          <button
-            type="button"
-            onClick={() => post("/api/effects/resolve", { key: e.key, happened: false }).then(load)}
-          >
-            It didn't happen
-          </button>
+          <a href="#/">Decide in Needs you</a>
         </p>
       ))}
       {d.workflows.attention.map((w) => (

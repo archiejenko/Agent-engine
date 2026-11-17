@@ -7,6 +7,7 @@ import {
 import { z } from "zod";
 import chJson from "./companies_house.json" with { type: "json" };
 import confidenceJson from "./confidence.json" with { type: "json" };
+import decisionsJson from "./decisions.json" with { type: "json" };
 import registryJson from "./field-registry.json" with { type: "json" };
 import infraJson from "./infra.json" with { type: "json" };
 import modelsJson from "./models.json" with { type: "json" };
@@ -357,6 +358,7 @@ export const rawConfig = {
   registry: registryJson,
   verification: verificationJson,
   triggers: triggersJson,
+  decisions: decisionsJson,
 };
 
 /** The company number used until Archie sets the real one (real sends refuse to run with it). */
@@ -432,4 +434,15 @@ export const TriggersConfig = z
 export type TriggersConfig = z.infer<typeof TriggersConfig>;
 export function loadTriggersConfig(raw: unknown = triggersJson): TriggersConfig {
   return TriggersConfig.parse(raw);
+}
+
+/** v3 Needs-you queue: deadlines per decision type (hours), lead cap, digest hour. */
+export const DecisionsConfig = z.object({
+  deadline_hours: z.record(z.string(), z.number().positive()),
+  max_open_leads: z.number().int().min(1).max(1000),
+  digest_hour_utc: z.number().int().min(0).max(23),
+});
+export type DecisionsConfig = z.infer<typeof DecisionsConfig>;
+export function loadDecisionsConfig(raw: unknown = decisionsJson): DecisionsConfig {
+  return DecisionsConfig.parse(raw);
 }
