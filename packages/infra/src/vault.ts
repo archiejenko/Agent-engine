@@ -227,32 +227,7 @@ export async function writeAgentNote(
   });
 }
 
-// ---- The ideas sheet (brain/ideas/seed-500.csv): shown in the Vault; every score is ASSUMED (rule 23).
-
-export const IDEA_SCORE_COLUMNS = [
-  "Autonomy",
-  "Speed to cash",
-  "Demand",
-  "Margin",
-  "Ease of build",
-  "Low risk",
-] as const;
-export const IDEA_COLUMNS = [
-  "ID",
-  "Rank",
-  "Idea",
-  "Score",
-  "Matrix",
-  "Category",
-  "Buyer",
-  "How it earns",
-  "Why now",
-  ...IDEA_SCORE_COLUMNS,
-  "Status",
-  "Decision",
-  "Comments",
-  "Batch",
-] as const;
+// ---- CSV (the ideas sheet itself is handled in ideas.ts).
 
 /** RFC 4180 CSV (quotes, doubled quotes, commas and newlines inside quotes). */
 export function parseCsv(text: string): string[][] {
@@ -283,35 +258,4 @@ export function parseCsv(text: string): string[][] {
   row.push(cell);
   if (row.some((c) => c !== "")) rows.push(row);
   return rows;
-}
-
-export interface IdeaRow {
-  values: Record<string, string>;
-  scores: Record<string, number | null>;
-  /** Every number in the sheet is an estimate (rule 23): never an outcome, never training data. */
-  kind: "assumed";
-}
-
-export function parseIdeasSheet(text: string): {
-  columns: string[];
-  missing: string[];
-  rows: IdeaRow[];
-} {
-  const [header, ...body] = parseCsv(text.replace(/^﻿/, ""));
-  const columns = (header ?? []).map((h) => h.trim());
-  const missing = IDEA_COLUMNS.filter(
-    (c) => !columns.some((h) => h.toLowerCase() === c.toLowerCase()),
-  );
-  const idx = (c: string) => columns.findIndex((h) => h.toLowerCase() === c.toLowerCase());
-  const rows = body.map((r) => {
-    const values: Record<string, string> = {};
-    for (const c of columns) values[c] = (r[idx(c)] ?? "").trim();
-    const scores: Record<string, number | null> = {};
-    for (const c of [...IDEA_SCORE_COLUMNS, "Score"]) {
-      const v = Number.parseFloat(r[idx(c)] ?? "");
-      scores[c] = Number.isFinite(v) ? v : null;
-    }
-    return { values, scores, kind: "assumed" as const };
-  });
-  return { columns, missing: [...missing], rows };
 }

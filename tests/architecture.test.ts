@@ -106,17 +106,46 @@ describe("v2 rule 14: agents can't change the safety layer", () => {
 });
 
 describe("v3 rule 23: assumed numbers stay assumed", () => {
-  it("scoring, targeting and learning code never reads the seeded ideas sheet", () => {
-    const scoring = files.filter(
-      (f) =>
-        /^packages\/opportunity\/src\//.test(f) ||
-        /^packages\/infra\/src\/(ev|cohort|ledger|lift|analytics)\.ts$/.test(f),
-    );
+  // Scoring, targeting, learning, ledger and verification code: none of it may read the seeded ideas,
+  // their hypotheses or their score history.
+  const scoring = files.filter(
+    (f) =>
+      !/\.test\.ts$|__tests__/.test(f) &&
+      (/^packages\/(opportunity|verification)\/src\//.test(f) ||
+        /^packages\/infra\/src\/(ev|cohort|ledger|lift|analytics|economics|autonomy|budget|outreach|triggers|digest|crm)\.ts$/.test(
+          f,
+        )),
+  );
+  it("scoring, targeting and learning code never reads the seeded ideas sheet or hypotheses", () => {
     const offenders = scoring.filter((f) =>
-      /seed-500|parseIdeasSheet|brain\/ideas/.test(readFileSync(join(ROOT, f), "utf8")),
+      /seed-500|brain\/ideas|\bhypotheses\b|hypothesis_score_history|hypothesis_imports|ideaScore|importIdeas|ideasSheetView|from "\.\/ideas\.ts"/.test(
+        readFileSync(join(ROOT, f), "utf8"),
+      ),
     );
-    expect(scoring.length).toBeGreaterThan(5);
+    expect(scoring.length).toBeGreaterThan(10);
     expect(offenders).toEqual([]);
+  });
+  it("no SQL outside the hypotheses store touches the hypotheses tables", () => {
+    const sqlFiles = files.filter(
+      (f) => /^packages\/storage\/src\/.*\.ts$/.test(f) && !/\.test\.ts$/.test(f),
+    );
+    const outside = sqlFiles.filter(
+      (f) =>
+        f !== "packages/storage/src/v3.ts" &&
+        f !== "packages/storage/src/sql-storage.ts" &&
+        /\bhypotheses\b|hypothesis_score_history|hypothesis_imports/.test(
+          readFileSync(join(ROOT, f), "utf8"),
+        ),
+    );
+    expect(outside).toEqual([]);
+    const v3 = readFileSync(join(ROOT, "packages/storage/src/v3.ts"), "utf8");
+    const start = v3.indexOf("    hypotheses: {");
+    const end = v3.indexOf("    keyRegistry: {");
+    const strays = [
+      ...v3.matchAll(/(FROM|INTO|JOIN|UPDATE)\s+(hypotheses|hypothesis_\w+)/g),
+    ].filter((m) => (m.index ?? 0) < start || (m.index ?? 0) > end);
+    expect(start).toBeGreaterThan(0);
+    expect(strays.map((m) => m[0])).toEqual([]);
   });
 });
 

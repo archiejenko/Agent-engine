@@ -1,0 +1,11 @@
+id,rank,idea,score,matrix,category,buyer,revenue_model,why_now,autonomy,speed_to_cash,demand,margin,ease_of_build,low_risk,status,decision,comments,batch,score_source
+I292,1,Quote follow-up automation,91,Do first,Back-office automation,SMEs,Monthly subscription,Evergreen,5,4,5,4,4,5,New,,,1: Market opportunities,estimate
+I383,2,Pre-qualification questionnaire answers from past submissions,90,Do first,Sales operations and bids,Sales teams in traditional firms,Monthly subscription,Slow quoting and admin,5,4,4,5,4,5,New,,,2: Slow processes,estimate
+I098,3,Strike-off warning rescue alerts from Gazette notices,89,Do first,Compliance and deadlines,SMEs and sole traders,One-off fee or subscription,Open data: Gazette notices,5,5,4,4,4,4,New,,,1: Market opportunities,estimate
+I140,4,Gazette notice alerts for credit controllers,89,Do first,Monitoring and alerts,Businesses,Monthly subscription,Open data signals,5,4,4,4,5,5,New,,,1: Market opportunities,estimate
+I142,5,Trades: missed-call text-back and follow-up,89,Do first,Traditional industries,Traditional SMEs,Setup fee plus monthly,Evergreen,5,4,5,4,4,4,New,,,1: Market opportunities,estimate
+I148,6,Garages: MOT and service reminder automation,89,Do first,Traditional industries,Traditional SMEs,Setup fee plus monthly,Evergreen,5,4,5,4,4,4,New,,,1: Market opportunities,estimate
+I172,7,Marketing agencies: white-label site audit reports,89,Do first,Professional services,Professional firms,Monthly subscription or white label,Evergreen,5,4,4,4,5,5,New,,,1: Market opportunities,estimate
+I233,16,Weekly 'new companies in your sector' paid digest,88,Do first,Digital products and content,Online buyers,"One-off sale, ads or sponsors",Open data: new incorporations,5,4,3,5,5,5,New,,,1: Market opportunities,estimate
+I459,21,Sustainability questionnaires for large customers,88,Do first,"Health, safety, quality and environment",Safety and quality managers,Monthly subscription,Paper-heavy compliance,5,4,4,5,4,4,New,,,2: Slow processes,estimate
+I121,14,Customer and supplier company watch (already built),88,Do first,Monitoring and alerts,Businesses,Monthly subscription,Open data signals,5,4,3,5,5,5,Built,,,1: Market opportunities,estimate

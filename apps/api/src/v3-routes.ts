@@ -11,10 +11,13 @@ import {
   decide,
   type GitNote,
   homeFigures,
+  IDEAS_PATH,
+  IdeaImportError,
+  ideasSheetView,
+  importIdeas,
   KeyError,
   KeyRing,
   needsYou,
-  parseIdeasSheet,
   searchVault,
   storageMailbox,
   vaultNotes,
@@ -164,14 +167,34 @@ export function mountV3(
     }
   });
   app.get("/api/vault/ideas", async (c) => {
-    const sheet = (await notes(c.env)).find((n) => n.path === "brain/ideas/seed-500.csv");
-    if (!sheet) return c.json({ present: false, path: "brain/ideas/seed-500.csv" });
-    const parsed = parseIdeasSheet(sheet.body);
+    const sheet = (await notes(c.env)).find((n) => n.path === IDEAS_PATH);
+    if (!sheet) return c.json({ present: false, path: IDEAS_PATH });
+    const s = storageFor(c.env);
     return c.json({
       present: true,
-      note: "Every score in this sheet is an estimate (assumed). It is never treated as an outcome or used to train scoring.",
-      ...parsed,
+      path: IDEAS_PATH,
+      ...ideasSheetView(sheet.body),
+      backlog: {
+        hypotheses: await s.hypotheses.count(),
+        last_import: await s.hypotheses.lastImport(),
+      },
     });
+  });
+  // Imports the sheet into the hypothesis backlog (idempotent on id; the whole file is rejected if any
+  // row is invalid). Not an approval: it changes no decision Archie has made.
+  app.post("/api/vault/ideas/import", async (c) => {
+    const sheet = (await notes(c.env)).find((n) => n.path === IDEAS_PATH);
+    if (!sheet) return c.json({ error: "no_ideas_file", path: IDEAS_PATH }, 404);
+    try {
+      return c.json({
+        ok: true,
+        ...(await importIdeas(storageFor(c.env), sheet.body, { by: accessUser(c) })),
+      });
+    } catch (e) {
+      if (e instanceof IdeaImportError)
+        return c.json({ error: "rejected", message: e.message, ...e.report, rows: undefined }, 422);
+      throw e;
+    }
   });
 
   // ---- Phase 2: the Needs-you queue (the only approval path) and the daily digest.

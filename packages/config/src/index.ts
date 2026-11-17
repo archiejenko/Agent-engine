@@ -9,6 +9,7 @@ import chJson from "./companies_house.json" with { type: "json" };
 import confidenceJson from "./confidence.json" with { type: "json" };
 import decisionsJson from "./decisions.json" with { type: "json" };
 import registryJson from "./field-registry.json" with { type: "json" };
+import ideaCategoriesJson from "./idea-categories.json" with { type: "json" };
 import infraJson from "./infra.json" with { type: "json" };
 import keysJson from "./keys.json" with { type: "json" };
 import modelsJson from "./models.json" with { type: "json" };
@@ -361,6 +362,7 @@ export const rawConfig = {
   triggers: triggersJson,
   decisions: decisionsJson,
   keys: keysJson,
+  idea_categories: ideaCategoriesJson,
 };
 
 /** The company number used until Archie sets the real one (real sends refuse to run with it). */
@@ -462,6 +464,18 @@ export const KeysConfig = z
 export type KeysConfig = z.infer<typeof KeysConfig>;
 export function loadKeysConfig(raw: unknown = keysJson): KeysConfig {
   return KeysConfig.parse(raw);
+}
+
+/** The seeded ideas' categories → nearest node in brain/taxonomy.md (null = Archie to place). */
+export const IdeaCategoriesConfig = z.object({
+  categories: z.record(
+    z.string().min(1),
+    z.object({ node: z.string().min(1).nullable(), why: z.string().min(1) }),
+  ),
+});
+export type IdeaCategoriesConfig = z.infer<typeof IdeaCategoriesConfig>;
+export function loadIdeaCategoriesConfig(raw: unknown = ideaCategoriesJson): IdeaCategoriesConfig {
+  return IdeaCategoriesConfig.parse(raw);
 }
 
 export function loadDecisionsConfig(raw: unknown = decisionsJson): DecisionsConfig {

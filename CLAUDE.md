@@ -189,6 +189,7 @@ pnpm --filter @ae/agent-runner tick   # one scheduled run locally (same jobs the
 
 # v3 (Milestone C)
 pnpm gate:v3 --phase N         # v3 gate N (1–5) → docs/gates/v3-phaseN.md
+pnpm gate:v3 --phase seed      # seeded ideas import → docs/gates/v3-seed.md
 ```
 
 ## 7. Repo map

@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { GateCriterion } from "@ae/agent-runner";
-import { IDEA_COLUMNS, writeAgentNote } from "@ae/infra";
+import { writeAgentNote } from "@ae/infra";
 import type { Storage } from "@ae/storage";
 import { createApp } from "../app.ts";
 
@@ -8,79 +10,11 @@ import { createApp } from "../app.ts";
  * provenance on every agent note, and the ideas sheet shown with every score labelled assumed.
  * Fixture notes are injected; brain/ itself is untouched.
  */
-const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-const IDEAS_FIXTURE = [
-  IDEA_COLUMNS.join(","),
-  [
-    "I-001",
-    "1",
-    "Websites for trades",
-    "4.2",
-    "Quick win",
-    "Services",
-    "Tradespeople",
-    "Setup + monthly",
-    "Few have sites",
-    "4",
-    "5",
-    "4",
-    "4",
-    "5",
-    "4",
-    "new",
-    "",
-    "",
-    "1",
-  ]
-    .map(csvCell)
-    .join(","),
-  [
-    "I-002",
-    "2",
-    'Company checks for agents, "pay per call"',
-    "3.9",
-    "Bet",
-    "Data",
-    "AI agents",
-    "x402 per call",
-    "Agents pay",
-    "5",
-    "3",
-    "3",
-    "5",
-    "3",
-    "3",
-    "new",
-    "",
-    "Needs x402",
-    "1",
-  ]
-    .map(csvCell)
-    .join(","),
-  [
-    "I-003",
-    "3",
-    "Late-filing alerts",
-    "3.1",
-    "Later",
-    "Data",
-    "Accountants",
-    "Monthly",
-    "Penalties",
-    "3",
-    "3",
-    "3",
-    "3",
-    "4",
-    "4",
-    "parked",
-    "fail",
-    "",
-    "1",
-  ]
-    .map(csvCell)
-    .join(","),
-].join("\n");
+/** Ten real rows from Archie's sheet (quoted cells, CRLF line endings). */
+export const IDEAS_FIXTURE = readFileSync(
+  join(import.meta.dirname, "../../../../packages/infra/src/__tests__/fixtures/seed-ideas-10.csv"),
+  "utf8",
+);
 
 export const VAULT_FIXTURE = [
   {
@@ -172,8 +106,8 @@ export async function runV3Phase4Gate(storage: Storage) {
   // 4. The ideas sheet, every score assumed.
   const ideas = (await get("/api/vault/ideas")) as {
     present: boolean;
-    missing: string[];
-    rows: { kind: string; values: Record<string, string> }[];
+    ok: boolean;
+    rows: { id: string; category: string; score_source: string; card: string }[];
   };
 
   const criteria: GateCriterion[] = [
@@ -232,16 +166,16 @@ export async function runV3Phase4Gate(storage: Storage) {
       evidence: `${allAgentVersions.length} agent versions, each with author, time and sources/ledger rows; a note without provenance was refused ("${noProvenance}"); the note built on a website shows "untrusted"`,
     },
     {
-      criterion: "The ideas sheet shows in the Vault with every score labelled assumed",
+      criterion: "The ideas sheet shows in the Vault with every score labelled an estimate",
       status:
         ideas.present &&
-        ideas.missing.length === 0 &&
-        ideas.rows.length === 3 &&
-        ideas.rows.every((r) => r.kind === "assumed") &&
-        ideas.rows[1]?.values.Idea === 'Company checks for agents, "pay per call"'
+        ideas.ok &&
+        ideas.rows.length === 10 &&
+        ideas.rows.every((r) => r.score_source === "estimate" && r.card === `#/ideas/${r.id}`) &&
+        ideas.rows.some((r) => r.category.includes(","))
           ? "passed (synthetic)"
           : "failed",
-      evidence: `fixture sheet with Archie's columns: ${ideas.rows.length} rows, all labelled assumed; quoted cells parsed; scoring code never reads it (tests/architecture.test.ts)`,
+      evidence: `ten real rows from Archie's sheet: ${ideas.rows.length} rows, every score labelled estimate, each linked to its idea card; quoted cells with commas parsed; scoring code never reads it (tests/architecture.test.ts)`,
     },
   ];
   return { criteria };

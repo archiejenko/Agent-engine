@@ -200,6 +200,7 @@ export class SqlStorage implements Storage {
   declare noteVersions: Storage["noteVersions"];
   declare keyRegistry: Storage["keyRegistry"];
   declare audit: Storage["audit"];
+  declare hypotheses: Storage["hypotheses"];
   declare ledgerRange: Storage["ledgerRange"];
   declare ledgerForEntity: Storage["ledgerForEntity"];
 

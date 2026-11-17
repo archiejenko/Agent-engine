@@ -98,8 +98,8 @@ claim prices and terms, and triggers (`brain/build-reports/v2-milestone-a.md`, s
 | the reply address | Email Routing | e.g. `replies@<sending domain>` routed to the Worker (decision D1) |
 
 **Files only you can write:**
-- `brain/ideas/seed-500.csv`, your 500 scored ideas. The Vault shows it with every score labelled
-  assumed. The page tells you if it's missing.
+- ~~`brain/ideas/seed-500.csv`~~: added 2026-11-17 and imported as hypotheses
+  (`brain/build-reports/v3-seed-ideas.md`).
 - `brain/status-and-vision.md` is a stub marked "To write (Archie)".
 
 ## 4. Updated cutover checklist

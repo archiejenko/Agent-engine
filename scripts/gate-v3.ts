@@ -8,6 +8,7 @@ import { runV3Phase2Gate } from "../apps/api/src/gates/v3-phase2.ts";
 import { runV3Phase3Gate } from "../apps/api/src/gates/v3-phase3.ts";
 import { runV3Phase4Gate } from "../apps/api/src/gates/v3-phase4.ts";
 import { runV3Phase5Gate } from "../apps/api/src/gates/v3-phase5.ts";
+import { runV3SeedGate } from "../apps/api/src/gates/v3-seed.ts";
 import { ROOT } from "./lib.ts";
 
 // v3 gates: `pnpm gate:v3 --phase N` writes docs/gates/v3-phaseN.md.
@@ -21,6 +22,7 @@ const GATES: Record<
   "3": (s) => runV3Phase3Gate(s, ROOT),
   "4": (s) => runV3Phase4Gate(s),
   "5": (s) => runV3Phase5Gate(s, ROOT),
+  seed: (s) => runV3SeedGate(s, ROOT),
 };
 const run = GATES[values.phase as string];
 if (!run) throw new Error(`no gate for phase ${values.phase}`);
@@ -29,6 +31,9 @@ const r = await run(storage);
 const md = gateMarkdown(`v3-${values.phase}`, r.criteria, [
   "Synthetic data, fakes only, kill switch on. Nothing external happened.",
 ]);
-writeFileSync(resolve(ROOT, `docs/gates/v3-phase${values.phase}.md`), md);
+const file = /^\d+$/.test(values.phase as string)
+  ? `v3-phase${values.phase}`
+  : `v3-${values.phase}`;
+writeFileSync(resolve(ROOT, `docs/gates/${file}.md`), md);
 console.log(md);
 await storage.close();

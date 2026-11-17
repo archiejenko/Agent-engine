@@ -132,6 +132,55 @@ export interface KeyRegistryRow {
   updated_by: string | null;
 }
 
+export const SCORE_FIELDS = [
+  "autonomy",
+  "speed_to_cash",
+  "demand",
+  "margin",
+  "ease_of_build",
+  "low_risk",
+] as const;
+export type ScoreField = (typeof SCORE_FIELDS)[number];
+export type IdeaScores = Record<ScoreField, number>;
+export type IdeaMatrix = "Do first" | "Big bet" | "Quick win" | "Park";
+
+/** A seeded idea as a hypothesis. Its scores are estimates (rule 23), never outcomes. */
+export interface HypothesisRow extends IdeaScores {
+  id: string;
+  rank: number;
+  idea: string;
+  category: string;
+  taxonomy_node: string | null;
+  buyer: string;
+  revenue_model: string;
+  why_now: string;
+  batch: string;
+  score: number;
+  matrix: IdeaMatrix;
+  score_source: "estimate";
+  file_status: "New" | "Built";
+  stage: string;
+  stage_changed_by: string | null;
+  decision: "Pass" | "Fail" | "Question" | null;
+  decision_by: string | null;
+  decision_at: string | null;
+  failed_fingerprint: string | null;
+  comments: string | null;
+  synthetic: boolean;
+  created_at: string;
+  updated_at: string;
+}
+export interface ScoreHistoryRow {
+  id: number;
+  hypothesis_id: string;
+  field: ScoreField;
+  old_value: number | null;
+  new_value: number;
+  changed_by: string;
+  reason: string;
+  changed_at: string;
+}
+
 export function v3Storage(db: SqlDriver) {
   const all = (sql: string, args: SqlValue[] = []) => db.all<Row>(sql, args);
   const nowIso = () => new Date().toISOString();
@@ -353,6 +402,127 @@ export function v3Storage(db: SqlDriver) {
       },
     },
 
+    hypotheses: {
+      get: async (id: string): Promise<HypothesisRow | null> => {
+        const r = (await all("SELECT * FROM hypotheses WHERE id = ?", [id]))[0];
+        return r ? toHyp(r) : null;
+      },
+      list: async (o: { limit?: number; offset?: number } = {}): Promise<HypothesisRow[]> =>
+        (
+          await all("SELECT * FROM hypotheses ORDER BY rank, id LIMIT ? OFFSET ?", [
+            o.limit ?? 1000,
+            o.offset ?? 0,
+          ])
+        ).map(toHyp),
+      count: async (): Promise<number> =>
+        Number((await all("SELECT COUNT(*) AS n FROM hypotheses"))[0]?.n ?? 0),
+      /** Writes the whole row (insert or replace). Callers decide which fields an import may touch. */
+      put: async (h: Omit<HypothesisRow, "created_at" | "updated_at">): Promise<void> => {
+        const now = nowIso();
+        const cols = [
+          "id",
+          "rank",
+          "idea",
+          "category",
+          "taxonomy_node",
+          "buyer",
+          "revenue_model",
+          "why_now",
+          "batch",
+          ...SCORE_FIELDS,
+          "score",
+          "matrix",
+          "score_source",
+          "file_status",
+          "stage",
+          "stage_changed_by",
+          "decision",
+          "decision_by",
+          "decision_at",
+          "failed_fingerprint",
+          "comments",
+          "synthetic",
+        ] as const;
+        const vals = cols.map((c) =>
+          c === "synthetic"
+            ? h.synthetic
+              ? 1
+              : 0
+            : ((h as unknown as Record<string, SqlValue>)[c] ?? null),
+        );
+        await db.run(
+          `INSERT INTO hypotheses (${cols.join(", ")}, created_at, updated_at) VALUES (${cols.map(() => "?").join(", ")}, ?, ?)
+           ON CONFLICT (id) DO UPDATE SET ${cols
+             .filter((c) => c !== "id")
+             .map((c) => `${c} = excluded.${c}`)
+             .join(", ")}, updated_at = excluded.updated_at`,
+          [...vals, now, now],
+        );
+      },
+      addHistory: async (r: Omit<ScoreHistoryRow, "id" | "changed_at">): Promise<void> => {
+        await db.run(
+          "INSERT INTO hypothesis_score_history (hypothesis_id, field, old_value, new_value, changed_by, reason, changed_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          [r.hypothesis_id, r.field, r.old_value, r.new_value, r.changed_by, r.reason, nowIso()],
+        );
+      },
+      history: async (id: string): Promise<ScoreHistoryRow[]> =>
+        (
+          await all("SELECT * FROM hypothesis_score_history WHERE hypothesis_id = ? ORDER BY id", [
+            id,
+          ])
+        ).map((r) => ({
+          id: Number(r.id),
+          hypothesis_id: r.hypothesis_id as string,
+          field: r.field as ScoreField,
+          old_value: r.old_value === null ? null : Number(r.old_value),
+          new_value: Number(r.new_value),
+          changed_by: r.changed_by as string,
+          reason: r.reason as string,
+          changed_at: r.changed_at as string,
+        })),
+      recordImport: async (r: {
+        id: string;
+        source: string;
+        source_hash: string;
+        rows: number;
+        created: number;
+        updated: number;
+        unchanged: number;
+        imported_by: string;
+      }): Promise<void> => {
+        await db.run(
+          "INSERT INTO hypothesis_imports (id, source, source_hash, rows, created, updated, unchanged, imported_by, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [
+            r.id,
+            r.source,
+            r.source_hash,
+            r.rows,
+            r.created,
+            r.updated,
+            r.unchanged,
+            r.imported_by,
+            nowIso(),
+          ],
+        );
+      },
+      lastImport: async () => {
+        const r = (
+          await all("SELECT * FROM hypothesis_imports ORDER BY imported_at DESC LIMIT 1")
+        )[0];
+        return r
+          ? {
+              source_hash: r.source_hash as string,
+              rows: Number(r.rows),
+              created: Number(r.created),
+              updated: Number(r.updated),
+              unchanged: Number(r.unchanged),
+              imported_by: r.imported_by as string,
+              imported_at: r.imported_at as string,
+            }
+          : null;
+      },
+    },
+
     keyRegistry: {
       get: async (name: string): Promise<KeyRegistryRow | null> => {
         const r = (await all("SELECT * FROM key_registry WHERE name = ?", [name]))[0];
@@ -540,6 +710,38 @@ export function v3Storage(db: SqlDriver) {
     },
   };
 }
+
+const toHyp = (r: Row): HypothesisRow => ({
+  id: r.id as string,
+  rank: Number(r.rank),
+  idea: r.idea as string,
+  category: r.category as string,
+  taxonomy_node: (r.taxonomy_node as string | null) ?? null,
+  buyer: r.buyer as string,
+  revenue_model: r.revenue_model as string,
+  why_now: r.why_now as string,
+  batch: r.batch as string,
+  autonomy: Number(r.autonomy),
+  speed_to_cash: Number(r.speed_to_cash),
+  demand: Number(r.demand),
+  margin: Number(r.margin),
+  ease_of_build: Number(r.ease_of_build),
+  low_risk: Number(r.low_risk),
+  score: Number(r.score),
+  matrix: r.matrix as IdeaMatrix,
+  score_source: "estimate",
+  file_status: r.file_status as "New" | "Built",
+  stage: r.stage as string,
+  stage_changed_by: (r.stage_changed_by as string | null) ?? null,
+  decision: (r.decision as HypothesisRow["decision"]) ?? null,
+  decision_by: (r.decision_by as string | null) ?? null,
+  decision_at: (r.decision_at as string | null) ?? null,
+  failed_fingerprint: (r.failed_fingerprint as string | null) ?? null,
+  comments: (r.comments as string | null) ?? null,
+  synthetic: Number(r.synthetic) === 1,
+  created_at: r.created_at as string,
+  updated_at: r.updated_at as string,
+});
 
 const toKey = (r: Row): KeyRegistryRow => ({
   name: r.name as string,

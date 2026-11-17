@@ -25,30 +25,63 @@ interface Note extends NoteItem {
   };
   history: { version: number; author: string; created_at: string }[];
 }
+type ScoreKey = "autonomy" | "speed_to_cash" | "demand" | "margin" | "ease_of_build" | "low_risk";
+interface IdeaRow {
+  id: string;
+  rank: number;
+  idea: string;
+  category: string;
+  taxonomy_node: string | null;
+  buyer: string;
+  batch: string;
+  status: string;
+  decision: string | null;
+  scores: Record<ScoreKey, number>;
+  score: number;
+  matrix: string;
+  score_source: "estimate";
+  card: string;
+}
 interface Ideas {
   present: boolean;
+  path?: string;
+  ok?: boolean;
   note?: string;
-  columns?: string[];
-  missing?: string[];
-  rows?: { values: Record<string, string>; kind: string }[];
+  rows?: IdeaRow[];
+  rejected?: { row: number; id: string | null; problems: string[] }[];
+  file_problems?: string[];
+  mismatches?: { id: string; field: string; file: string; computed: string }[];
+  backlog?: {
+    hypotheses: number;
+    last_import: {
+      imported_at: string;
+      created: number;
+      updated: number;
+      unchanged: number;
+    } | null;
+  };
 }
 
-const SCORE_COLUMNS = [
-  "Score",
-  "Autonomy",
-  "Speed to cash",
-  "Demand",
-  "Margin",
-  "Ease of build",
-  "Low risk",
+const SCORES: [ScoreKey, string][] = [
+  ["autonomy", "Autonomy"],
+  ["speed_to_cash", "Speed"],
+  ["demand", "Demand"],
+  ["margin", "Margin"],
+  ["ease_of_build", "Ease"],
+  ["low_risk", "Low risk"],
 ];
 
 function IdeasSheet() {
   const [d, setD] = useState<Ideas | null>(null);
   const [q, setQ] = useState("");
-  useEffect(() => {
+  const [cat, setCat] = useState("");
+  const [matrix, setMatrix] = useState("");
+  const [batch, setBatch] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = useCallback(() => {
     getJson<Ideas>("/api/vault/ideas").then(setD, () => setD({ present: false }));
   }, []);
+  useEffect(load, [load]);
   if (!d) return <p>Loading…</p>;
   if (!d.present)
     return (
@@ -57,25 +90,68 @@ function IdeasSheet() {
         shows here.
       </p>
     );
-  const shown = [
-    "Rank",
-    "Idea",
-    "Category",
-    "Buyer",
-    "Score",
-    ...SCORE_COLUMNS.slice(1),
-    "Status",
-  ].filter((c) => d.columns?.includes(c));
-  const rows = (d.rows ?? []).filter(
-    (r) => !q || Object.values(r.values).join(" ").toLowerCase().includes(q.toLowerCase()),
+  const all = d.rows ?? [];
+  const uniq = (xs: string[]) => [...new Set(xs)].sort();
+  const rows = all.filter(
+    (r) =>
+      (!q ||
+        `${r.id} ${r.idea} ${r.buyer} ${r.category}`.toLowerCase().includes(q.toLowerCase())) &&
+      (!cat || r.category === cat) &&
+      (!matrix || r.matrix === matrix) &&
+      (!batch || r.batch === batch),
   );
+  const importNow = async () => {
+    const r = await fetch("/api/vault/ideas/import", { method: "POST" });
+    const b = (await r.json()) as {
+      created?: number;
+      updated?: number;
+      unchanged?: number;
+      message?: string;
+    };
+    setMsg(
+      r.ok
+        ? `Imported: ${b.created} new, ${b.updated} updated, ${b.unchanged} unchanged. Your decisions and comments are never overwritten.`
+        : (b.message ?? "Import failed"),
+    );
+    load();
+  };
+  const last = d.backlog?.last_import;
   return (
     <>
       <p className="muted">
-        {d.note} <span className="kind kind-assumed">assumed</span>
+        {d.note} <span className="kind kind-estimated">estimate</span>
       </p>
-      {(d.missing ?? []).length > 0 && (
-        <p className="muted">Columns not found: {(d.missing ?? []).join(", ")}</p>
+      <p className="muted">
+        Score and matrix are recomputed from the six scores, not copied from the file. Backlog:{" "}
+        {d.backlog?.hypotheses ?? 0} hypotheses
+        {last
+          ? `, last imported ${last.imported_at.slice(0, 16).replace("T", " ")}`
+          : ", not imported yet"}
+        .{" "}
+        <button type="button" onClick={() => void importNow()} disabled={d.ok === false}>
+          Import into the backlog
+        </button>
+      </p>
+      {msg && <p role="status">{msg}</p>}
+      {(d.file_problems ?? []).length > 0 && <p className="error">{d.file_problems?.join("; ")}</p>}
+      {(d.rejected ?? []).length > 0 && (
+        <div className="card">
+          <b>The file can't be imported: {d.rejected?.length} row(s) need fixing.</b>
+          <ul>
+            {d.rejected?.slice(0, 20).map((r) => (
+              <li key={r.row}>
+                Row {r.row}
+                {r.id ? ` (${r.id})` : ""}: {r.problems.join(", ")}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {(d.mismatches ?? []).length > 0 && (
+        <p className="muted">
+          {d.mismatches?.length} row(s) where the file's score or matrix disagrees with the six
+          scores; the recomputed value is used.
+        </p>
       )}
       <div className="filters">
         <input
@@ -85,34 +161,83 @@ function IdeasSheet() {
           onChange={(e) => setQ(e.target.value)}
           aria-label="Search ideas"
         />
+        <select value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Category">
+          <option value="">All categories</option>
+          {uniq(all.map((r) => r.category)).map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </select>
+        <select value={matrix} onChange={(e) => setMatrix(e.target.value)} aria-label="Matrix">
+          <option value="">All matrix</option>
+          {["Do first", "Quick win", "Big bet", "Park"].map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </select>
+        <select value={batch} onChange={(e) => setBatch(e.target.value)} aria-label="Batch">
+          <option value="">All batches</option>
+          {uniq(all.map((r) => r.batch)).map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </select>
         <span className="muted">
-          {rows.length} of {d.rows?.length ?? 0}
+          {rows.length} of {all.length}
         </span>
       </div>
-      <table>
-        <thead>
-          <tr>
-            {shown.map((c) => (
-              <th key={c} align={SCORE_COLUMNS.includes(c) ? "right" : "left"}>
-                {c}
-                {SCORE_COLUMNS.includes(c) && <small> (assumed)</small>}
+      <div className="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th align="right">Rank</th>
+              <th align="left">Idea</th>
+              <th align="left">Category</th>
+              <th align="left">Matrix</th>
+              <th align="right">
+                Score <small>(estimate)</small>
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.slice(0, 200).map((r) => (
-            <tr key={r.values.ID ?? r.values.Idea}>
-              {shown.map((c) => (
-                <td key={c} align={SCORE_COLUMNS.includes(c) ? "right" : "left"}>
-                  {r.values[c]}
-                </td>
+              {SCORES.map(([k, label]) => (
+                <th key={k} align="right">
+                  {label}
+                </th>
               ))}
+              <th align="left">Status</th>
             </tr>
-          ))}
-          {rows.length === 0 && <EmptyRow cols={shown.length}>No ideas match.</EmptyRow>}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.slice(0, 200).map((r) => (
+              <tr key={r.id}>
+                <td align="right">{r.rank}</td>
+                <td>
+                  <a href={r.card}>{r.id}</a> {r.idea}
+                  <br />
+                  <small className="muted">{r.buyer}</small>
+                </td>
+                <td>
+                  {r.category}
+                  <br />
+                  <small className="muted">{r.taxonomy_node ?? "not mapped yet"}</small>
+                </td>
+                <td>{r.matrix}</td>
+                <td align="right">{r.score}</td>
+                {SCORES.map(([k]) => (
+                  <td key={k} align="right">
+                    {r.scores[k]}
+                  </td>
+                ))}
+                <td>{r.status}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && <EmptyRow cols={6 + SCORES.length}>No ideas match.</EmptyRow>}
+          </tbody>
+        </table>
+      </div>
+      {rows.length > 200 && (
+        <p className="muted">Showing the first 200; narrow with the filters.</p>
+      )}
+      <p className="muted">
+        Every number above is an estimate: never an outcome, never in the outcome ledger, never used
+        to train scoring. Each idea's card (Pass / Fail / Question) arrives with the Ideas feed in
+        Phase 6.
+      </p>
     </>
   );
 }

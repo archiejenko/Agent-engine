@@ -428,3 +428,22 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   Saving a new value resumes them and supersedes the decision.
 - **The Worker rebuilds its app at most once a minute**, so a newly saved Stripe or Companies House key
   takes effect without a deploy.
+
+## 2026-11-17 — Seeded ideas (`brain/ideas/seed-500.csv`)
+
+- Archie's 500-row sheet is committed unchanged and imported as **hypotheses** (migration 0018). The
+  import is idempotent on `id` and rejects the whole file on any invalid row, naming the rows.
+- **Score and matrix are recomputed in code.** Score = Σ(weight% × score) / 5 (exact for these weights);
+  matrix = value (mean of demand and margin) × feasibility (mean of the other four), with 4+ counting as
+  high. All 500 rows agree with the file.
+- **Every seeded score is an estimate (rule 23).** The `score_source` column only accepts `estimate`. Score
+  changes keep a who/when/why history. Static tests keep scoring, learning, ledger and verification code,
+  and all other SQL, away from the hypotheses tables.
+- **A re-import** keeps Archie's decision and comments, and any stage changed by Archie or an agent. Text
+  and scores follow the sheet (open question to Archie: should dashboard score edits survive a re-import?).
+- **Categories → taxonomy** in `packages/config/src/idea-categories.json`: 14 mapped and 11 left unmapped
+  (industries, channels or product types), listed for Archie rather than guessed.
+- **Ideas feed, Board and Pass/Fail/Question** are Phase 6 (Milestone D, on hold). Idea decisions will be
+  applied through `decide()`; no route sets them now.
+- **Milestone D on hold.** Archie runs cutover Stages 1, 1b, 1c and 1d, then saves the Companies House and
+  Anthropic keys. On Archie's word, run Stage 5 (20 real drafts) for review before Phase 6.

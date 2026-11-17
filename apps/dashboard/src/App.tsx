@@ -78,7 +78,11 @@ export function App() {
       ) : route.startsWith("/ideas") ? (
         <Placeholder
           title="Ideas"
-          text="Idea cards from the research agents arrive in Milestone D (Phase 6)."
+          text={
+            route.startsWith("/ideas/")
+              ? `The card for idea ${route.slice(7)} (Pass / Fail / Question) arrives with the Ideas feed in Milestone D (Phase 6). Its row and estimated scores are in Vault → Ideas sheet.`
+              : "The ideas feed arrives in Milestone D (Phase 6). The 500 seeded ideas are already in the backlog: see Vault → Ideas sheet."
+          }
         />
       ) : route.startsWith("/board") ? (
         <Placeholder

@@ -1,0 +1,78 @@
+{
+  "_note": "The 25 idea categories in brain/ideas/seed-500.csv, each mapped to the nearest node in brain/taxonomy.md (a business-function taxonomy). node = null where a category is an industry, a sales channel or a product type rather than a business function, or spans several functions: those are listed in the gate report for Archie to place, not guessed. A test checks every node exists in brain/taxonomy.md.",
+  "categories": {
+    "Sales operations and bids": {
+      "node": "sales",
+      "why": "bids and quoting are a sales function"
+    },
+    "Leads sold to other firms": { "node": "sales", "why": "the buyer's sales pipeline" },
+    "SME websites": { "node": "marketing", "why": "a small firm's website is its marketing" },
+    "Customer service and complaints": {
+      "node": "customer service and success",
+      "why": "direct match"
+    },
+    "Operations and field service": { "node": "operations and delivery", "why": "direct match" },
+    "Finance and accounts": { "node": "finance", "why": "direct match" },
+    "Compliance and deadlines": { "node": "legal, risk and compliance", "why": "direct match" },
+    "Legal and company secretarial": {
+      "node": "legal, risk and compliance",
+      "why": "direct match"
+    },
+    "Health, safety, quality and environment": {
+      "node": "legal, risk and compliance",
+      "why": "H&S and quality are compliance duties; environment could arguably sit under ESG"
+    },
+    "HR and people admin": { "node": "HR", "why": "direct match" },
+    "Purchasing and supply chain": {
+      "node": "procurement",
+      "why": "purchasing is procurement; supply chain could arguably sit under supply chain and logistics"
+    },
+    "Documents, data and IT admin": {
+      "node": "IT and security",
+      "why": "IT admin is the main part"
+    },
+    "One-off data reports": { "node": "data and analytics", "why": "direct match" },
+    "Facilities, fleet and assets": {
+      "node": "facilities and property",
+      "why": "facilities and assets; fleet could arguably sit under supply chain and logistics"
+    },
+    "Back-office automation": {
+      "node": null,
+      "why": "spans finance, HR and operations admin; no single node"
+    },
+    "Monitoring and alerts": {
+      "node": null,
+      "why": "a product type; what is monitored decides the function"
+    },
+    "Traditional industries": { "node": null, "why": "an industry group, not a business function" },
+    "Professional services": { "node": null, "why": "an industry group, not a business function" },
+    "Local consumer businesses": {
+      "node": null,
+      "why": "an industry group, not a business function"
+    },
+    "Property and construction": {
+      "node": null,
+      "why": "an industry, not the facilities function"
+    },
+    "E-commerce and marketplaces": {
+      "node": null,
+      "why": "a sales channel and industry; could be sales or operations"
+    },
+    "Digital products and content": {
+      "node": null,
+      "why": "a product type, not a business function"
+    },
+    "Agent-readiness for SMEs": {
+      "node": null,
+      "why": "new: making a firm usable by AI agents; no node yet"
+    },
+    "x402 utility tools": {
+      "node": null,
+      "why": "a sales channel (paid calls from AI agents), not a business function"
+    },
+    "x402 data APIs": {
+      "node": null,
+      "why": "a sales channel (paid calls from AI agents), not a business function"
+    }
+  }
+}

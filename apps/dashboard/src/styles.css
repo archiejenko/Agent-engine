@@ -390,3 +390,10 @@ form.keyform input {
   flex: 1 1 200px;
   min-width: 0;
 }
+div.scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+p.error {
+  color: #8a1c1c;
+}
