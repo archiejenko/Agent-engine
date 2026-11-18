@@ -1,6 +1,6 @@
 # Phase graph-g2 gate report
 
-Generated 2026-11-18T23:25:49.944Z on SYNTHETIC data with fake external systems.
+Generated 2026-11-18T23:32:48.026Z on SYNTHETIC data with fake external systems.
 
 | Criterion | Status | Evidence |
 |---|---|---|
@@ -12,6 +12,8 @@ Generated 2026-11-18T23:25:49.944Z on SYNTHETIC data with fake external systems.
 | An empty pool pauses a running graph before its next step; a top-up lets it continue | passed (synthetic) | with real spend and £0 in the pool the run paused before its first model step ("the agent pool is empty"); after a £5 top-up it ran on to the approval (waiting) |
 | Alerts at 50%, 80% and 100% of a graph's budget, each raised once | passed (synthetic) | at 85% of the budget: 2 alerts (50%, 80%); checked again: 0 new |
 | Behind the flag: with GRAPH_ENGINE_ENABLED off, tasks run on the old runner exactly as before | passed (synthetic) | flag off: 0 graph runs; the task ran on the old runner (awaiting_approval) |
+| A node that finishes before the Workflow waits for it still completes; a duplicated queue job doesn't run the node twice | passed (synthetic) | 3 role nodes finished inside their dispatch, before the wait; the run still reached the approval (awaiting_approval); every job delivered again: run log 3 → 3 lines, cost events 6 → 6 |
+| Legacy cost fields (run_log, tasks.cost_gbp) reconcile with cost_events | passed (synthetic) | run log £0.003103; task £0.003103; model + tool cost events £0.003103 (infra events are new and have no legacy field) |
 | The Worker builds with the GraphRunWorkflow binding | passed (synthetic) | GRAPH (GraphRunWorkflow) bound |
 
 Synthetic data, fakes only, dry-run, kill switch on. Nothing external happened.

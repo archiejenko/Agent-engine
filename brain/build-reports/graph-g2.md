@@ -2,7 +2,7 @@
 type: build-report
 gate: graph-G2
 date: 2026-11-18
-status: gate passed (9 of 9, synthetic, dry-run); flag off by default; old runner kept (see below)
+status: gate passed (11 of 11, synthetic, dry-run); flag off by default; old runner kept (see below)
 ---
 
 # Task graph G2: the Workflows runtime (gate report)
@@ -62,10 +62,19 @@ the fake model, in dry-run. Nothing external happened.
 7. Budget alerts fire at 50% and 80%, and checking again raises none.
 8. With the flag off, the old runner handles the task.
 9. The Worker builds with the `GRAPH (GraphRunWorkflow)` binding (`wrangler deploy --dry-run`).
+10. A role node that finishes *before* the Workflow starts waiting for it still completes, because the
+    event is buffered. Delivering every job a second time adds no run-log lines and no cost events.
+11. The old cost fields (`run_log`, `tasks.cost_gbp`) equal the new cost ledger's model and tool events,
+    to the penny.
 
 The fifth G2 cost test, "sandbox spend never appears as live", belongs to G3. It's next.
 
 ## Changed along the way
+
+- **The local workflow engine now buffers events, as Cloudflare does.** Before, an event that arrived
+  while an instance was mid-step re-entered the instance, and in the buffered-event case it looped
+  forever. It now stores the event; the instance picks it up at its wait, or re-runs once afterwards.
+  There's a test for this. No earlier gate or test changed.
 
 - **The G0 "no runtime change" check now reads "no runtime change by default".** It confirms three
   things:
@@ -85,6 +94,13 @@ The fifth G2 cost test, "sandbox spend never appears as live", belongs to G3. It
 
   I'd remove the loop once you've switched the flag on in production and seen real `sme_outreach` runs
   on it. If you'd rather it went now, say so; it's a small commit.
+
+## Not tested here
+
+- **A `wrangler dev` run of a graph.** The plan listed one. It needs a local D1 with migrations and the
+  Workflows simulator, which I can't drive end to end from this session. The Worker build, the shared
+  `graph_run` definition and the local engine are all tested. The first real run will be on your
+  deployment, with the flag on.
 
 ## What you'd do to try it on Cloudflare (optional, dry-run)
 

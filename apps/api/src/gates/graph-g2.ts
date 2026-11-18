@@ -12,7 +12,15 @@ import {
 import { loadInfraConfig } from "@ae/config";
 import type { CompiledGraph } from "@ae/contracts";
 import { rollUp } from "@ae/graph";
-import { checkBudgetAlerts, createTask, K, loadCompiled, setKillSwitch } from "@ae/infra";
+import {
+  checkBudgetAlerts,
+  createTask,
+  type GraphNodeJob,
+  K,
+  loadCompiled,
+  runGraphNodeJob,
+  setKillSwitch,
+} from "@ae/infra";
 import type { Storage, StoredTask } from "@ae/storage";
 import { openSqliteStorage } from "@ae/storage/sqlite";
 import { createApp } from "../app.ts";
@@ -21,7 +29,10 @@ import { createApp } from "../app.ts";
  * Graph G2 gate: the graph runtime (GRAPH_ENGINE_ENABLED) on the persisted-step workflow engine, the
  * same `graph_run` definition GraphRunWorkflow runs on Cloudflare. Dry-run throughout.
  */
-async function world(root: string, o: { enabled: boolean; clock: { now: Date } }) {
+async function world(
+  root: string,
+  o: { enabled: boolean; clock: { now: Date }; inline?: GraphNodeJob[] },
+) {
   const storage = await openSqliteStorage(":memory:");
   const model = fakeModel();
   await buildSyntheticWorld(storage, model, { count: 40, seed: 11 });
@@ -34,12 +45,22 @@ async function world(root: string, o: { enabled: boolean; clock: { now: Date } }
   const entities = [...new Set(facts.map((f) => f.entity_id))].sort(
     (a, b) => Number(withEmail.has(b)) - Number(withEmail.has(a)) || a.localeCompare(b),
   );
-  const service = new AgentService({
+  const service: AgentService = new AgentService({
     storage,
     playbooks: await loadPlaybooks(join(root, "playbooks")),
     model,
     graphEngine: { enabled: o.enabled },
     now: () => o.clock.now,
+    // `inline`: run each role node the moment it's dispatched, so its "done" event arrives before the
+    // Workflow waits for it (the buffered-event case).
+    ...(o.inline
+      ? {
+          graphDispatch: async (job: GraphNodeJob) => {
+            o.inline?.push(job);
+            await runGraphNodeJob(service.graphDeps, job, service.workflowPort);
+          },
+        }
+      : {}),
   });
   return { storage, service, entities };
 }
@@ -200,6 +221,24 @@ export async function runGraphG2Gate(
   const t6 = await newOutreach(off, 5);
   const offRuns = await off.storage.graphRuns.list();
 
+  // 10. A node that finishes before the Workflow waits for it still completes (the event is buffered);
+  // the same queue job delivered twice doesn't run the node twice.
+  const inline: GraphNodeJob[] = [];
+  const E = await world(root, { enabled: true, clock, inline });
+  const t7 = await newOutreach(E, 0);
+  const early = (await E.storage.tasks.get(t7.task_id)) as StoredTask;
+  const logBefore = (await E.storage.runLog.forTask(t7.task_id)).length;
+  const costBefore = (await E.storage.costEvents.forRun(runOf(t7).run_id)).length;
+  for (const job of inline) await runGraphNodeJob(E.service.graphDeps, job, E.service.workflowPort);
+  const logAfter = (await E.storage.runLog.forTask(t7.task_id)).length;
+  const costAfter = (await E.storage.costEvents.forRun(runOf(t7).run_id)).length;
+
+  // 11. The legacy cost fields (run_log, tasks.cost_gbp) agree with the new cost ledger.
+  const logCost = log1.reduce((a, l) => a + l.cost_gbp, 0);
+  const ledgerCost = events
+    .filter((e) => e.category === "model" || e.category === "tool")
+    .reduce((a, e) => a + e.amount_gbp, 0);
+
   // 9. The Worker builds with the GraphRunWorkflow binding.
   let build = "skipped (unit test)";
   if (o.workerBuild) {
@@ -307,6 +346,26 @@ export async function runGraphG2Gate(
       status:
         offRuns.length === 0 && t6.status === "awaiting_approval" ? "passed (synthetic)" : "failed",
       evidence: `flag off: ${offRuns.length} graph runs; the task ran on the old runner (${t6.status})`,
+    },
+    {
+      criterion:
+        "A node that finishes before the Workflow waits for it still completes; a duplicated queue job doesn't run the node twice",
+      status:
+        inline.length >= 3 &&
+        early.status === "awaiting_approval" &&
+        logAfter === logBefore &&
+        costAfter === costBefore
+          ? "passed (synthetic)"
+          : "failed",
+      evidence: `${inline.length} role nodes finished inside their dispatch, before the wait; the run still reached the approval (${early.status}); every job delivered again: run log ${logBefore} → ${logAfter} lines, cost events ${costBefore} → ${costAfter}`,
+    },
+    {
+      criterion: "Legacy cost fields (run_log, tasks.cost_gbp) reconcile with cost_events",
+      status:
+        Math.abs(logCost - ledgerCost) < 1e-9 && Math.abs(done1.cost_gbp - logCost) < 1e-9
+          ? "passed (synthetic)"
+          : "failed",
+      evidence: `run log £${logCost.toFixed(6)}; task £${done1.cost_gbp.toFixed(6)}; model + tool cost events £${ledgerCost.toFixed(6)} (infra events are new and have no legacy field)`,
     },
     {
       criterion: "The Worker builds with the GraphRunWorkflow binding",

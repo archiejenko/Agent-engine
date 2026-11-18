@@ -44,6 +44,28 @@ describe("local workflow engine", () => {
     expect(runs).toEqual(["a", "b"]);
   });
 
+  it("an event sent while the instance is mid-step is buffered, not re-entered (as on Cloudflare)", async () => {
+    const runs: string[] = [];
+    let engine: LocalWorkflowEngine;
+    const wf: WorkflowDef<unknown, unknown> = {
+      name: "e",
+      playbook: "sme_outreach",
+      run: async (_p, step, ctx) => {
+        await step.do("dispatch", async () => {
+          runs.push("dispatch");
+          await engine.sendEvent(ctx.instanceId, "done-1", { v: 7 }); // finishes before the wait
+          return true;
+        });
+        return step.waitForEvent("done", "done-1", 60_000);
+      },
+    };
+    engine = new LocalWorkflowEngine(storage, cfg, [wf as WorkflowDef<never, unknown>]);
+    const i = await engine.start("e", {});
+    expect(i.status).toBe("complete");
+    expect(i.output).toEqual({ v: 7 });
+    expect(runs).toEqual(["dispatch"]);
+  });
+
   it("a dry-run instance (started with the kill switch on) keeps going; it can't act externally", async () => {
     await storage.controls.set(K.global, true, "test");
     const wf: WorkflowDef<unknown, number> = {

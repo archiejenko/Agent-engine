@@ -67,6 +67,10 @@ class Halt extends Error {
 
 export class LocalWorkflowEngine {
   private readonly defs = new Map<string, WorkflowDef<never, unknown>>();
+  /** Instances this engine is running right now. An event for one of them is only stored (buffered). */
+  private readonly running = new Set<string>();
+  /** Instances that received an event while running: advanced once more when the run ends. */
+  private readonly missed = new Set<string>();
 
   constructor(
     private readonly storage: Storage,
@@ -106,6 +110,26 @@ export class LocalWorkflowEngine {
     if (inst.status === "complete" || inst.status === "errored") return inst;
     const def = this.defs.get(inst.workflow);
     if (!def) throw new Error(`unknown workflow ${inst.workflow}`);
+    if (this.running.has(id)) {
+      this.missed.add(id); // already running: it picks up the event at its wait, or on the re-run below
+      return inst;
+    }
+    this.running.add(id);
+    let out: WorkflowInstanceRow;
+    try {
+      out = await this.run(id, inst, def);
+    } finally {
+      this.running.delete(id);
+    }
+    if (this.missed.delete(id) && out.status === "sleeping") return this.advance(id);
+    return out;
+  }
+
+  private async run(
+    id: string,
+    inst: WorkflowInstanceRow,
+    def: WorkflowDef<never, unknown>,
+  ): Promise<WorkflowInstanceRow> {
     await this.storage.workflows.update(id, {
       status: "running",
       pause_reason: null,
@@ -185,7 +209,10 @@ export class LocalWorkflowEngine {
     return (await this.storage.workflows.get(id)) as WorkflowInstanceRow;
   }
 
-  /** Sends an event to an instance and lets it continue (if it was waiting for that event). */
+  /**
+   * Sends an event to an instance and lets it continue (if it was waiting for that event). As on
+   * Cloudflare, an event for an instance that is mid-step is buffered until it reaches the wait.
+   */
   async sendEvent(id: string, type: string, payload: unknown): Promise<WorkflowInstanceRow | null> {
     if (!(await this.storage.workflows.get(id))) return null;
     await this.storage.workflowEvents.add(id, type, payload);
