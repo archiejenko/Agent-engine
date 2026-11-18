@@ -85,7 +85,11 @@ export async function stage5Review(
       // Real drafts only: written by a real model.
       if (writer.length === 0 || writer.every((l) => l.model === "fake-model")) continue;
       for (const l of log)
-        if (l.model && l.model !== "fake-model") (models[l.role] ??= new Set()).add(l.model);
+        if (l.model && l.model !== "fake-model") {
+          const set = models[l.role] ?? new Set<string>();
+          set.add(l.model);
+          models[l.role] = set;
+        }
       const checks = log.filter((l) => l.check_result);
       if (checks.length) {
         checked++;
