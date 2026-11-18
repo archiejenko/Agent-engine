@@ -27,6 +27,7 @@ export * from "./playbooks/post_reply.ts";
 export * from "./playbooks/sme_letter.ts";
 export * from "./playbooks/sme_outreach.ts";
 export * from "./runner.ts";
+export * from "./stage5.ts";
 export * from "./standard-tools.ts";
 export * from "./tasks.ts";
 export * from "./tools.ts";

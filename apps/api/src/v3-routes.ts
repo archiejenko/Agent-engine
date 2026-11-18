@@ -19,6 +19,7 @@ import {
   KeyRing,
   needsYou,
   searchVault,
+  stage5Review,
   storageMailbox,
   vaultNotes,
   writeArchieNote,
@@ -95,6 +96,11 @@ export function mountV3(
 ) {
   // ---- Phase 5: Keys (rule 20). Write-only: no route returns a value; responses are never cached.
   const ring = (env: unknown) => new KeyRing(keyStoreFor(env), storageFor(env));
+  // Stage 5 (cutover): read-only summary of the latest real drafts (aggregates only; rule 22).
+  app.get("/api/review/stage5", async (c) =>
+    c.json(await stage5Review(storageFor(c.env), { limit: 20 })),
+  );
+
   app.get("/api/keys", async (c) => {
     c.header("cache-control", "no-store");
     return c.json({ keys: await ring(c.env).list() });

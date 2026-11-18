@@ -3,6 +3,7 @@ import { getJson } from "./api.ts";
 import { EmptyRow } from "./format.tsx";
 import { Letters } from "./Letters.tsx";
 import { NeedsYou } from "./NeedsYou.tsx";
+import { Stage5Card } from "./Stage5.tsx";
 
 interface Msg {
   id: string;
@@ -103,7 +104,10 @@ export function Inbox({ route }: { route: string }) {
       {tab === "letters" ? (
         <Letters />
       ) : tab === "awaiting" ? (
-        <NeedsYou type="draft" title="Drafts awaiting approval" />
+        <>
+          <Stage5Card />
+          <NeedsYou type="draft" title="Drafts awaiting approval" />
+        </>
       ) : (
         <Messages tab={tab} />
       )}
