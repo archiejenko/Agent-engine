@@ -9,9 +9,11 @@ import chJson from "./companies_house.json" with { type: "json" };
 import confidenceJson from "./confidence.json" with { type: "json" };
 import decisionsJson from "./decisions.json" with { type: "json" };
 import registryJson from "./field-registry.json" with { type: "json" };
+import graphPolicyJson from "./graph-policy.json" with { type: "json" };
 import ideaCategoriesJson from "./idea-categories.json" with { type: "json" };
 import ideaFunctionsJson from "./idea-functions.json" with { type: "json" };
 import infraJson from "./infra.json" with { type: "json" };
+import infraPricesJson from "./infra-prices.json" with { type: "json" };
 import keysJson from "./keys.json" with { type: "json" };
 import modelsJson from "./models.json" with { type: "json" };
 import productsJson from "./products.json" with { type: "json" };
@@ -148,9 +150,28 @@ const RoleName = z.enum([
 export const ModelsConfig = z
   .object({
     usd_to_gbp: z.number().positive(),
+    /** Stamped on every cost event; bump when any price changes. */
+    price_table_version: z.string().min(1),
+    prices_checked_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    prices_source: z.url(),
     prices: z.record(
       z.string(),
-      z.object({ input_usd_per_mtok: z.number().min(0), output_usd_per_mtok: z.number().min(0) }),
+      z.object({
+        input_usd_per_mtok: z.number().min(0),
+        output_usd_per_mtok: z.number().min(0),
+        cache_read_usd_per_mtok: z.number().min(0).optional(),
+        cache_write_5m_usd_per_mtok: z.number().min(0).optional(),
+        cache_write_1h_usd_per_mtok: z.number().min(0).optional(),
+        /** Above this many input tokens (all input, cache included) these prices apply instead. */
+        long_context: z
+          .object({
+            over_input_tokens: z.number().int().positive(),
+            input_usd_per_mtok: z.number().min(0),
+            output_usd_per_mtok: z.number().min(0),
+            cache_read_usd_per_mtok: z.number().min(0).optional(),
+          })
+          .optional(),
+      }),
     ),
     roles: z.record(RoleName, z.object({ model: z.string().min(1), effort: Effort })),
   })
@@ -365,6 +386,8 @@ export const rawConfig = {
   keys: keysJson,
   idea_categories: ideaCategoriesJson,
   idea_functions: ideaFunctionsJson,
+  infra_prices: infraPricesJson,
+  graph_policy: graphPolicyJson,
 };
 
 /** The company number used until Archie sets the real one (real sends refuse to run with it). */
@@ -498,6 +521,65 @@ export const INDUSTRY_CATEGORIES = [
   "Traditional industries",
   "E-commerce and marketplaces",
 ] as const;
+
+/** Cloudflare unit rates for allocating infra cost per step (graph plan, G0). */
+export const InfraPricesConfig = z.object({
+  price_table_version: z.string().min(1),
+  checked_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  plan_usd_per_month: z.number().min(0),
+  rates: z.record(
+    z.string(),
+    z.object({
+      usd_per_unit: z.number().min(0),
+      included_per_month: z.number().min(0),
+      source: z.string().min(1),
+    }),
+  ),
+});
+export type InfraPricesConfig = z.infer<typeof InfraPricesConfig>;
+export function loadInfraPricesConfig(raw: unknown = infraPricesJson): InfraPricesConfig {
+  return InfraPricesConfig.parse(raw);
+}
+
+/** Task graph policy: every bound lives here (graph plan). */
+export const GraphPolicy = z.object({
+  limits: z.object({
+    max_nodes: z.number().int().min(1).max(100),
+    max_depth: z.number().int().min(1).max(50),
+    max_loop_iterations: z.number().int().min(1).max(10),
+    max_fanout_width: z.number().int().min(1).max(50),
+    max_fanout_items: z.number().int().min(1).max(1000),
+    max_workflow_steps: z.number().int().min(1).max(10000),
+    steps_per_node: z.number().int().min(1).max(10),
+  }),
+  sandbox: z.object({
+    max_cost_per_attempt_gbp: z.number().positive(),
+    max_cost_per_graph_gbp: z.number().positive(),
+    max_attempts: z.number().int().min(1).max(10),
+    max_probes: z.number().int().min(0).max(10),
+    probe_max_nodes: z.number().int().min(1).max(25),
+    min_failure_scenarios: z.number().int().min(1),
+  }),
+  runtime: z.object({
+    approval_timeout_days: z.number().int().min(1).max(365),
+    role_node_timeout_margin_s: z.number().int().min(0),
+    role_node_timeout_max_s: z.number().int().min(60).max(1800),
+    state_value_max_bytes: z.number().int().positive().max(1_048_576),
+    budget_alert_thresholds: z.array(z.number().gt(0).max(1)).min(1),
+  }),
+  budget: z.object({ ev_share: z.number().gt(0).max(1) }),
+  autonomy: z.object({ bespoke_max: z.enum(["L0", "L1", "L2", "L3"]) }),
+  promotion: z.object({
+    min_live_runs: z.number().int().min(1),
+    max_breaches: z.number().int().min(0),
+    wilson_z: z.number().positive(),
+    min_success_lower_bound: z.number().min(0).max(1),
+  }),
+});
+export type GraphPolicy = z.infer<typeof GraphPolicy>;
+export function loadGraphPolicy(raw: unknown = graphPolicyJson): GraphPolicy {
+  return GraphPolicy.parse(raw);
+}
 
 export function loadDecisionsConfig(raw: unknown = decisionsJson): DecisionsConfig {
   return DecisionsConfig.parse(raw);

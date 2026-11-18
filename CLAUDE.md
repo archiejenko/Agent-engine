@@ -54,6 +54,16 @@ Three layers, in dependency order:
   5 Agent House lead gen, 6 M&A target briefs. Build nothing new on them; the built monitoring and
   human check stay as they are. Path 2 (x402) isn't frozen but isn't in v2 scope.
 
+### Task graph layer (approved 2026-11-18, plan: `brain/build-reports/graph-plan.md`)
+
+- Gates G0–G5, built without stopping, all in dry-run: G0 contracts and storage → G1 compiler,
+  interpreter and seven playbooks as graphs → G2 Workflows runtime → G3 sandbox → v3 Phase 6 (Ideas feed and
+  Board) → G4 planner → G5 promotion. Stage 5 (real drafts) runs on Archie's deployment in parallel.
+- A graph is data (a JSON GraphSpec of registered node kinds), never code; a deterministic compiler accepts
+  or rejects it; one interpreter runs every graph; bespoke graphs are capped at L1.
+- Archie's reject/edit/question reasons go in `decision_log` (read by the planner and its eval), never the
+  outcome ledger.
+
 ### v3 (approved 2026-11-17, plan: `brain/build-reports/v3-plan.md`)
 
 - **Goal: Archie acts only as a judge.** One internal dashboard (behind Access, single user): Home,
@@ -190,6 +200,9 @@ pnpm --filter @ae/agent-runner tick   # one scheduled run locally (same jobs the
 # v3 (Milestone C)
 pnpm gate:v3 --phase N         # v3 gate N (1–5) → docs/gates/v3-phaseN.md
 pnpm gate:v3 --phase seed      # seeded ideas import → docs/gates/v3-seed.md
+
+# Task graph layer (plan: brain/build-reports/graph-plan.md)
+pnpm gate:graph --gate N       # graph gate N (0–5) → docs/gates/graph-gN.md
 ```
 
 ## 7. Repo map
@@ -202,6 +215,7 @@ packages/contracts  Zod schemas + types
 packages/config     JSON config + loaders (universe, confidence, field registry)
 packages/storage    Storage interface, SQLite + D1 adapters, migrations
 packages/verification, opportunity, infra   engines (filled phase by phase)
+packages/graph      task graph layer: compiler, interpreter, sandbox, costs, node library export
 brain/              frameworks/, signals/, digests/
 playbooks/          one folder per playbook
 scripts/            CLI jobs

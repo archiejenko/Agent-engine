@@ -1,6 +1,7 @@
 import { Claim, VerifiedFact, VerifiedFactVersion } from "@ae/contracts";
 import { claimsStorage } from "./claims.ts";
 import type { SqlDriver, SqlStatement, SqlValue } from "./driver.ts";
+import { graphStorage } from "./graph.ts";
 import { lettersStorage } from "./letters.ts";
 import { phase2 } from "./phase2.ts";
 import { phase3 } from "./phase3.ts";
@@ -150,6 +151,7 @@ export class SqlStorage implements Storage {
       runtimeStorage(db),
       claimsStorage(db),
       v3Storage(db),
+      graphStorage(db),
     );
   }
   declare signals: Storage["signals"];
@@ -201,6 +203,17 @@ export class SqlStorage implements Storage {
   declare keyRegistry: Storage["keyRegistry"];
   declare audit: Storage["audit"];
   declare hypotheses: Storage["hypotheses"];
+  declare graphSpecs: Storage["graphSpecs"];
+  declare sandboxReports: Storage["sandboxReports"];
+  declare graphRuns: Storage["graphRuns"];
+  declare graphNodeRuns: Storage["graphNodeRuns"];
+  declare graphState: Storage["graphState"];
+  declare decisionLog: Storage["decisionLog"];
+  declare graphShapes: Storage["graphShapes"];
+  declare promotedPlaybooks: Storage["promotedPlaybooks"];
+  declare costEvents: Storage["costEvents"];
+  declare revenueEvents: Storage["revenueEvents"];
+  declare poolEvents: Storage["poolEvents"];
   declare ledgerRange: Storage["ledgerRange"];
   declare ledgerForEntity: Storage["ledgerForEntity"];
 

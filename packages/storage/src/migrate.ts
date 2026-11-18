@@ -53,3 +53,13 @@ export async function migrate(driver: SqlDriver, migrations: Migration[]): Promi
   }
   return pending.map((m) => m.name);
 }
+
+/**
+ * Reverse one applied migration with its down file (graph plan: migrations 0020 onwards have one, in
+ * packages/storage/migrations-down/, which wrangler never reads). Local and test use only.
+ */
+export async function rollback(driver: SqlDriver, m: Migration, down: string): Promise<void> {
+  const statements: SqlStatement[] = splitSqlStatements(down).map((sql) => ({ sql }));
+  statements.push({ sql: "DELETE FROM d1_migrations WHERE name = ?", params: [m.name] });
+  await driver.batch(statements);
+}

@@ -1,0 +1,74 @@
+{
+  "graphId": "sme-outreach-example",
+  "version": 1,
+  "taskId": "task-example",
+  "goal": "Draft one outreach email for a company whose website is out of date.",
+  "successMetric": {
+    "name": "draft approved",
+    "target": 1,
+    "unit": "drafts",
+    "measuredBy": "draft_approved"
+  },
+  "stopConditions": ["budget reached", "rejected by Archie"],
+  "budgetGbp": 0.4,
+  "state": {
+    "entity_id": { "type": "string" },
+    "brief": { "type": "json" },
+    "draft": { "type": "string" },
+    "verdict": { "type": "enum", "enumValues": ["pass", "fail"] }
+  },
+  "inputs": ["entity_id"],
+  "nodes": [
+    {
+      "id": "research",
+      "kind": "role",
+      "ref": "researcher",
+      "reads": ["entity_id"],
+      "writes": ["brief"],
+      "budget": { "maxCostGbp": 0.1, "maxDurationS": 600 }
+    },
+    {
+      "id": "draft",
+      "kind": "role",
+      "ref": "writer",
+      "reads": ["brief"],
+      "writes": ["draft"],
+      "budget": { "maxCostGbp": 0.1, "maxDurationS": 600 }
+    },
+    {
+      "id": "check",
+      "kind": "role",
+      "ref": "checker",
+      "reads": ["brief", "draft"],
+      "writes": ["verdict"],
+      "budget": { "maxCostGbp": 0.1, "maxDurationS": 600 }
+    },
+    {
+      "id": "approve",
+      "kind": "approval",
+      "ref": "archie",
+      "reads": ["draft"],
+      "writes": [],
+      "budget": { "maxCostGbp": 0, "maxDurationS": 604800 }
+    }
+  ],
+  "edges": [
+    { "from": "research", "to": "draft" },
+    { "from": "draft", "to": "check" },
+    { "from": "check", "to": "approve", "when": { "key": "verdict", "op": "eq", "value": "pass" } },
+    {
+      "from": "check",
+      "to": "draft",
+      "when": { "key": "verdict", "op": "eq", "value": "fail" },
+      "loop": { "maxIterations": 2 }
+    }
+  ],
+  "entry": "research",
+  "exits": ["approve"],
+  "planner": {
+    "model": "claude-opus-5-5",
+    "promptVersion": "1",
+    "rationale": "Reuses the outreach shape.",
+    "assumptions": []
+  }
+}

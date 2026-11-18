@@ -26,7 +26,8 @@
     "hono": "4.13.16",
     "jose": "6.2.15",
     "pdf-lib": "1.17.1",
-    "zod": "4.6.7"
+    "zod": "4.6.7",
+    "@ae/graph": "workspace:*"
   },
   "devDependencies": {
     "wrangler": "4.158.0"

@@ -1,0 +1,43 @@
+{
+  "_note": "Cloudflare unit rates used to allocate infra cost per step (Workers Paid). Checked 2026-11-18 on developers.cloudflare.com: workflows/reference/pricing, d1/platform/pricing, workers/platform/pricing. 'included' amounts are monthly allowances on the plan; allocation charges the marginal rate only above them. A monthly adjustment event reconciles against the real bill.",
+  "price_table_version": "2026-11-18",
+  "checked_at": "2026-11-18",
+  "plan_usd_per_month": 5,
+  "rates": {
+    "workflow_step": {
+      "usd_per_unit": 0.000008,
+      "included_per_month": 500000,
+      "source": "Workflows: $0.80 per additional 100,000 steps"
+    },
+    "workflow_cpu_ms": {
+      "usd_per_unit": 0.00000002,
+      "included_per_month": 30000000,
+      "source": "Workers/Workflows: $0.02 per additional million CPU ms"
+    },
+    "workflow_storage_gb_month": {
+      "usd_per_unit": 0.2,
+      "included_per_month": 1,
+      "source": "Workflows: $0.20 per additional GB-month"
+    },
+    "d1_row_written": {
+      "usd_per_unit": 0.000001,
+      "included_per_month": 50000000,
+      "source": "D1: $1.00 per additional million rows written"
+    },
+    "d1_row_read": {
+      "usd_per_unit": 0.000000001,
+      "included_per_month": 25000000000,
+      "source": "D1: $0.001 per additional million rows read"
+    },
+    "d1_storage_gb_month": {
+      "usd_per_unit": 0.75,
+      "included_per_month": 5,
+      "source": "D1: $0.75 per additional GB-month"
+    },
+    "worker_request": {
+      "usd_per_unit": 0.0000003,
+      "included_per_month": 10000000,
+      "source": "Workers: $0.30 per additional million requests"
+    }
+  }
+}

@@ -105,7 +105,13 @@ describe("models config", async () => {
   it("every role has a model with a known price", () => {
     const m = loadModelsConfig();
     expect(m.roles.writer.model).toBe("claude-opus-5-5");
-    expect(m.prices["claude-opus-5-5"]).toEqual({ input_usd_per_mtok: 4, output_usd_per_mtok: 20 });
+    expect(m.prices["claude-opus-5-5"]).toEqual({
+      input_usd_per_mtok: 4,
+      output_usd_per_mtok: 20,
+      cache_read_usd_per_mtok: 0.2,
+      cache_write_5m_usd_per_mtok: 5,
+      cache_write_1h_usd_per_mtok: 8,
+    });
   });
   it("refuses a role pointing at an unpriced model", () => {
     const raw = structuredClone(rawConfig.models) as { roles: { writer: { model: string } } };

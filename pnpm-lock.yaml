@@ -104,6 +104,9 @@ importers:
       '@ae/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@ae/graph':
+        specifier: workspace:*
+        version: link:../../packages/graph
       '@ae/infra':
         specifier: workspace:*
         version: link:../../packages/infra
@@ -181,6 +184,18 @@ importers:
 
   packages/contracts:
     dependencies:
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+
+  packages/graph:
+    dependencies:
+      '@ae/config':
+        specifier: workspace:*
+        version: link:../config
+      '@ae/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       zod:
         specifier: 4.6.7
         version: 4.6.7

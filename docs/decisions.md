@@ -464,3 +464,18 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **Spot-check (2026-11-18):** Archie changed I217 (building rules guide) and I239 (council open-data
   dashboards) to "own product" and kept the other 218 as assigned. On re-import, exactly those 2 ideas
   changed and the other 498 stayed as they were.
+
+## 2026-11-18 — Task graph layer approved (Archie); G0 built
+
+- Plan: `brain/build-reports/graph-plan.md`.
+- **A:** convert all seven playbooks to graphs in G1, with equivalence tests; frozen ones stay frozen.
+- **B:** order is G0/G1 (with Stage 5 in parallel), then G2/G3, then Phase 6, then G4/G5.
+- **C:** gate reports go in `brain/build-reports/`, with evidence in `docs/gates/`.
+- **Addition 1:** Archie's reject reasons go in a separate decision log (`decision_log`), which the planner
+  reads when revising and in its eval. They never enter the outcome ledger.
+- **Addition 2:** the price table was checked against the live pricing page on 2026-11-18; cache prices
+  and Haiku's long-prompt tier were added; `price_table_version` is stamped on every cost event.
+- Graph down-migrations live in `packages/storage/migrations-down/`, because Wrangler applies every `.sql`
+  file in the folder it deploys.
+- **Stage 5 runs on Archie's deployment.** By rule 20, no agent can read the Anthropic key, and the real
+  data lives in D1. The build session provides the review summary.

@@ -1,19 +1,71 @@
 {
-  "_note": "Prices from the Claude API reference (cached 2026-10-06), USD per million tokens. Verify at cutover. Default model for every role is claude-opus-5-5 (the reference's default); switching bulk roles to a cheaper model is Archie's decision (see docs/decisions.md).",
+  "_note": "Prices are USD per million tokens, checked against https://platform.claude.com/docs/en/about-claude/pricing on 2026-11-18 (the page shows no 'last updated' date). price_table_version is stamped on every cost event. Cache reads are 0.05x input on Opus 5.5 / Sonnet 5.5; cache writes: 5-minute 1.25x, 1-hour 2x input. Haiku 5.5 is tiered: prompts over 100,000 tokens (all input incl. cache reads/writes) use the long_context prices. Default model for every role is claude-opus-5-5; switching bulk roles to a cheaper model is Archie's decision (see docs/decisions.md).",
+  "price_table_version": "2026-11-18",
+  "prices_checked_at": "2026-11-18",
+  "prices_source": "https://platform.claude.com/docs/en/about-claude/pricing",
   "usd_to_gbp": 0.79,
   "prices": {
-    "claude-opus-5-5": { "input_usd_per_mtok": 4.0, "output_usd_per_mtok": 20.0 },
-    "claude-sonnet-5-5": { "input_usd_per_mtok": 2.0, "output_usd_per_mtok": 10.0 },
-    "claude-haiku-5-5": { "input_usd_per_mtok": 0.1, "output_usd_per_mtok": 0.5 },
-    "fake-model": { "input_usd_per_mtok": 4.0, "output_usd_per_mtok": 20.0 }
+    "claude-opus-5-5": {
+      "input_usd_per_mtok": 4.0,
+      "output_usd_per_mtok": 20.0,
+      "cache_read_usd_per_mtok": 0.2,
+      "cache_write_5m_usd_per_mtok": 5.0,
+      "cache_write_1h_usd_per_mtok": 8.0
+    },
+    "claude-sonnet-5-5": {
+      "input_usd_per_mtok": 2.0,
+      "output_usd_per_mtok": 10.0,
+      "cache_read_usd_per_mtok": 0.1,
+      "cache_write_5m_usd_per_mtok": 2.5,
+      "cache_write_1h_usd_per_mtok": 4.0
+    },
+    "claude-haiku-5-5": {
+      "input_usd_per_mtok": 0.1,
+      "output_usd_per_mtok": 0.5,
+      "cache_read_usd_per_mtok": 0.01,
+      "long_context": {
+        "over_input_tokens": 100000,
+        "input_usd_per_mtok": 0.5,
+        "output_usd_per_mtok": 2.5,
+        "cache_read_usd_per_mtok": 0.05
+      }
+    },
+    "fake-model": {
+      "input_usd_per_mtok": 4.0,
+      "output_usd_per_mtok": 20.0,
+      "cache_read_usd_per_mtok": 0.2,
+      "cache_write_5m_usd_per_mtok": 5.0,
+      "cache_write_1h_usd_per_mtok": 8.0
+    }
   },
   "roles": {
-    "extractor": { "model": "claude-opus-5-5", "effort": "low" },
-    "researcher": { "model": "claude-opus-5-5", "effort": "low" },
-    "writer": { "model": "claude-opus-5-5", "effort": "medium" },
-    "checker": { "model": "claude-opus-5-5", "effort": "high" },
-    "explainer": { "model": "claude-opus-5-5", "effort": "low" },
-    "adjudicator": { "model": "claude-opus-5-5", "effort": "medium" },
-    "verifier": { "model": "claude-opus-5-5", "effort": "medium" }
+    "extractor": {
+      "model": "claude-opus-5-5",
+      "effort": "low"
+    },
+    "researcher": {
+      "model": "claude-opus-5-5",
+      "effort": "low"
+    },
+    "writer": {
+      "model": "claude-opus-5-5",
+      "effort": "medium"
+    },
+    "checker": {
+      "model": "claude-opus-5-5",
+      "effort": "high"
+    },
+    "explainer": {
+      "model": "claude-opus-5-5",
+      "effort": "low"
+    },
+    "adjudicator": {
+      "model": "claude-opus-5-5",
+      "effort": "medium"
+    },
+    "verifier": {
+      "model": "claude-opus-5-5",
+      "effort": "medium"
+    }
   }
 }

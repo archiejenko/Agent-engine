@@ -3,8 +3,9 @@
 export type * from "./claims.ts";
 export { type D1Like, d1Driver } from "./d1.ts";
 export type { SqlDriver, SqlStatement, SqlValue } from "./driver.ts";
+export type * from "./graph.ts";
 export type * from "./letters.ts";
-export { type Migration, migrate, splitSqlStatements } from "./migrate.ts";
+export { type Migration, migrate, rollback, splitSqlStatements } from "./migrate.ts";
 export type * from "./phase2.ts";
 export type * from "./phase3.ts";
 export type * from "./phase4.ts";

@@ -72,6 +72,11 @@ export class ToolRegistry {
     return this.tools.get(name)?.reg ?? null;
   }
 
+  /** Read-only listing of every registration (the graph layer's node library export). */
+  list(): ToolRegistration[] {
+    return [...this.tools.values()].map((t) => t.reg).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   /** Called on a guardrail breach (a call outside the rules), before the call is refused. */
   onBreach:
     | ((d: { playbook: string; task_id: string; tool: string; reason: string }) => Promise<void>)

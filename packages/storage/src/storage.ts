@@ -1,5 +1,6 @@
 import type { Claim, VerifiedFact, VerifiedFactVersion } from "@ae/contracts";
 import type { ClaimsStorage } from "./claims.ts";
+import type { GraphStorage } from "./graph.ts";
 import type { LettersStorage } from "./letters.ts";
 import type { Phase2Storage } from "./phase2.ts";
 import type { Phase3Storage } from "./phase3.ts";
@@ -75,7 +76,8 @@ export interface Storage
     V2Storage,
     RuntimeStorage,
     ClaimsStorage,
-    V3Storage {
+    V3Storage,
+    GraphStorage {
   runs: {
     start(input: { kind: string; config_versions?: Record<string, string> }): Promise<Run>;
     finish(runId: string, status: Exclude<RunStatus, "running">): Promise<void>;
