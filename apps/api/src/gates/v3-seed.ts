@@ -112,6 +112,16 @@ export async function runV3SeedGate(storage: Storage, root: string) {
   const after = await snapshot();
   const ledgerHits = await storage.audit.tablesContaining("seeded estimate");
 
+  // Score edits stick: re-import the same file after a dashboard edit.
+  const reimport = await importNow();
+  const i001 = await storage.hypotheses.get("I001");
+  const i001Hist = (await storage.hypotheses.history("I001")).filter((h) => h.field === "demand");
+
+  // Function and market on every idea.
+  const allHyps = await storage.hypotheses.list({ limit: 1000 });
+  const bySource = (src: string) => allHyps.filter((h) => h.function_source === src).length;
+  const withIndustry = allHyps.filter((h) => h.market_industry).length;
+
   // 6. Taxonomy map.
   const cats = loadIdeaCategoriesConfig().categories;
   const used = [...new Set(all.rows.map((r) => r.category))];
@@ -185,6 +195,32 @@ export async function runV3SeedGate(storage: Storage, root: string) {
           ? "passed (synthetic)"
           : "failed",
       evidence: `500 imported and a score changed: P(paid), every Home figure and the outcome ledger are byte-for-byte unchanged; seeded rows exist only in the hypotheses tables (${ledgerHits.join(", ")}); static tests keep scoring, learning, ledger and verification code and all other SQL away from them (tests/architecture.test.ts)`,
+    },
+    {
+      criterion:
+        "A score changed on the dashboard survives a re-import; both values stay in the history",
+      status:
+        reimport.status === 200 &&
+        (reimport.body.scores_kept as number) >= 1 &&
+        i001?.demand === 1 &&
+        i001Hist.length === 2 &&
+        i001Hist[1]?.changed_by === "agent:researcher"
+          ? "passed (synthetic)"
+          : "failed",
+      evidence: `I001 demand set to 1 by an agent; the sheet still says ${i001Hist[0]?.new_value}; after re-import it is ${i001?.demand} (${reimport.body.scores_kept} edited score kept); history: ${i001Hist.map((h) => `${h.new_value} by ${h.changed_by}`).join(" → ")}`,
+    },
+    {
+      criterion:
+        "Every idea has a function (taxonomy node or own product) and a market (buyer, plus industry)",
+      status:
+        allHyps.length === 500 &&
+        allHyps.every((h) => h.function && h.market_buyer) &&
+        bySource("category") + bySource("estimate") === 500 &&
+        bySource("estimate") === 220 &&
+        withIndustry === 100
+          ? "passed (synthetic)"
+          : "failed",
+      evidence: `${bySource("category")} inherit their category's node; ${bySource("estimate")} carry a per-idea estimate (listed in brain/build-reports/v3-seed-ideas.md); ${allHyps.filter((h) => h.function === "own product").length} are "own product"; ${withIndustry} carry an industry`,
     },
     {
       criterion:

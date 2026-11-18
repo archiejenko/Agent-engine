@@ -155,3 +155,74 @@ describe("idea categories map to brain/taxonomy.md", () => {
     for (const [c, v] of Object.entries(cats)) if (v.node) expect(nodes, c).toContain(v.node);
   });
 });
+
+describe("score edits stick after the first import", () => {
+  it("a score changed by Archie or an agent survives a re-import; untouched scores follow the file; both values in history", async () => {
+    const storage = await openSqliteStorage(":memory:");
+    await importIdeas(storage, FIXTURE, { by: "archie" });
+    const id = (await storage.hypotheses.list())[0]?.id as string;
+    const orig = (await storage.hypotheses.get(id)) as NonNullable<
+      Awaited<ReturnType<typeof storage.hypotheses.get>>
+    >;
+    const mine = orig.demand === 1 ? 2 : 1;
+    await changeIdeaScore(storage, id, "demand", mine, { by: "archie", reason: "few buyers" });
+    const row = lines(FIXTURE).findIndex((l) => l.startsWith(`${id},`));
+    const newMargin = orig.margin === 1 ? 2 : 1;
+    const sheet = editCell(
+      editCell(FIXTURE, row, COL("demand"), "5"),
+      row,
+      COL("margin"),
+      String(newMargin),
+    );
+    const r = await importIdeas(storage, sheet, { by: "archie" });
+    const h = await storage.hypotheses.get(id);
+    expect(h?.demand).toBe(mine);
+    expect(h?.margin).toBe(newMargin);
+    expect(h?.score).toBe(ideaScore(h as never));
+    expect(h?.matrix).toBe(ideaMatrix(h as never));
+    expect(r.scores_kept).toBe(1);
+    const demandHist = (await storage.hypotheses.history(id)).filter((x) => x.field === "demand");
+    expect(demandHist.map((x) => [x.new_value, x.changed_by])).toEqual([
+      [orig.demand, "import"],
+      [mine, "archie"],
+    ]);
+  });
+});
+
+describe("every idea has a function and a market", () => {
+  it("mapped categories inherit their node; the 220 others carry a per-idea estimate; all values are valid", async () => {
+    const { loadIdeaFunctionsConfig } = await import("@ae/config");
+    const { ideaFunction, ideaMarket } = await import("../ideas.ts");
+    const cats = loadIdeaCategoriesConfig();
+    const fns = loadIdeaFunctionsConfig();
+    const nodes = readFileSync(join(ROOT, "brain/taxonomy.md"), "utf8")
+      .split("\n")
+      .filter((l) => l.startsWith("- "))
+      .map((l) => l.slice(2).trim());
+    const rows = validateIdeasSheet(FULL).rows;
+    let estimates = 0;
+    for (const r of rows) {
+      const f = ideaFunction(r.id, r.category, cats, fns);
+      expect(f.function, r.id).not.toBeNull();
+      expect([...nodes, "own product"], r.id).toContain(f.function);
+      if (cats.categories[r.category]?.node)
+        expect(f).toEqual({ function: cats.categories[r.category]?.node, source: "category" });
+      else {
+        expect(f.source).toBe("estimate");
+        estimates++;
+      }
+      const m = ideaMarket(r);
+      expect(m.buyer).toBe(r.buyer);
+    }
+    expect(estimates).toBe(220);
+    // Ideas in a mapped category never carry a per-idea override.
+    for (const id of Object.keys(fns.ideas)) {
+      const r = rows.find((x) => x.id === id);
+      expect(cats.categories[r?.category ?? ""]?.node ?? null, id).toBeNull();
+    }
+    expect(
+      ideaMarket({ buyer: "Local SMEs", category: "Local consumer businesses" }).industry,
+    ).toBe("Local consumer businesses");
+    expect(ideaMarket({ buyer: "SMEs", category: "SME websites" }).industry).toBeNull();
+  });
+});

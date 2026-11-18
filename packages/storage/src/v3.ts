@@ -166,6 +166,12 @@ export interface HypothesisRow extends IdeaScores {
   decision_at: string | null;
   failed_fingerprint: string | null;
   comments: string | null;
+  /** A node in brain/taxonomy.md, or "own product". */
+  function: string | null;
+  function_source: "category" | "estimate" | "set" | null;
+  function_changed_by: string | null;
+  market_buyer: string | null;
+  market_industry: string | null;
   synthetic: boolean;
   created_at: string;
   updated_at: string;
@@ -441,6 +447,11 @@ export function v3Storage(db: SqlDriver) {
           "decision_at",
           "failed_fingerprint",
           "comments",
+          "function",
+          "function_source",
+          "function_changed_by",
+          "market_buyer",
+          "market_industry",
           "synthetic",
         ] as const;
         const vals = cols.map((c) =>
@@ -738,6 +749,11 @@ const toHyp = (r: Row): HypothesisRow => ({
   decision_at: (r.decision_at as string | null) ?? null,
   failed_fingerprint: (r.failed_fingerprint as string | null) ?? null,
   comments: (r.comments as string | null) ?? null,
+  function: (r.function as string | null) ?? null,
+  function_source: (r.function_source as HypothesisRow["function_source"]) ?? null,
+  function_changed_by: (r.function_changed_by as string | null) ?? null,
+  market_buyer: (r.market_buyer as string | null) ?? null,
+  market_industry: (r.market_industry as string | null) ?? null,
   synthetic: Number(r.synthetic) === 1,
   created_at: r.created_at as string,
   updated_at: r.updated_at as string,

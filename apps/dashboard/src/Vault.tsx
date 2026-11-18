@@ -32,6 +32,9 @@ interface IdeaRow {
   idea: string;
   category: string;
   taxonomy_node: string | null;
+  function: string | null;
+  function_source: "category" | "estimate" | null;
+  market: { buyer: string; industry: string | null };
   buyer: string;
   batch: string;
   status: string;
@@ -77,6 +80,8 @@ function IdeasSheet() {
   const [cat, setCat] = useState("");
   const [matrix, setMatrix] = useState("");
   const [batch, setBatch] = useState("");
+  const [fn, setFn] = useState("");
+  const [industry, setIndustry] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const load = useCallback(() => {
     getJson<Ideas>("/api/vault/ideas").then(setD, () => setD({ present: false }));
@@ -98,7 +103,9 @@ function IdeasSheet() {
         `${r.id} ${r.idea} ${r.buyer} ${r.category}`.toLowerCase().includes(q.toLowerCase())) &&
       (!cat || r.category === cat) &&
       (!matrix || r.matrix === matrix) &&
-      (!batch || r.batch === batch),
+      (!batch || r.batch === batch) &&
+      (!fn || r.function === fn) &&
+      (!industry || r.market.industry === industry || (industry === "-" && !r.market.industry)),
   );
   const importNow = async () => {
     const r = await fetch("/api/vault/ideas/import", { method: "POST" });
@@ -179,6 +186,23 @@ function IdeasSheet() {
             <option key={c}>{c}</option>
           ))}
         </select>
+        <select value={fn} onChange={(e) => setFn(e.target.value)} aria-label="Function">
+          <option value="">All functions</option>
+          {uniq(all.map((r) => r.function ?? ""))
+            .filter(Boolean)
+            .map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+        </select>
+        <select value={industry} onChange={(e) => setIndustry(e.target.value)} aria-label="Market">
+          <option value="">All markets</option>
+          <option value="-">No industry named</option>
+          {uniq(all.map((r) => r.market.industry ?? ""))
+            .filter(Boolean)
+            .map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+        </select>
         <span className="muted">
           {rows.length} of {all.length}
         </span>
@@ -190,6 +214,7 @@ function IdeasSheet() {
               <th align="right">Rank</th>
               <th align="left">Idea</th>
               <th align="left">Category</th>
+              <th align="left">Function / market</th>
               <th align="left">Matrix</th>
               <th align="right">
                 Score <small>(estimate)</small>
@@ -208,13 +233,18 @@ function IdeasSheet() {
                 <td align="right">{r.rank}</td>
                 <td>
                   <a href={r.card}>{r.id}</a> {r.idea}
-                  <br />
-                  <small className="muted">{r.buyer}</small>
                 </td>
+                <td>{r.category}</td>
                 <td>
-                  {r.category}
+                  {r.function ?? "not assigned"}
+                  {r.function_source === "estimate" && (
+                    <span className="kind kind-estimated">estimate</span>
+                  )}
                   <br />
-                  <small className="muted">{r.taxonomy_node ?? "not mapped yet"}</small>
+                  <small className="muted">
+                    {r.market.buyer}
+                    {r.market.industry ? ` · ${r.market.industry}` : ""}
+                  </small>
                 </td>
                 <td>{r.matrix}</td>
                 <td align="right">{r.score}</td>
@@ -226,7 +256,7 @@ function IdeasSheet() {
                 <td>{r.status}</td>
               </tr>
             ))}
-            {rows.length === 0 && <EmptyRow cols={6 + SCORES.length}>No ideas match.</EmptyRow>}
+            {rows.length === 0 && <EmptyRow cols={7 + SCORES.length}>No ideas match.</EmptyRow>}
           </tbody>
         </table>
       </div>

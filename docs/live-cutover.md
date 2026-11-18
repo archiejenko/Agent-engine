@@ -60,7 +60,7 @@ v2 runtime (all in `apps/api/wrangler.jsonc`; `wrangler deploy` creates the queu
 - [ ] Controls → Budgets shows today's spend against the caps; leave every playbook on S0 at first
 
 v3 dashboard (Milestone C)
-- [ ] D1 migrations 0014–0018 applied (decisions, mailbox, Vault versions, key registry, ideas backlog); `/api/health` shows 18
+- [ ] D1 migrations 0014–0019 applied (decisions, mailbox, Vault versions, key registry, ideas backlog, idea function and market); `/api/health` shows 19
 - [ ] Open the root URL: it goes straight to the dashboard (Home). There is no public landing page
 - [ ] Needs you shows decisions; the daily digest appears on Home after the first 06:00 UTC run
 - [ ] Vault lists `brain/` (bundled at deploy by `pnpm gen:brain`, which `pnpm cf:deploy` runs). Then

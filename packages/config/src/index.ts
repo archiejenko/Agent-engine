@@ -10,6 +10,7 @@ import confidenceJson from "./confidence.json" with { type: "json" };
 import decisionsJson from "./decisions.json" with { type: "json" };
 import registryJson from "./field-registry.json" with { type: "json" };
 import ideaCategoriesJson from "./idea-categories.json" with { type: "json" };
+import ideaFunctionsJson from "./idea-functions.json" with { type: "json" };
 import infraJson from "./infra.json" with { type: "json" };
 import keysJson from "./keys.json" with { type: "json" };
 import modelsJson from "./models.json" with { type: "json" };
@@ -363,6 +364,7 @@ export const rawConfig = {
   decisions: decisionsJson,
   keys: keysJson,
   idea_categories: ideaCategoriesJson,
+  idea_functions: ideaFunctionsJson,
 };
 
 /** The company number used until Archie sets the real one (real sends refuse to run with it). */
@@ -477,6 +479,25 @@ export type IdeaCategoriesConfig = z.infer<typeof IdeaCategoriesConfig>;
 export function loadIdeaCategoriesConfig(raw: unknown = ideaCategoriesJson): IdeaCategoriesConfig {
   return IdeaCategoriesConfig.parse(raw);
 }
+
+/** Per-idea function for ideas whose category has no single node. Every value is an estimate. */
+export const IdeaFunctionsConfig = z.object({
+  assigned_by: z.string().min(1),
+  assigned_at: z.string().min(1),
+  ideas: z.record(z.string().regex(/^I\d{3,}$/), z.string().min(1)),
+});
+export type IdeaFunctionsConfig = z.infer<typeof IdeaFunctionsConfig>;
+export function loadIdeaFunctionsConfig(raw: unknown = ideaFunctionsJson): IdeaFunctionsConfig {
+  return IdeaFunctionsConfig.parse(raw);
+}
+/** Categories that name an industry: an idea in one carries it as its market industry. */
+export const INDUSTRY_CATEGORIES = [
+  "Property and construction",
+  "Professional services",
+  "Local consumer businesses",
+  "Traditional industries",
+  "E-commerce and marketplaces",
+] as const;
 
 export function loadDecisionsConfig(raw: unknown = decisionsJson): DecisionsConfig {
   return DecisionsConfig.parse(raw);

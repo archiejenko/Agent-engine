@@ -1,4 +1,10 @@
-import { type IdeaCategoriesConfig, loadIdeaCategoriesConfig } from "@ae/config";
+import {
+  type IdeaCategoriesConfig,
+  type IdeaFunctionsConfig,
+  INDUSTRY_CATEGORIES,
+  loadIdeaCategoriesConfig,
+  loadIdeaFunctionsConfig,
+} from "@ae/config";
 import type { HypothesisRow, IdeaMatrix, IdeaScores, ScoreField, Storage } from "@ae/storage";
 import { parseCsv } from "./vault.ts";
 
@@ -210,6 +216,27 @@ export class IdeaImportError extends Error {
   }
 }
 
+/** Function: the category's taxonomy node, else the per-idea estimate (idea-functions.json), else null. */
+export function ideaFunction(
+  id: string,
+  category: string,
+  cats: IdeaCategoriesConfig = loadIdeaCategoriesConfig(),
+  fns: IdeaFunctionsConfig = loadIdeaFunctionsConfig(),
+): { function: string | null; source: "category" | "estimate" | null } {
+  const node = cats.categories[category]?.node;
+  if (node) return { function: node, source: "category" };
+  const est = fns.ideas[id];
+  return est ? { function: est, source: "estimate" } : { function: null, source: null };
+}
+
+/** Market: the buyer column, plus the industry where the category names one. */
+export function ideaMarket(r: { buyer: string; category: string }) {
+  return {
+    buyer: r.buyer,
+    industry: (INDUSTRY_CATEGORIES as readonly string[]).includes(r.category) ? r.category : null,
+  };
+}
+
 const stageFor = (status: "New" | "Built") => (status === "Built" ? "live" : "proposed");
 
 async function sha256(text: string) {
@@ -234,6 +261,8 @@ export interface ImportResult {
   updated: number;
   unchanged: number;
   score_changes: number;
+  /** Scores Archie or an agent changed that differ from the file: kept, not overwritten. */
+  scores_kept: number;
   mismatches: IdeasReport["mismatches"];
   source_hash: string;
 }
@@ -242,9 +271,15 @@ export interface ImportResult {
 export async function importIdeas(
   storage: Storage,
   text: string,
-  o: { source?: string; by: string; categories?: IdeaCategoriesConfig },
+  o: {
+    source?: string;
+    by: string;
+    categories?: IdeaCategoriesConfig;
+    functions?: IdeaFunctionsConfig;
+  },
 ): Promise<ImportResult> {
   const cats = o.categories ?? loadIdeaCategoriesConfig();
+  const fns = o.functions ?? loadIdeaFunctionsConfig();
   const report = validateIdeasSheet(text, cats);
   if (!report.ok) throw new IdeaImportError(report);
   const source = o.source ?? IDEAS_PATH;
@@ -253,9 +288,12 @@ export async function importIdeas(
   let updated = 0;
   let unchanged = 0;
   let score_changes = 0;
+  let scores_kept = 0;
   for (const r of report.rows) {
     const cur = await storage.hypotheses.get(r.id);
     const node = cats.categories[r.category]?.node ?? null;
+    const fn = ideaFunction(r.id, r.category, cats, fns);
+    const market = ideaMarket(r);
     if (!cur) {
       await storage.hypotheses.put({
         id: r.id,
@@ -280,6 +318,11 @@ export async function importIdeas(
         failed_fingerprint:
           r.decision === "Fail" ? await ideaFingerprint({ idea: r.idea, ...r.scores }) : null,
         comments: r.comments,
+        function: fn.function,
+        function_source: fn.source,
+        function_changed_by: null,
+        market_buyer: market.buyer,
+        market_industry: market.industry,
         synthetic: false,
       });
       for (const f of IDEA_SCORE_FIELDS)
@@ -294,8 +337,18 @@ export async function importIdeas(
       created++;
       continue;
     }
-    // Re-import: text and scores follow the file; decisions, comments and a stage someone changed don't.
-    const changedScores = IDEA_SCORE_FIELDS.filter((f) => cur[f] !== r.scores[f]);
+    // Re-import: new text follows the file. A score Archie or an agent changed since import sticks (the
+    // dashboard is the record); untouched scores follow the file. Decisions, comments, a changed stage and
+    // a changed function are never overwritten.
+    const edited = new Set(
+      (await storage.hypotheses.history(r.id))
+        .filter((h) => h.changed_by !== "import")
+        .map((h) => h.field),
+    );
+    const scores = {} as IdeaScores;
+    for (const f of IDEA_SCORE_FIELDS) scores[f] = edited.has(f) ? cur[f] : r.scores[f];
+    scores_kept += IDEA_SCORE_FIELDS.filter((f) => edited.has(f) && cur[f] !== r.scores[f]).length;
+    const changedScores = IDEA_SCORE_FIELDS.filter((f) => cur[f] !== scores[f]);
     const next: HypothesisRow = {
       ...cur,
       rank: r.rank,
@@ -306,9 +359,9 @@ export async function importIdeas(
       revenue_model: r.revenue_model,
       why_now: r.why_now,
       batch: r.batch,
-      ...r.scores,
-      score: r.score,
-      matrix: r.matrix,
+      ...scores,
+      score: ideaScore(scores),
+      matrix: ideaMatrix(scores),
       file_status: r.status,
       stage: cur.stage_changed_by ? cur.stage : stageFor(r.status),
       decision: cur.decision ?? r.decision,
@@ -320,6 +373,10 @@ export async function importIdeas(
           ? await ideaFingerprint({ idea: r.idea, ...r.scores })
           : null),
       comments: cur.comments || r.comments,
+      function: cur.function_changed_by ? cur.function : fn.function,
+      function_source: cur.function_changed_by ? cur.function_source : fn.source,
+      market_buyer: market.buyer,
+      market_industry: market.industry,
     };
     const keys: (keyof HypothesisRow)[] = [
       "rank",
@@ -335,6 +392,10 @@ export async function importIdeas(
       "stage",
       "decision",
       "comments",
+      "function",
+      "function_source",
+      "market_buyer",
+      "market_industry",
     ];
     if (keys.every((k) => cur[k] === next[k])) {
       unchanged++;
@@ -346,7 +407,7 @@ export async function importIdeas(
         hypothesis_id: r.id,
         field: f,
         old_value: cur[f],
-        new_value: r.scores[f],
+        new_value: scores[f],
         changed_by: "import",
         reason: `re-import of ${source}`,
       });
@@ -370,6 +431,7 @@ export async function importIdeas(
     updated,
     unchanged,
     score_changes,
+    scores_kept,
     mismatches: report.mismatches,
     source_hash,
   };
@@ -457,6 +519,9 @@ export function ideasSheetView(text: string, cats = loadIdeaCategoriesConfig()) 
       idea: x.idea,
       category: x.category,
       taxonomy_node: cats.categories[x.category]?.node ?? null,
+      function: ideaFunction(x.id, x.category, cats).function,
+      function_source: ideaFunction(x.id, x.category, cats).source,
+      market: ideaMarket(x),
       buyer: x.buyer,
       revenue_model: x.revenue_model,
       why_now: x.why_now,
@@ -470,4 +535,16 @@ export function ideasSheetView(text: string, cats = loadIdeaCategoriesConfig()) 
       card: `#/ideas/${x.id}`,
     })),
   };
+}
+
+/** Archie or an agent sets an idea's function; a re-import then leaves it alone. */
+export async function setIdeaFunction(storage: Storage, id: string, fn: string, by: string) {
+  const cur = await storage.hypotheses.get(id);
+  if (!cur) throw new IdeaChangeError("not_found");
+  await storage.hypotheses.put({
+    ...cur,
+    function: fn,
+    function_source: "set",
+    function_changed_by: by,
+  });
 }

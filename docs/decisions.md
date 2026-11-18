@@ -447,3 +447,17 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   applied through `decide()`; no route sets them now.
 - **Milestone D on hold.** Archie runs cutover Stages 1, 1b, 1c and 1d, then saves the Companies House and
   Anthropic keys. On Archie's word, run Stage 5 (20 real drafts) for review before Phase 6.
+
+## 2026-11-18 — Seeded ideas: Archie's answers
+
+- **Score edits stick.** After the first import the dashboard is the record. A re-import adds new ideas
+  and updates text. It updates a score only if nobody changed it since import, so a score changed by Archie
+  or an agent is kept (detected from the score history). Both values stay in the history.
+- **Function and market on every idea** (migration 0019):
+  - **Function** is a `brain/taxonomy.md` node, or "own product". The 14 mapped categories pass their
+    node down, and Archie approved the three judgement calls. The 220 ideas in the 11 unmapped categories
+    carry a per-idea function assigned from the idea text (`packages/config/src/idea-functions.json`).
+    These are labelled estimate and listed in `brain/build-reports/v3-seed-ideas.md` for spot-checking.
+    A function someone sets later survives re-imports.
+  - **Market** is the buyer, plus the industry for the five industry categories.
+  - The Vault filters by both now; idea cards and the Board will in Phase 6.
