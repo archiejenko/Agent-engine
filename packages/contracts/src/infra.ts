@@ -149,6 +149,10 @@ export const RunLogEntry = z.object({
   cost_gbp: Gbp,
   duration_ms: z.number().int().nonnegative(),
   timestamp: IsoDateTime,
+  /** Set when the step ran as a node of a task graph (graph plan); null for the old runner. */
+  graph_id: z.string().nullable().optional(),
+  graph_version: z.number().int().positive().nullable().optional(),
+  node_id: z.string().nullable().optional(),
 });
 export type RunLogEntry = z.infer<typeof RunLogEntry>;
 

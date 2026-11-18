@@ -114,6 +114,10 @@ function rowToRunLog(r: Row): StoredRunLog {
     cost_gbp: r.cost_gbp,
     duration_ms: Number(r.duration_ms),
     timestamp: r.timestamp,
+    graph_id: (r.graph_id as string | null) ?? null,
+    graph_version:
+      r.graph_version === null || r.graph_version === undefined ? null : Number(r.graph_version),
+    node_id: (r.node_id as string | null) ?? null,
   });
   return { ...e, id: Number(r.id) };
 }
@@ -413,8 +417,8 @@ export function phase2(db: SqlDriver) {
       append: async (e: RunLogEntry) => {
         const v = RunLogEntry.parse(e);
         await db.run(
-          `INSERT INTO run_log (task_id, step_id, role, model, tool_calls, output, check_result, tokens_in, tokens_out, cost_gbp, duration_ms, timestamp)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO run_log (task_id, step_id, role, model, tool_calls, output, check_result, tokens_in, tokens_out, cost_gbp, duration_ms, timestamp, graph_id, graph_version, node_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             v.task_id,
             v.step_id,
@@ -428,6 +432,9 @@ export function phase2(db: SqlDriver) {
             v.cost_gbp,
             v.duration_ms,
             v.timestamp,
+            v.graph_id ?? null,
+            v.graph_version ?? null,
+            v.node_id ?? null,
           ],
         );
       },
@@ -474,10 +481,26 @@ export function phase2(db: SqlDriver) {
         item_shown: unknown;
         decision: "approve" | "edit" | "reject";
         edited_text: string | null;
+        /** Graph tags (graph plan): set when the approval was an approval node. */
+        graph_id?: string | null;
+        graph_version?: number | null;
+        node_id?: string | null;
+        comment?: string | null;
       }) => {
         await db.run(
-          "INSERT INTO approvals (task_id, step_id, item_shown, decision, edited_text, decided_at) VALUES (?, ?, ?, ?, ?, ?)",
-          [a.task_id, a.step_id, j(a.item_shown), a.decision, a.edited_text, nowIso()],
+          "INSERT INTO approvals (task_id, step_id, item_shown, decision, edited_text, decided_at, graph_id, graph_version, node_id, comment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [
+            a.task_id,
+            a.step_id,
+            j(a.item_shown),
+            a.decision,
+            a.edited_text,
+            nowIso(),
+            a.graph_id ?? null,
+            a.graph_version ?? null,
+            a.node_id ?? null,
+            a.comment ?? null,
+          ],
         );
       },
       forTask: async (taskId: string) =>

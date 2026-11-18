@@ -4,6 +4,7 @@ import { parseArgs } from "node:util";
 import { type GateCriterion, gateMarkdown } from "@ae/agent-runner";
 import { openSqliteStorage } from "@ae/storage/sqlite";
 import { runGraphG0Gate } from "../apps/api/src/gates/graph-g0.ts";
+import { runGraphG1Gate } from "../apps/api/src/gates/graph-g1.ts";
 import { ROOT } from "./lib.ts";
 
 // Task graph gates: `pnpm gate:graph --gate N` writes docs/gates/graph-gN.md (graph plan).
@@ -13,6 +14,7 @@ const GATES: Record<
   (s: Awaited<ReturnType<typeof openSqliteStorage>>) => Promise<{ criteria: GateCriterion[] }>
 > = {
   "0": (s) => runGraphG0Gate(s, ROOT),
+  "1": (s) => runGraphG1Gate(s, ROOT),
 };
 const run = GATES[values.gate as string];
 if (!run) throw new Error(`no graph gate ${values.gate}`);

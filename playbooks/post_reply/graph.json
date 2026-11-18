@@ -1,0 +1,167 @@
+{
+  "graphId": "pb-post-reply",
+  "version": 1,
+  "taskId": "playbook:post_reply",
+  "goal": "Run the post_reply playbook (v1) as a graph, doing exactly what the old runner does.",
+  "successMetric": {
+    "name": "run finished",
+    "target": 1,
+    "unit": "runs",
+    "measuredBy": "draft_approved"
+  },
+  "stopConditions": ["budget reached", "rejected by Archie", "outreach not allowed"],
+  "budgetGbp": 0.2,
+  "state": {
+    "triage": {
+      "type": "json",
+      "untrusted": false
+    },
+    "reply_draft": {
+      "type": "json",
+      "untrusted": false
+    },
+    "check_feedback": {
+      "type": "string",
+      "untrusted": false
+    },
+    "pass_or_fail": {
+      "type": "json",
+      "untrusted": false
+    },
+    "check_verdict": {
+      "type": "enum",
+      "enumValues": ["pass", "fail"],
+      "untrusted": false
+    },
+    "approved": {
+      "type": "boolean",
+      "untrusted": false
+    }
+  },
+  "inputs": ["check_feedback"],
+  "nodes": [
+    {
+      "id": "triage",
+      "kind": "role",
+      "ref": "researcher",
+      "reads": [],
+      "writes": ["triage"],
+      "config": {
+        "playbook": "post_reply",
+        "step": "triage"
+      },
+      "budget": {
+        "maxCostGbp": 0.04,
+        "maxDurationS": 600
+      }
+    },
+    {
+      "id": "draft",
+      "kind": "role",
+      "ref": "writer",
+      "reads": ["triage", "check_feedback"],
+      "writes": ["reply_draft"],
+      "config": {
+        "playbook": "post_reply",
+        "step": "draft"
+      },
+      "budget": {
+        "maxCostGbp": 0.04,
+        "maxDurationS": 600
+      }
+    },
+    {
+      "id": "check",
+      "kind": "role",
+      "ref": "checker",
+      "reads": ["triage", "reply_draft"],
+      "writes": ["pass_or_fail", "check_verdict", "check_feedback"],
+      "config": {
+        "playbook": "post_reply",
+        "step": "check"
+      },
+      "budget": {
+        "maxCostGbp": 0.04,
+        "maxDurationS": 600
+      }
+    },
+    {
+      "id": "check_review",
+      "kind": "approval",
+      "ref": "archie",
+      "reads": ["triage", "reply_draft", "pass_or_fail"],
+      "writes": ["approved", "reply_draft"],
+      "config": {
+        "kind": "check_failed",
+        "playbook": "post_reply"
+      },
+      "budget": {
+        "maxCostGbp": 0,
+        "maxDurationS": 604800
+      }
+    },
+    {
+      "id": "review",
+      "kind": "approval",
+      "ref": "archie",
+      "reads": ["triage", "reply_draft", "pass_or_fail"],
+      "writes": ["approved", "reply_draft"],
+      "config": {
+        "kind": "gate",
+        "playbook": "post_reply"
+      },
+      "budget": {
+        "maxCostGbp": 0,
+        "maxDurationS": 604800
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "triage",
+      "to": "draft"
+    },
+    {
+      "from": "draft",
+      "to": "check"
+    },
+    {
+      "from": "check",
+      "to": "draft",
+      "when": {
+        "key": "check_verdict",
+        "op": "eq",
+        "value": "fail"
+      },
+      "loop": {
+        "maxIterations": 1
+      }
+    },
+    {
+      "from": "check",
+      "to": "check_review",
+      "when": {
+        "key": "check_verdict",
+        "op": "eq",
+        "value": "fail"
+      }
+    },
+    {
+      "from": "check",
+      "to": "review",
+      "when": {
+        "key": "check_verdict",
+        "op": "eq",
+        "value": "pass"
+      }
+    }
+  ],
+  "entry": "triage",
+  "exits": ["check_review", "review"],
+  "planner": {
+    "model": "none",
+    "promptVersion": "converted",
+    "rationale": "Converted mechanically from playbooks/post_reply/SKILL.md v1 at L0.",
+    "assumptions": []
+  }
+}

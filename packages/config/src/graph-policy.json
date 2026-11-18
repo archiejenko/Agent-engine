@@ -35,5 +35,10 @@
     "max_breaches": 0,
     "wilson_z": 1.645,
     "min_success_lower_bound": 0.6
+  },
+  "guardrails": {
+    "_note": "Which registered tools count as outreach sends (compiler rule 12: suppression and 90-day cooldown on every path) and which return untrusted content (rule 9). The tools still enforce their own checks; this makes the graph prove them too.",
+    "outreach_send_tools": ["send_email", "prepare_letter"],
+    "untrusted_output_tools": ["web_fetch", "mailbox_read", "mailbox_list"]
   }
 }

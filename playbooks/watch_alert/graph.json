@@ -1,0 +1,47 @@
+{
+  "graphId": "pb-watch-alert",
+  "version": 1,
+  "taskId": "playbook:watch_alert",
+  "goal": "Run the watch_alert playbook (v1) as a graph, doing exactly what the old runner does.",
+  "successMetric": {
+    "name": "run finished",
+    "target": 1,
+    "unit": "runs",
+    "measuredBy": "draft_approved"
+  },
+  "stopConditions": ["budget reached", "rejected by Archie", "outreach not allowed"],
+  "budgetGbp": 0.01,
+  "state": {
+    "delivery": {
+      "type": "json",
+      "untrusted": false
+    }
+  },
+  "inputs": [],
+  "nodes": [
+    {
+      "id": "deliver",
+      "kind": "role",
+      "ref": "operator",
+      "reads": [],
+      "writes": ["delivery"],
+      "config": {
+        "playbook": "watch_alert",
+        "step": "deliver"
+      },
+      "budget": {
+        "maxCostGbp": 0.01,
+        "maxDurationS": 600
+      }
+    }
+  ],
+  "edges": [],
+  "entry": "deliver",
+  "exits": ["deliver"],
+  "planner": {
+    "model": "none",
+    "promptVersion": "converted",
+    "rationale": "Converted mechanically from playbooks/watch_alert/SKILL.md v1 at L3.",
+    "assumptions": []
+  }
+}

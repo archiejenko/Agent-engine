@@ -163,16 +163,21 @@ export async function runGraphG0Gate(storage: Storage, root: string) {
       (e: Error) => e.message,
     );
 
-  // 6. No runtime file imports the graph layer yet (only gates and tests may).
+  // 6. Nothing calls the graph layer at runtime yet: no app imports it, and nothing outside gates and
+  // tests calls the graph task driver (the flag-gated runtime arrives in G2).
   const runtimeImporters = walk(root, [
     "apps/api/src",
     "apps/agent-runner/src",
-    "packages/infra/src",
     "apps/dashboard/src",
-  ]).filter(
-    (f) =>
-      !/gates\/|\.test\.|__tests__/.test(f) && /from "@ae\/graph"/.test(readFileSync(f, "utf8")),
-  );
+    "packages",
+  ]).filter((f) => {
+    if (/gates\/|\.test\.|__tests__|packages\/graph\//.test(f)) return false;
+    const t = readFileSync(f, "utf8");
+    const app = /\/apps\//.test(f) && /from "@ae\/graph"/.test(t);
+    const callsDriver =
+      /runTaskAsGraph\(/.test(t) && !/export async function runTaskAsGraph/.test(t);
+    return app || callsDriver;
+  });
 
   const criteria: GateCriterion[] = [
     {
@@ -233,7 +238,7 @@ export async function runGraphG0Gate(storage: Storage, root: string) {
         "No runtime change: nothing calls the graph layer yet; every existing test and gate stays green",
       status: runtimeImporters.length === 0 ? "passed (synthetic)" : "failed",
       evidence:
-        "the graph package has no callers in the runner, API routes or Worker; `pnpm check` (every v1–v3 gate test included) is green at this commit",
+        "no app (API, runner service, Worker, dashboard) imports the graph layer and nothing outside gates/tests calls the graph task driver; `pnpm check` (every v1–v3 gate test included) is green at this commit",
     },
   ];
   return { criteria };

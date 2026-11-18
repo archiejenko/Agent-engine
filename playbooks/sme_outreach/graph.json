@@ -1,0 +1,243 @@
+{
+  "graphId": "pb-sme-outreach",
+  "version": 2,
+  "taskId": "playbook:sme_outreach",
+  "goal": "Run the sme_outreach playbook (v2) as a graph, doing exactly what the old runner does.",
+  "successMetric": {
+    "name": "run finished",
+    "target": 1,
+    "unit": "runs",
+    "measuredBy": "draft_approved"
+  },
+  "stopConditions": ["budget reached", "rejected by Archie", "outreach not allowed"],
+  "budgetGbp": 0.4,
+  "state": {
+    "entity_ref": {
+      "type": "string",
+      "untrusted": false
+    },
+    "outreach_allowed": {
+      "type": "boolean",
+      "untrusted": false
+    },
+    "company_brief": {
+      "type": "json",
+      "untrusted": false
+    },
+    "email_draft": {
+      "type": "json",
+      "untrusted": false
+    },
+    "check_feedback": {
+      "type": "string",
+      "untrusted": false
+    },
+    "pass_or_fail": {
+      "type": "json",
+      "untrusted": false
+    },
+    "check_verdict": {
+      "type": "enum",
+      "enumValues": ["pass", "fail"],
+      "untrusted": false
+    },
+    "approved": {
+      "type": "boolean",
+      "untrusted": false
+    },
+    "delivery": {
+      "type": "json",
+      "untrusted": false
+    }
+  },
+  "inputs": ["entity_ref", "check_feedback"],
+  "nodes": [
+    {
+      "id": "research",
+      "kind": "role",
+      "ref": "researcher",
+      "reads": [],
+      "writes": ["company_brief"],
+      "config": {
+        "playbook": "sme_outreach",
+        "step": "research",
+        "tools": ["verified_facts"]
+      },
+      "budget": {
+        "maxCostGbp": 0.066666,
+        "maxDurationS": 600
+      }
+    },
+    {
+      "id": "draft",
+      "kind": "role",
+      "ref": "writer",
+      "reads": ["company_brief", "check_feedback"],
+      "writes": ["email_draft"],
+      "config": {
+        "playbook": "sme_outreach",
+        "step": "draft"
+      },
+      "budget": {
+        "maxCostGbp": 0.066666,
+        "maxDurationS": 600
+      }
+    },
+    {
+      "id": "check",
+      "kind": "role",
+      "ref": "checker",
+      "reads": ["company_brief", "email_draft"],
+      "writes": ["pass_or_fail", "check_verdict", "check_feedback"],
+      "config": {
+        "playbook": "sme_outreach",
+        "step": "check"
+      },
+      "budget": {
+        "maxCostGbp": 0.066666,
+        "maxDurationS": 600
+      }
+    },
+    {
+      "id": "check_review",
+      "kind": "approval",
+      "ref": "archie",
+      "reads": ["company_brief", "email_draft", "pass_or_fail"],
+      "writes": ["approved", "email_draft"],
+      "config": {
+        "kind": "check_failed",
+        "playbook": "sme_outreach"
+      },
+      "budget": {
+        "maxCostGbp": 0,
+        "maxDurationS": 604800
+      }
+    },
+    {
+      "id": "approve",
+      "kind": "approval",
+      "ref": "archie",
+      "reads": ["company_brief", "email_draft", "pass_or_fail"],
+      "writes": ["approved", "email_draft"],
+      "config": {
+        "kind": "gate",
+        "playbook": "sme_outreach"
+      },
+      "budget": {
+        "maxCostGbp": 0,
+        "maxDurationS": 604800
+      }
+    },
+    {
+      "id": "suppression",
+      "kind": "function",
+      "ref": "suppression_check",
+      "reads": ["entity_ref"],
+      "writes": ["outreach_allowed"],
+      "budget": {
+        "maxCostGbp": 0,
+        "maxDurationS": 60
+      }
+    },
+    {
+      "id": "cooldown",
+      "kind": "function",
+      "ref": "contact_cooldown",
+      "reads": ["entity_ref"],
+      "writes": ["outreach_allowed"],
+      "budget": {
+        "maxCostGbp": 0,
+        "maxDurationS": 60
+      }
+    },
+    {
+      "id": "send",
+      "kind": "role",
+      "ref": "operator",
+      "reads": ["company_brief", "email_draft", "pass_or_fail", "approved"],
+      "writes": ["delivery"],
+      "config": {
+        "playbook": "sme_outreach",
+        "step": "send"
+      },
+      "budget": {
+        "maxCostGbp": 0.066666,
+        "maxDurationS": 600
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "research",
+      "to": "draft"
+    },
+    {
+      "from": "draft",
+      "to": "check"
+    },
+    {
+      "from": "check",
+      "to": "draft",
+      "when": {
+        "key": "check_verdict",
+        "op": "eq",
+        "value": "fail"
+      },
+      "loop": {
+        "maxIterations": 1
+      }
+    },
+    {
+      "from": "check",
+      "to": "check_review",
+      "when": {
+        "key": "check_verdict",
+        "op": "eq",
+        "value": "fail"
+      }
+    },
+    {
+      "from": "check",
+      "to": "approve",
+      "when": {
+        "key": "check_verdict",
+        "op": "eq",
+        "value": "pass"
+      }
+    },
+    {
+      "from": "check_review",
+      "to": "suppression"
+    },
+    {
+      "from": "approve",
+      "to": "suppression"
+    },
+    {
+      "from": "suppression",
+      "to": "cooldown",
+      "when": {
+        "key": "outreach_allowed",
+        "op": "eq",
+        "value": true
+      }
+    },
+    {
+      "from": "cooldown",
+      "to": "send",
+      "when": {
+        "key": "outreach_allowed",
+        "op": "eq",
+        "value": true
+      }
+    }
+  ],
+  "entry": "research",
+  "exits": ["send"],
+  "planner": {
+    "model": "none",
+    "promptVersion": "converted",
+    "rationale": "Converted mechanically from playbooks/sme_outreach/SKILL.md v2 at L1.",
+    "assumptions": []
+  }
+}

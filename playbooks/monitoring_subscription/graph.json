@@ -1,0 +1,47 @@
+{
+  "graphId": "pb-monitoring-subscription",
+  "version": 1,
+  "taskId": "playbook:monitoring_subscription",
+  "goal": "Run the monitoring_subscription playbook (v1) as a graph, doing exactly what the old runner does.",
+  "successMetric": {
+    "name": "run finished",
+    "target": 1,
+    "unit": "runs",
+    "measuredBy": "draft_approved"
+  },
+  "stopConditions": ["budget reached", "rejected by Archie", "outreach not allowed"],
+  "budgetGbp": 0.01,
+  "state": {
+    "activated": {
+      "type": "json",
+      "untrusted": false
+    }
+  },
+  "inputs": [],
+  "nodes": [
+    {
+      "id": "activate",
+      "kind": "role",
+      "ref": "operator",
+      "reads": [],
+      "writes": ["activated"],
+      "config": {
+        "playbook": "monitoring_subscription",
+        "step": "activate"
+      },
+      "budget": {
+        "maxCostGbp": 0.01,
+        "maxDurationS": 600
+      }
+    }
+  ],
+  "edges": [],
+  "entry": "activate",
+  "exits": ["activate"],
+  "planner": {
+    "model": "none",
+    "promptVersion": "converted",
+    "rationale": "Converted mechanically from playbooks/monitoring_subscription/SKILL.md v1 at L3.",
+    "assumptions": []
+  }
+}

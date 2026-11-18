@@ -20,6 +20,9 @@ importers:
       '@ae/contracts':
         specifier: workspace:*
         version: link:packages/contracts
+      '@ae/graph':
+        specifier: workspace:*
+        version: link:packages/graph
       '@ae/infra':
         specifier: workspace:*
         version: link:packages/infra
@@ -208,6 +211,9 @@ importers:
       '@ae/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@ae/graph':
+        specifier: workspace:*
+        version: link:../graph
       '@ae/opportunity':
         specifier: workspace:*
         version: link:../opportunity

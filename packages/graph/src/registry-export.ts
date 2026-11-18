@@ -12,6 +12,11 @@ export interface PlaybookCatalogueEntry {
   version: number;
   autonomy: Autonomy;
   revenue_path: string;
+  /** The playbook's steps (a role node bound to a step uses that step's tools). */
+  steps?: (
+    | { id: string; role: Role; tools: string[]; output: string }
+    | { id: string; gate: string }
+  )[];
   /** Filled from run history (G5); zero until then. */
   stats: { runs: number; success_rate: number | null; avg_cost_gbp: number | null };
 }

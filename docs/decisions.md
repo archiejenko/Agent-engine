@@ -479,3 +479,19 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   file in the folder it deploys.
 - **Stage 5 runs on Archie's deployment.** By rule 20, no agent can read the Anthropic key, and the real
   data lives in D1. The build session provides the review summary.
+
+## 2026-11-18 — Task graph G1
+
+- **Compiler:** 16 rules, pure and deterministic, with structured errors and a failing fixture for every
+  rule. **Interpreter:** one runtime, deterministic order, declared keys only, bounded loops.
+- **Playbooks as graphs:** six are converted mechanically and proven equivalent to the old runner on eight
+  scenarios. `claim_site` is converted by hand from its workflow and rejected by rules 11 and 8 (see the
+  G1 report). It stays on its workflow pending Archie's decision.
+- **Rule 11:** read as "an approval on every path into a send, with only deterministic checks between
+  them".
+- **Rule 8:** Archie's approval doesn't replace the checker for model-written text; Archie's own edits
+  count as checked.
+- **`sme_outreach` research** is narrowed to `verified_facts` in its graph (the code never calls
+  `web_fetch`). Its SKILL.md is unchanged.
+- **Found:** the old runner restarts a gateless playbook (`human_report`) from step 0 after a
+  twice-failed check is approved. Not changed (frozen path); reported to Archie.

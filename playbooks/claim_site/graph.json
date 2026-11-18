@@ -1,0 +1,97 @@
+{
+  "graphId": "pb-claim-site",
+  "version": 1,
+  "taskId": "playbook:claim_site",
+  "goal": "Fulfil a claimed site: request details, draft, get Archie's approval, publish, then propose a custom domain.",
+  "successMetric": {
+    "name": "run finished",
+    "target": 1,
+    "unit": "runs",
+    "measuredBy": "draft_approved"
+  },
+  "stopConditions": [
+    "customer cancelled or refunded",
+    "rejected by Archie",
+    "details not received in time"
+  ],
+  "budgetGbp": 0.5,
+  "state": {
+    "claim_ref": { "type": "string" },
+    "details_requested": { "type": "json" },
+    "details": { "type": "json", "untrusted": true },
+    "site_draft": { "type": "json" },
+    "approved": { "type": "boolean" },
+    "live_url": { "type": "json" },
+    "domain_proposed": { "type": "json" }
+  },
+  "inputs": ["claim_ref"],
+  "nodes": [
+    {
+      "id": "details_form",
+      "kind": "tool",
+      "ref": "send_customer_email",
+      "reads": ["claim_ref"],
+      "writes": ["details_requested"],
+      "budget": { "maxCostGbp": 0, "maxDurationS": 60 }
+    },
+    {
+      "id": "details",
+      "kind": "wait",
+      "ref": "event:details",
+      "reads": ["details_requested"],
+      "writes": ["details"],
+      "budget": { "maxCostGbp": 0, "maxDurationS": 1209600 }
+    },
+    {
+      "id": "draft_site",
+      "kind": "role",
+      "ref": "writer",
+      "reads": ["details"],
+      "writes": ["site_draft"],
+      "config": { "playbook": "claim_site", "step": "draft_site" },
+      "budget": { "maxCostGbp": 0.5, "maxDurationS": 600 }
+    },
+    {
+      "id": "publish_review",
+      "kind": "approval",
+      "ref": "archie",
+      "reads": ["site_draft"],
+      "writes": ["approved"],
+      "config": { "kind": "gate", "playbook": "claim_site" },
+      "budget": { "maxCostGbp": 0, "maxDurationS": 2592000 }
+    },
+    {
+      "id": "publish",
+      "kind": "tool",
+      "ref": "publish_site",
+      "reads": ["claim_ref", "site_draft", "approved"],
+      "writes": ["live_url"],
+      "budget": { "maxCostGbp": 0, "maxDurationS": 60 }
+    },
+    {
+      "id": "domain_proposal",
+      "kind": "tool",
+      "ref": "send_customer_email",
+      "reads": ["claim_ref", "live_url"],
+      "writes": ["domain_proposed"],
+      "budget": { "maxCostGbp": 0, "maxDurationS": 60 }
+    }
+  ],
+  "edges": [
+    { "from": "details_form", "to": "details" },
+    { "from": "details", "to": "draft_site" },
+    { "from": "draft_site", "to": "publish_review" },
+    { "from": "publish_review", "to": "publish" },
+    { "from": "publish", "to": "domain_proposal" }
+  ],
+  "entry": "details_form",
+  "exits": ["domain_proposal"],
+  "planner": {
+    "model": "none",
+    "promptVersion": "converted",
+    "rationale": "Converted by hand from the claim_fulfilment workflow (packages/infra/src/claim.ts), because claim_site runs only as that workflow and has no runner steps. It records what the workflow actually does; the compiler rejects it (see brain/build-reports/graph-g1.md), so claim_site keeps running unchanged on its workflow until Archie decides.",
+    "assumptions": [
+      "the workflow's cancellation check before every step maps to the runtime's pre-node check"
+    ]
+  }
+}

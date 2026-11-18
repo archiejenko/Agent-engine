@@ -39,13 +39,15 @@
     "gate:v2-phase3": "tsx scripts/gate-v2-phase3.ts",
     "gate:v2-phase4": "tsx scripts/gate-v2-phase4.ts",
     "gate:v3": "tsx scripts/gate-v3.ts",
-    "gate:graph": "tsx scripts/gate-graph.ts"
+    "gate:graph": "tsx scripts/gate-graph.ts",
+    "gen:graphs": "tsx scripts/gen-graphs.ts"
   },
   "devDependencies": {
     "@ae/agent-runner": "workspace:*",
     "@ae/api": "workspace:*",
     "@ae/config": "workspace:*",
     "@ae/contracts": "workspace:*",
+    "@ae/graph": "workspace:*",
     "@ae/infra": "workspace:*",
     "@ae/opportunity": "workspace:*",
     "@ae/ports": "workspace:*",

@@ -7,6 +7,8 @@ import { type LoadedPlaybook, parsePlaybook } from "@ae/infra";
 export async function loadPlaybooks(dir: string): Promise<Map<string, LoadedPlaybook>> {
   const out = new Map<string, LoadedPlaybook>();
   for (const name of readdirSync(dir)) {
+    // Folders starting with "_" hold prompts that aren't playbooks (e.g. _planner, graph plan G4).
+    if (name.startsWith("_")) continue;
     try {
       const pb = await parsePlaybook(readFileSync(join(dir, name, "SKILL.md"), "utf8"));
       out.set(pb.spec.playbook, pb);

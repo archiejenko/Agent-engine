@@ -1,0 +1,152 @@
+{
+  "graphId": "pb-human-report",
+  "version": 1,
+  "taskId": "playbook:human_report",
+  "goal": "Run the human_report playbook (v1) as a graph, doing exactly what the old runner does.",
+  "successMetric": {
+    "name": "run finished",
+    "target": 1,
+    "unit": "runs",
+    "measuredBy": "draft_approved"
+  },
+  "stopConditions": ["budget reached", "rejected by Archie", "outreach not allowed"],
+  "budgetGbp": 0.05,
+  "state": {
+    "report": {
+      "type": "json",
+      "untrusted": false
+    },
+    "verify_feedback": {
+      "type": "string",
+      "untrusted": false
+    },
+    "pass_or_fail": {
+      "type": "json",
+      "untrusted": false
+    },
+    "verify_verdict": {
+      "type": "enum",
+      "enumValues": ["pass", "fail"],
+      "untrusted": false
+    },
+    "approved": {
+      "type": "boolean",
+      "untrusted": false
+    },
+    "delivery": {
+      "type": "json",
+      "untrusted": false
+    }
+  },
+  "inputs": ["verify_feedback"],
+  "nodes": [
+    {
+      "id": "build",
+      "kind": "role",
+      "ref": "researcher",
+      "reads": ["verify_feedback"],
+      "writes": ["report"],
+      "config": {
+        "playbook": "human_report",
+        "step": "build"
+      },
+      "budget": {
+        "maxCostGbp": 0.01,
+        "maxDurationS": 600
+      }
+    },
+    {
+      "id": "verify",
+      "kind": "role",
+      "ref": "checker",
+      "reads": ["report"],
+      "writes": ["pass_or_fail", "verify_verdict", "verify_feedback"],
+      "config": {
+        "playbook": "human_report",
+        "step": "verify"
+      },
+      "budget": {
+        "maxCostGbp": 0.01,
+        "maxDurationS": 600
+      }
+    },
+    {
+      "id": "verify_review",
+      "kind": "approval",
+      "ref": "archie",
+      "reads": ["report", "pass_or_fail"],
+      "writes": ["approved"],
+      "config": {
+        "kind": "check_failed",
+        "playbook": "human_report"
+      },
+      "budget": {
+        "maxCostGbp": 0,
+        "maxDurationS": 604800
+      }
+    },
+    {
+      "id": "deliver",
+      "kind": "role",
+      "ref": "operator",
+      "reads": ["report", "pass_or_fail"],
+      "writes": ["delivery"],
+      "config": {
+        "playbook": "human_report",
+        "step": "deliver"
+      },
+      "budget": {
+        "maxCostGbp": 0.01,
+        "maxDurationS": 600
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "build",
+      "to": "verify"
+    },
+    {
+      "from": "verify",
+      "to": "build",
+      "when": {
+        "key": "verify_verdict",
+        "op": "eq",
+        "value": "fail"
+      },
+      "loop": {
+        "maxIterations": 1
+      }
+    },
+    {
+      "from": "verify",
+      "to": "verify_review",
+      "when": {
+        "key": "verify_verdict",
+        "op": "eq",
+        "value": "fail"
+      }
+    },
+    {
+      "from": "verify",
+      "to": "deliver",
+      "when": {
+        "key": "verify_verdict",
+        "op": "eq",
+        "value": "pass"
+      }
+    },
+    {
+      "from": "verify_review",
+      "to": "deliver"
+    }
+  ],
+  "entry": "build",
+  "exits": ["deliver"],
+  "planner": {
+    "model": "none",
+    "promptVersion": "converted",
+    "rationale": "Converted mechanically from playbooks/human_report/SKILL.md v1 at L3.",
+    "assumptions": []
+  }
+}

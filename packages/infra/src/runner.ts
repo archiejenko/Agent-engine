@@ -198,6 +198,7 @@ export class PlaybookRunner {
     state: TaskState,
     idx: number,
     retryReason: string | null,
+    tags?: { graph_id: string; graph_version: number; node_id: string },
   ): Promise<RoleStepResult> {
     const step = pb.spec.steps[idx];
     if (!step || !("role" in step)) throw new Error(`step ${idx} is not a role step`);
@@ -284,9 +285,38 @@ export class PlaybookRunner {
       cost_gbp: cost,
       duration_ms: Date.now() - started,
       timestamp: this.now().toISOString(),
+      ...(tags ?? {}),
     });
     if (cost > 0) await this.d.storage.tasks.addCost(task.task_id, cost);
     return res;
+  }
+
+  // ---- Task graph (graph plan, G1): converted playbooks run their role nodes through the SAME step
+  // code as this runner. The interpreter owns control flow; these run one step or render one gate.
+
+  /** Runs one role step of a task's playbook with exactly `inputs` (the node's declared reads). */
+  async runStepForGraph(
+    taskId: string,
+    stepId: string,
+    inputs: Record<string, unknown>,
+    retryReason: string | null,
+    tags: { graph_id: string; graph_version: number; node_id: string },
+  ): Promise<RoleStepResult> {
+    const { task, pb, impl } = await this.load(taskId);
+    const idx = pb.spec.steps.findIndex((s) => s.id === stepId);
+    if (idx < 0) throw new Error(`${task.playbook} has no step ${stepId}`);
+    const state: TaskState = { ...initialState(), next_step: idx, outputs: { ...inputs } };
+    return this.execStep(task, pb, impl, state, idx, retryReason, tags);
+  }
+
+  /** What Archie sees at a gate, and an edit applied, for a playbook's outputs (graph approval nodes). */
+  gateForGraph(playbook: string, outputs: Record<string, unknown>, editedText?: string) {
+    const impl = this.d.impls.get(playbook);
+    if (!impl) throw new Error(`playbook ${playbook} has no implementation`);
+    const state: TaskState = { ...initialState(), outputs: structuredClone(outputs) };
+    const item = impl.gateItem(state);
+    if (editedText !== undefined) impl.applyEdit?.(state, editedText);
+    return { item, outputs: state.outputs };
   }
 
   /** Archie's decision at a gate: approve / edit / reject. Edits become playbook examples. */

@@ -569,6 +569,10 @@ export const GraphPolicy = z.object({
   }),
   budget: z.object({ ev_share: z.number().gt(0).max(1) }),
   autonomy: z.object({ bespoke_max: z.enum(["L0", "L1", "L2", "L3"]) }),
+  guardrails: z.object({
+    outreach_send_tools: z.array(z.string().min(1)),
+    untrusted_output_tools: z.array(z.string().min(1)),
+  }),
   promotion: z.object({
     min_live_runs: z.number().int().min(1),
     max_breaches: z.number().int().min(0),
