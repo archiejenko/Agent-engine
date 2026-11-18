@@ -12,6 +12,7 @@ import registryJson from "./field-registry.json" with { type: "json" };
 import graphPolicyJson from "./graph-policy.json" with { type: "json" };
 import ideaCategoriesJson from "./idea-categories.json" with { type: "json" };
 import ideaFunctionsJson from "./idea-functions.json" with { type: "json" };
+import ideasJson from "./ideas.json" with { type: "json" };
 import infraJson from "./infra.json" with { type: "json" };
 import infraPricesJson from "./infra-prices.json" with { type: "json" };
 import keysJson from "./keys.json" with { type: "json" };
@@ -388,6 +389,7 @@ export const rawConfig = {
   idea_functions: ideaFunctionsJson,
   infra_prices: infraPricesJson,
   graph_policy: graphPolicyJson,
+  ideas: ideasJson,
 };
 
 /** The company number used until Archie sets the real one (real sends refuse to run with it). */
@@ -587,4 +589,57 @@ export function loadGraphPolicy(raw: unknown = graphPolicyJson): GraphPolicy {
 
 export function loadDecisionsConfig(raw: unknown = decisionsJson): DecisionsConfig {
   return DecisionsConfig.parse(raw);
+}
+
+/** v3 Phase 6: scouting fields, idea-card cost model, test defaults (placeholders until Archie sets them). */
+const KillCriterionCfg = z.object({
+  metric: z.enum([
+    "demo_visits_per_100_sends",
+    "replies_per_100_sends",
+    "paid_per_100_sends",
+    "spend_gbp",
+  ]),
+  op: z.enum(["<", ">="]),
+  threshold: z.number().finite(),
+  by_day: z.number().int().min(1),
+});
+export const IdeasConfig = z.object({
+  auto_start_test_gbp: z.number().nonnegative(),
+  auto_start_is_assumption: z.boolean(),
+  fields: z
+    .array(
+      z.object({
+        id: z.string().regex(/^[a-z][a-z0-9_]{1,40}$/),
+        name: z.string().min(1),
+        regulated: z.boolean(),
+        sources: z
+          .array(
+            z.object({
+              name: z.string().regex(/^[a-z][a-z0-9_]{1,40}$/),
+              lane: z.enum(["open", "licensed"]),
+              reuse_allowed: z.boolean(),
+            }),
+          )
+          .min(1),
+      }),
+    )
+    .min(1),
+  cost_model: z.object({
+    model_gbp_per_customer: z.number().nonnegative(),
+    hosting_gbp_per_customer_year: z.number().nonnegative(),
+    third_party_gbp_per_customer_year: z.number().nonnegative(),
+    owner_minutes_per_customer: z.number().nonnegative(),
+  }),
+  test_defaults: z.object({
+    sample_size: z.number().int().positive(),
+    time_cap_days: z.number().int().positive(),
+    budget_gbp: z.number().positive(),
+    next_budget_step_gbp: z.number().nonnegative(),
+  }),
+  weekly_send_capacity_assumed: z.number().int().positive(),
+  default_kill_criteria: z.array(KillCriterionCfg).min(1),
+});
+export type IdeasConfig = z.infer<typeof IdeasConfig>;
+export function loadIdeasConfig(raw: unknown = ideasJson): IdeasConfig {
+  return IdeasConfig.parse(raw);
 }

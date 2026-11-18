@@ -1,0 +1,41 @@
+{
+  "_note": "v3 Phase 6 (Ideas feed and Board, with v2 Phase 7). Every money and time figure below is a PLACEHOLDER (assumption) until Archie sets it; cards show them labelled 'assumed' with the assumption stated.",
+  "auto_start_test_gbp": 5,
+  "auto_start_is_assumption": true,
+  "fields": [
+    {
+      "id": "sme_websites",
+      "name": "SME websites",
+      "regulated": false,
+      "sources": [
+        { "name": "companies_house", "lane": "open", "reuse_allowed": true },
+        { "name": "gazette", "lane": "open", "reuse_allowed": true },
+        { "name": "company_website", "lane": "open", "reuse_allowed": true }
+      ]
+    },
+    {
+      "id": "business_lending_intros",
+      "name": "Business lending introductions",
+      "regulated": true,
+      "sources": [{ "name": "companies_house", "lane": "open", "reuse_allowed": true }]
+    }
+  ],
+  "cost_model": {
+    "_note": "Per customer, first year. Assumptions until real costs exist.",
+    "model_gbp_per_customer": 0.5,
+    "hosting_gbp_per_customer_year": 60,
+    "third_party_gbp_per_customer_year": 20,
+    "owner_minutes_per_customer": 30
+  },
+  "test_defaults": {
+    "sample_size": 200,
+    "time_cap_days": 21,
+    "budget_gbp": 4,
+    "next_budget_step_gbp": 25
+  },
+  "weekly_send_capacity_assumed": 100,
+  "default_kill_criteria": [
+    { "metric": "demo_visits_per_100_sends", "op": "<", "threshold": 3, "by_day": 10 },
+    { "metric": "spend_gbp", "op": ">=", "threshold": 4, "by_day": 1 }
+  ]
+}

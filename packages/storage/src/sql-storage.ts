@@ -2,6 +2,7 @@ import { Claim, VerifiedFact, VerifiedFactVersion } from "@ae/contracts";
 import { claimsStorage } from "./claims.ts";
 import type { SqlDriver, SqlStatement, SqlValue } from "./driver.ts";
 import { graphStorage } from "./graph.ts";
+import { ideasStorage } from "./ideas.ts";
 import { lettersStorage } from "./letters.ts";
 import { phase2 } from "./phase2.ts";
 import { phase3 } from "./phase3.ts";
@@ -152,6 +153,7 @@ export class SqlStorage implements Storage {
       claimsStorage(db),
       v3Storage(db),
       graphStorage(db),
+      ideasStorage(db),
     );
   }
   declare signals: Storage["signals"];
@@ -203,6 +205,11 @@ export class SqlStorage implements Storage {
   declare keyRegistry: Storage["keyRegistry"];
   declare audit: Storage["audit"];
   declare hypotheses: Storage["hypotheses"];
+  declare scoutSignals: Storage["scoutSignals"];
+  declare ideaCards: Storage["ideaCards"];
+  declare ideaThread: Storage["ideaThread"];
+  declare board: Storage["board"];
+  declare experiments: Storage["experiments"];
   declare graphSpecs: Storage["graphSpecs"];
   declare sandboxReports: Storage["sandboxReports"];
   declare graphRuns: Storage["graphRuns"];

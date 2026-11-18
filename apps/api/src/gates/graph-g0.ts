@@ -45,7 +45,10 @@ export async function runGraphG0Gate(storage: Storage, root: string) {
   // 2. Migrations up, down, up on a fresh database.
   const all = loadMigrations();
   const down = loadDownMigrations();
-  const graphMigrations = all.filter((m) => down.has(m.name)).map((m) => m.name);
+  // The graph layer's own migrations (0020–0022); later ones with down files have their own tests.
+  const graphMigrations = all
+    .filter((m) => down.has(m.name) && m.name >= "0020" && m.name < "0023")
+    .map((m) => m.name);
   const db = sqliteDriver(":memory:");
   await migrate(db, all);
   const tables = async () =>

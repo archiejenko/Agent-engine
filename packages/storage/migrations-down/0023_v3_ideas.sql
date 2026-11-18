@@ -1,0 +1,14 @@
+DROP INDEX IF EXISTS experiments_card;
+DROP TABLE IF EXISTS experiments;
+DROP INDEX IF EXISTS board_moves_market;
+DROP TABLE IF EXISTS board_moves;
+DROP TABLE IF EXISTS board_tiles;
+DROP TRIGGER IF EXISTS idea_thread_no_delete;
+DROP TRIGGER IF EXISTS idea_thread_no_update;
+DROP INDEX IF EXISTS idea_thread_card;
+DROP TABLE IF EXISTS idea_thread;
+DROP INDEX IF EXISTS idea_cards_market;
+DROP INDEX IF EXISTS idea_cards_status;
+DROP TABLE IF EXISTS idea_cards;
+DROP INDEX IF EXISTS scout_signals_market;
+DROP TABLE IF EXISTS scout_signals;
