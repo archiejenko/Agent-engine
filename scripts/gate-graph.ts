@@ -6,6 +6,7 @@ import { openSqliteStorage } from "@ae/storage/sqlite";
 import { runGraphG0Gate } from "../apps/api/src/gates/graph-g0.ts";
 import { runGraphG1Gate } from "../apps/api/src/gates/graph-g1.ts";
 import { runGraphG2Gate } from "../apps/api/src/gates/graph-g2.ts";
+import { runGraphG3Gate } from "../apps/api/src/gates/graph-g3.ts";
 import { ROOT } from "./lib.ts";
 
 // Task graph gates: `pnpm gate:graph --gate N` writes docs/gates/graph-gN.md (graph plan).
@@ -17,6 +18,7 @@ const GATES: Record<
   "0": (s) => runGraphG0Gate(s, ROOT),
   "1": (s) => runGraphG1Gate(s, ROOT),
   "2": (s) => runGraphG2Gate(s, ROOT, { workerBuild: true }),
+  "3": (s) => runGraphG3Gate(s, ROOT),
 };
 const run = GATES[values.gate as string];
 if (!run) throw new Error(`no graph gate ${values.gate}`);

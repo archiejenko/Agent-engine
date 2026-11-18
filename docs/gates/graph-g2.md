@@ -1,6 +1,6 @@
 # Phase graph-g2 gate report
 
-Generated 2026-11-18T23:32:48.026Z on SYNTHETIC data with fake external systems.
+Generated 2026-11-18T23:47:06.726Z on SYNTHETIC data with fake external systems.
 
 | Criterion | Status | Evidence |
 |---|---|---|

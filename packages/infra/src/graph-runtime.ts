@@ -66,6 +66,11 @@ export interface GraphRuntimeDeps {
   toolPrice(tool: string): number;
   /** True when node spend is real money (a live model); the pool is enforced only then. */
   realSpend: boolean;
+  /**
+   * "sandbox" (graph plan G3): cost events are recorded as sandbox spend, never live, and a run stops at
+   * the policy's per-attempt sandbox cap. Defaults to "live".
+   */
+  mode?: "live" | "sandbox";
 }
 
 const NODE_TIMEOUT_MS = (p: GraphPolicy, n: GraphNode) =>
@@ -111,6 +116,12 @@ export async function pauseReason(
   const run = await d.storage.graphRuns.get(runId);
   if (run && run.cost_so_far_gbp + node.budget.maxCostGbp > compiled.spec.budgetGbp + 1e-9)
     return `the graph's budget (£${compiled.spec.budgetGbp.toFixed(2)}) would be exceeded`;
+  if (
+    d.mode === "sandbox" &&
+    run &&
+    run.cost_so_far_gbp + node.budget.maxCostGbp > d.policy.sandbox.max_cost_per_attempt_gbp + 1e-9
+  )
+    return `the sandbox cap (£${d.policy.sandbox.max_cost_per_attempt_gbp.toFixed(2)} per attempt) would be exceeded`;
   if (
     d.realSpend &&
     node.budget.maxCostGbp > 0 &&
@@ -258,7 +269,7 @@ async function recordInfra(
     opportunity_id: null,
     revenue_path: task.revenue_path,
     shape_fingerprint: compiled.shapeFingerprint,
-    mode: "live",
+    mode: d.mode ?? "live",
     category: "infra",
     unit: "workflow_step",
     quantity: qty,
@@ -295,7 +306,7 @@ export async function runGraphNodeJob(
 ): Promise<void> {
   const type = graphEventType("gd", job.run_id, job.node_id, job.iteration);
   const row = await d.storage.graphNodeRuns.start(job.run_id, job.node_id, job.iteration);
-  if (row.status === "done") {
+  if (row.status === "done" || row.status === "failed") {
     await port.sendEvent(job.instance_id, type, row.recorded_model_output);
     return;
   }
@@ -307,15 +318,23 @@ export async function runGraphNodeJob(
   );
   const inputs = Object.fromEntries(node.reads.map((k) => [k, latest.get(k)]));
   const before = (await d.storage.runLog.forTask(task.task_id)).length;
-  const out = await legacyBindings({ storage: d.storage, cfg: d.cfg, runner: d.runner }, task).run({
-    runId: job.run_id,
-    node,
-    iteration: job.iteration,
-    inputs,
-    compiled,
-  });
-  if (hooks.crashAfterStep?.(job)) throw new Error("injected crash after the step ran");
-  if (out.status !== "done") throw new Error(`role node ${node.id} didn't finish`);
+  // A node that throws (a tool down, a model error) is a recorded failure, not a lost job: its costs so
+  // far are recorded and the run is told, so it can end as "failed" with the reason.
+  let out: NodeOutcome | null = null;
+  let failure: string | null = null;
+  try {
+    out = await legacyBindings({ storage: d.storage, cfg: d.cfg, runner: d.runner }, task).run({
+      runId: job.run_id,
+      node,
+      iteration: job.iteration,
+      inputs,
+      compiled,
+    });
+  } catch (e) {
+    failure = `${node.id}: ${(e as Error).message}`;
+  }
+  if (!failure && hooks.crashAfterStep?.(job)) throw new Error("injected crash after the step ran");
+  if (!failure && out?.status !== "done") failure = `role node ${node.id} didn't finish`;
   const log = (await d.storage.runLog.forTask(task.task_id)).slice(before);
   let cost = 0;
   for (const entry of log)
@@ -327,9 +346,20 @@ export async function runGraphNodeJob(
       graph_version: compiled.spec.version,
       node_id: node.id,
       shape: compiled.shapeFingerprint,
-      mode: "live",
+      mode: d.mode ?? "live",
       dry_run: true,
     });
+  if (failure || out?.status !== "done") {
+    const failed = { error: failure ?? "no result", cost_gbp: cost };
+    await d.storage.graphNodeRuns.finish(job.run_id, job.node_id, job.iteration, {
+      status: "failed",
+      cost_gbp: cost,
+      recorded_model_output: failed,
+      error: failed.error,
+    });
+    await port.sendEvent(job.instance_id, type, failed);
+    return;
+  }
   assertStateSize(out.writes, d.policy.runtime.state_value_max_bytes);
   const payload = { writes: out.writes, cost_gbp: cost };
   await d.storage.graphNodeRuns.finish(job.run_id, job.node_id, job.iteration, {
@@ -339,6 +369,9 @@ export async function runGraphNodeJob(
   });
   await port.sendEvent(job.instance_id, type, payload);
 }
+
+/** A role node failed or never reported back: the run ends as "failed". */
+export class GraphNodeFailedError extends Error {}
 
 interface GraphTaskState {
   graph_run?: { run_id: string; instance_id: string; graph_id: string; version: number };
@@ -432,19 +465,28 @@ export function graphRunWorkflow(d: GraphRuntimeDeps): WorkflowDef<GraphRunParam
               return true;
             });
             const ev = await step.waitForEvent<{
-              writes: Record<string, unknown>;
+              writes?: Record<string, unknown>;
               cost_gbp: number;
+              error?: string;
             }>(
               `node:${key}`,
               graphEventType("gd", p.run_id, n.id, ctx.iteration),
               NODE_TIMEOUT_MS(d.policy, n),
             );
-            if (!ev) throw new Error(`node ${key} didn't report back in time`);
+            if (!ev) throw new GraphNodeFailedError(`node ${key} didn't report back in time`);
+            if (ev.error || !ev.writes) {
+              await step.do(`post:${key}`, async () => {
+                await d.storage.graphRuns.addCost(p.run_id, ev.cost_gbp);
+                return true;
+              });
+              throw new GraphNodeFailedError(ev.error ?? `node ${key} returned nothing`);
+            }
+            const writes = ev.writes;
             await step.do(`post:${key}`, async () => {
-              await persist(ctx, ev.writes, ev.cost_gbp);
+              await persist(ctx, writes, ev.cost_gbp);
               return true;
             });
-            return { status: "done", writes: ev.writes };
+            return { status: "done", writes };
           }
           if (n.kind === "function") {
             const out = await step.do(`${key}`, () => legacy.run(ctx));
@@ -517,8 +559,15 @@ export function graphRunWorkflow(d: GraphRuntimeDeps): WorkflowDef<GraphRunParam
       };
 
       let rs = rs0;
+      let failure: string | null = null;
       for (;;) {
-        rs = await runGraph(compiled, bindings, rs);
+        try {
+          rs = await runGraph(compiled, bindings, rs);
+        } catch (e) {
+          if (!(e instanceof GraphNodeFailedError)) throw e;
+          failure = e.message;
+          break;
+        }
         if (rs.status !== "paused") break;
         pauses++;
         await step.sleep(`paused #${pauses}`, 5 * 60_000);
@@ -526,6 +575,27 @@ export function graphRunWorkflow(d: GraphRuntimeDeps): WorkflowDef<GraphRunParam
         await step.do(`resumed #${pauses}`, async () => {
           await d.storage.graphRuns.update(p.run_id, { status: "running", pause_reason: null });
           return true;
+        });
+      }
+      if (failure) {
+        const why = failure;
+        return step.do("finish", async () => {
+          // A node failed (or never reported back): the run and task fail with the reason, and Archie is
+          // told. Nothing after the failed node ran.
+          await d.storage.graphRuns.update(p.run_id, {
+            status: "failed",
+            ended_at: new Date().toISOString(),
+          });
+          await d.storage.tasks.update(task.task_id, { status: "failed", error: why });
+          await d.storage.alerts.raise(
+            "graph_failed",
+            `${task.playbook} graph run failed: ${why}`,
+            {
+              run_id: p.run_id,
+              task_id: task.task_id,
+            },
+          );
+          return { status: "failed" };
         });
       }
       return step.do("finish", async () => {

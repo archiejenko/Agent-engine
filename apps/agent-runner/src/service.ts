@@ -132,6 +132,33 @@ export interface ServiceDeps {
   graphDispatch?: (job: GraphNodeJob) => Promise<void>;
   /** Starting workflows and sending them events (Cloudflare Workflows); defaults to the local engine. */
   workflowPort?: WorkflowPort;
+  /**
+   * Sandbox (graph plan G3). Every port must be a fake (the model may be real, for real costs); the
+   * registry runs every external tool dry and injects no key; every task is synthetic; graph spend is
+   * recorded as sandbox spend, never live. Construction refuses any live adapter.
+   */
+  sandbox?: boolean;
+}
+
+export class SandboxIsolationError extends Error {
+  constructor(readonly port: string) {
+    super(`sandbox refuses a live ${port}`);
+  }
+}
+
+/** The ports a sandbox may be given: fakes only (the model is the one exception, for real costs). */
+export function assertSandboxPorts(d: ServiceDeps): void {
+  const live = (port: string, ok: boolean) => {
+    if (!ok) throw new SandboxIsolationError(port);
+  };
+  live("key ring", d.keys === undefined);
+  live("workflow port", d.workflowPort === undefined);
+  live("graph dispatch", d.graphDispatch === undefined);
+  live("email sender", d.email === undefined || d.email instanceof FakeEmailSender);
+  live("inbox", d.inbox === undefined || d.inbox instanceof FakeInbox);
+  live("alert channel", d.alerts === undefined || d.alerts instanceof FakeAlertChannel);
+  live("web fetcher", d.fetcher === undefined || d.fetcher instanceof FakeWebFetcher);
+  live("budget port", d.budget === undefined);
 }
 
 interface OpenCohort {
@@ -163,12 +190,15 @@ export class AgentService {
   readonly workflowPort: WorkflowPort;
   readonly graphEngine: { enabled: boolean; playbooks: string[] };
   readonly graphDeps: GraphRuntimeDeps;
+  readonly sandbox: boolean;
   /** graph_node jobs waiting to run locally (on Cloudflare they go to the queue). */
   readonly graphJobs: GraphNodeJob[] = [];
   /** Test hooks applied to every locally processed graph job (gates inject crashes here). */
   graphJobHooks: Parameters<typeof runGraphNodeJob>[3] = {};
 
   constructor(d: ServiceDeps) {
+    if (d.sandbox) assertSandboxPorts(d);
+    this.sandbox = d.sandbox === true;
     this.storage = d.storage;
     this.infra = d.infra ?? loadInfraConfig();
     this.queue = d.queue ?? new InMemoryQueue();
@@ -176,9 +206,10 @@ export class AgentService {
     this.model = d.model ?? fakeModel();
     this.tools = new ToolRegistry(d.storage, this.infra);
     this.tools.keys = d.keys ?? null;
+    this.tools.sandbox = this.sandbox;
     const ctx = d.ctx ?? defaultContext();
     this.ctx = ctx;
-    this.synthetic = d.synthetic === true;
+    this.synthetic = d.synthetic === true || this.sandbox;
     this.email = d.email ?? new FakeEmailSender();
     this.alerts = d.alerts ?? new FakeAlertChannel();
     this.inbox = d.inbox ?? new FakeInbox();
@@ -235,6 +266,7 @@ export class AgentService {
         }),
       toolPrice: (t) => this.tools.get(t)?.cost_gbp_per_call ?? 0,
       realSpend: this.model.name !== "fake-model",
+      mode: this.sandbox ? "sandbox" : "live",
     };
     this.workflows = new LocalWorkflowEngine(
       d.storage,
@@ -335,7 +367,7 @@ export class AgentService {
       graph_id: c.spec.graphId,
       version: c.spec.version,
       instance_id,
-      mode: "live",
+      mode: this.sandbox ? "sandbox" : "live",
       status: "pending",
       started_at: new Date().toISOString(),
       synthetic: this.synthetic,

@@ -509,3 +509,15 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **The G0 "no runtime change" criterion** is restated as "no runtime change by default".
 - **The old runner stays** until the flag has been on in production. Removing it now would break a
   deployment with the flag off.
+
+## 2026-11-18 — Task graph G3
+
+- **Sandbox mode:** fakes only (a real model is allowed, for real costs); every external tool dry and
+  keyless whatever the switches say; tasks synthetic; spend recorded as `mode: "sandbox"`, never live;
+  £2 per attempt and £5 per graph (probes included), from `graph-policy.json`.
+- **Scenarios** come from what the happy path did: "Archie rejects" where it asks for approval, "tool
+  error" on the first tool it called, and "kill switch on" for every playbook.
+- **A failed role node** (a thrown tool or model error, or no report back) ends the run and the task as
+  `failed` with the reason, and raises a `graph_failed` alert. Before, the run was left at "running".
+- **Probes:** at most 5 nodes, read-only, with no operator, approval, wait or external tool, including
+  tools a role's step lists. They run with the planner (G4).

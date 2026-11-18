@@ -56,6 +56,11 @@ export class ToolRegistry {
   readonly calls: ToolCallRecord[] = [];
   /** Where keys come from. Production always sets it; without it, tools get no keys (local fakes). */
   keys: KeyRing | null = null;
+  /**
+   * Sandbox (graph plan G3): every external tool runs dry whatever the kill switches say, and no key is
+   * ever injected. Set once, at construction of a sandbox service.
+   */
+  sandbox = false;
 
   constructor(
     private readonly storage: Storage,
@@ -110,12 +115,12 @@ export class ToolRegistry {
     this.recent.set(name, window);
 
     const dryRun = reg.external
-      ? !(await externalActionsAllowed(this.storage, this.cfg, ctx.task.playbook))
+      ? this.sandbox || !(await externalActionsAllowed(this.storage, this.cfg, ctx.task.playbook))
       : false;
     // Keys: injected for live calls only (a dry run touches no provider). A failing or missing key is
     // refused here, before anything is recorded or attempted.
     let injected: { keys: Record<string, string>; secrets: string[] } | null = null;
-    if (reg.keys?.length && !dryRun && this.keys) {
+    if (reg.keys?.length && !dryRun && this.keys && !this.sandbox) {
       try {
         injected = await this.keys.forTool(reg.keys);
       } catch (e) {
