@@ -10,10 +10,12 @@ import {
   dailyDigest,
   expireDecisions,
   feedIsStale,
+  type GraphNodeJob,
   type LocalWorkflowEngine,
   loadTriggerScope,
   pollFallback,
   processEvents,
+  runGraphNodeJob,
   syncDecisions,
   type WorkflowPort,
 } from "@ae/infra";
@@ -33,7 +35,9 @@ export type Job =
   | { kind: "poll_fallback" }
   | { kind: "reverify"; entity_id: string; reason: string }
   | { kind: "workflows_tick" }
-  | { kind: "decisions" };
+  | { kind: "decisions" }
+  /** Task graph runtime (graph plan G2): run one role node, then wake its graph_run. */
+  | GraphNodeJob;
 
 export interface JobRuntime {
   service: AgentService;
@@ -107,6 +111,8 @@ export async function handleJob(rt: JobRuntime, job: Job): Promise<unknown> {
       return rt.refresh(job.entity_id);
     case "workflows_tick":
       return rt.workflows ? rt.workflows.tick() : 0;
+    case "graph_node":
+      return runGraphNodeJob(rt.service.graphDeps, job, rt.workflowPort ?? rt.service.workflowPort);
     case "decisions": {
       // Sync the Needs-you queue, apply safe defaults to expired decisions, build yesterday's digest.
       const d = {

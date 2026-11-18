@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { loadPlaybooks } from "@ae/agent-runner";
 import { loadGraphPolicy } from "@ae/config";
 import { playbookToGraph } from "@ae/graph";
+import { bundle } from "./gen-playbooks.ts";
 import { ROOT } from "./lib.ts";
 
 /**
@@ -49,4 +50,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     cwd: ROOT,
     stdio: "ignore",
   });
+  // The Worker's bundle carries the graphs too.
+  writeFileSync(join(ROOT, "packages/infra/src/playbooks.generated.ts"), bundle());
 }

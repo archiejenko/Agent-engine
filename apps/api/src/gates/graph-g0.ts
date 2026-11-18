@@ -163,8 +163,9 @@ export async function runGraphG0Gate(storage: Storage, root: string) {
       (e: Error) => e.message,
     );
 
-  // 6. Nothing calls the graph layer at runtime yet: no app imports it, and nothing outside gates and
-  // tests calls the graph task driver (the flag-gated runtime arrives in G2).
+  // 6. The graph layer reaches the runtime only behind GRAPH_ENGINE_ENABLED (wired in G2, off by default):
+  // the runner service is the one app file that imports it, the flag is off unless set to "1", and
+  // nothing outside gates and tests calls the G1 equivalence driver.
   const runtimeImporters = walk(root, [
     "apps/api/src",
     "apps/agent-runner/src",
@@ -172,12 +173,22 @@ export async function runGraphG0Gate(storage: Storage, root: string) {
     "packages",
   ]).filter((f) => {
     if (/gates\/|\.test\.|__tests__|packages\/graph\//.test(f)) return false;
+    if (f.endsWith("apps/agent-runner/src/service.ts")) return false; // the flag-gated entry point
     const t = readFileSync(f, "utf8");
     const app = /\/apps\//.test(f) && /from "@ae\/graph"/.test(t);
     const callsDriver =
       /runTaskAsGraph\(/.test(t) && !/export async function runTaskAsGraph/.test(t);
     return app || callsDriver;
   });
+  const flagDefault = new AgentService({
+    storage,
+    playbooks: await loadPlaybooks(join(root, "playbooks")),
+    model: fakeModel(),
+  }).graphEngine.enabled;
+  const wranglerFlag =
+    /"GRAPH_ENGINE_ENABLED":\s*"([^"]*)"/.exec(
+      readFileSync(join(root, "apps/api/wrangler.jsonc"), "utf8"),
+    )?.[1] ?? "missing";
 
   const criteria: GateCriterion[] = [
     {
@@ -235,10 +246,12 @@ export async function runGraphG0Gate(storage: Storage, root: string) {
     },
     {
       criterion:
-        "No runtime change: nothing calls the graph layer yet; every existing test and gate stays green",
-      status: runtimeImporters.length === 0 ? "passed (synthetic)" : "failed",
-      evidence:
-        "no app (API, runner service, Worker, dashboard) imports the graph layer and nothing outside gates/tests calls the graph task driver; `pnpm check` (every v1–v3 gate test included) is green at this commit",
+        "No runtime change by default: the graph layer runs only behind GRAPH_ENGINE_ENABLED; every existing test and gate stays green",
+      status:
+        runtimeImporters.length === 0 && flagDefault === false && wranglerFlag === ""
+          ? "passed (synthetic)"
+          : "failed",
+      evidence: `only the runner service imports the graph layer (others: ${runtimeImporters.length}); flag default ${flagDefault ? "on" : "off"}, Worker var "${wranglerFlag}"; nothing outside gates/tests calls the G1 driver; \`pnpm check\` (every v1–v3 gate test included) is green at this commit`,
     },
   ];
   return { criteria };

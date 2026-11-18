@@ -16,6 +16,7 @@ export * from "./digest.ts";
 export * from "./economics.ts";
 export * from "./ev.ts";
 export * from "./graph-legacy.ts";
+export * from "./graph-runtime.ts";
 export * from "./ideas.ts";
 export * from "./keys.ts";
 export * from "./ledger.ts";

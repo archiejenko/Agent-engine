@@ -28,6 +28,8 @@ import {
   chunkEvents,
   externalActionsAllowed,
   type FeedState,
+  GRAPH_WORKFLOW,
+  graphRunWorkflow,
   KeyRing,
   keyedModel,
   loadBundledPlaybooks,
@@ -94,6 +96,12 @@ async function runtimeFor(env: Env): Promise<JobRuntime> {
     budget: budgetPort(env),
     models,
     keys: ring,
+    // Task graph layer (G2): off unless the GRAPH_ENGINE_ENABLED var is "1".
+    graphEngine: { enabled: vars.GRAPH_ENGINE_ENABLED === "1" },
+    graphDispatch: async (job) => {
+      await env.JOBS.send(job);
+    },
+    workflowPort: cloudflareWorkflowPort(env),
   });
   const ch = loadCompaniesHouseConfig();
   const chKey = await keyFor(ring, "CH_API_KEY");
@@ -234,42 +242,81 @@ export class EngineWorkflow extends WorkflowEntrypoint<Env, EngineParams> {
     });
     const out = await def.run(
       params,
-      {
-        do: async <T>(name: string, fn: () => Promise<T>): Promise<T> => {
-          for (let i = 0; ; i++) {
-            const ok = await step.do(`kill check: ${name} #${i}`, () =>
-              workflowMayProceed(storage, cfg, inst),
-            );
-            if (ok) break;
-            await step.do(`mark paused: ${name} #${i}`, async () => {
-              await storage.workflows.update(instance_id, {
-                status: "paused",
-                pause_reason: "kill switch on",
-              });
-              return true;
-            });
-            await step.sleep(`wait for kill switch: ${name} #${i}`, "5 minutes");
-          }
-          return (await step.do(name, async () => {
-            const r = await fn();
-            await storage.workflows.putStep(instance_id, name, r ?? null);
-            return (r ?? null) as never;
-          })) as T;
-        },
-        sleep: (name, ms) => step.sleep(name, ms),
-        waitForEvent: async <T>(name: string, type: string, timeoutMs: number) => {
-          try {
-            const ev = await step.waitForEvent<Rpc.Serializable<unknown>>(name, {
-              type,
-              timeout: timeoutMs,
-            });
-            return (ev as unknown as { payload?: T }).payload ?? null;
-          } catch {
-            return null; // timed out
-          }
-        },
-      },
+      engineStep(step, storage, instance_id, async (name, i) => {
+        const ok = await step.do(`kill check: ${name} #${i}`, () =>
+          workflowMayProceed(storage, cfg, inst),
+        );
+        if (ok) return true;
+        await step.do(`mark paused: ${name} #${i}`, async () => {
+          await storage.workflows.update(instance_id, {
+            status: "paused",
+            pause_reason: "kill switch on",
+          });
+          return true;
+        });
+        await step.sleep(`wait for kill switch: ${name} #${i}`, "5 minutes");
+        return false;
+      }),
       { instanceId: instance_id, dryRun: inst.dry_run },
+    );
+    await step.do("complete", async () => {
+      await storage.workflows.update(instance_id, { status: "complete", output: out ?? null });
+      return true;
+    });
+    return out;
+  }
+}
+
+/**
+ * The engine's step contract on a Cloudflare WorkflowStep. Each `do` result is also written to D1 for
+ * the dashboard. `guard` (optional) runs before every step and returns false to wait and re-check.
+ */
+function engineStep(
+  step: WorkflowStep,
+  storage: Storage,
+  instanceId: string,
+  guard?: (name: string, attempt: number) => Promise<boolean>,
+) {
+  return {
+    do: async <T>(name: string, fn: () => Promise<T>): Promise<T> => {
+      for (let i = 0; guard && !(await guard(name, i)); i++) {
+        // waiting while the guard says no
+      }
+      return (await step.do(name, async () => {
+        const r = await fn();
+        await storage.workflows.putStep(instanceId, name, r ?? null);
+        return (r ?? null) as never;
+      })) as T;
+    },
+    sleep: (name: string, ms: number) => step.sleep(name, ms),
+    waitForEvent: async <T>(name: string, type: string, timeoutMs: number) => {
+      try {
+        const ev = await step.waitForEvent<Rpc.Serializable<unknown>>(name, {
+          type,
+          timeout: timeoutMs,
+        });
+        return (ev as unknown as { payload?: T }).payload ?? null;
+      } catch {
+        return null; // timed out
+      }
+    },
+  };
+}
+
+/**
+ * The task graph interpreter on Cloudflare (graph plan, G2): the same `graph_run` definition the local
+ * engine runs. It checks the queue, kill switch, graph budget and pool before every node itself, so it
+ * takes no extra guard. Role nodes are queued as `graph_node` jobs; their results come back as events.
+ */
+export class GraphRunWorkflow extends WorkflowEntrypoint<Env, EngineParams> {
+  override async run(event: WorkflowEvent<EngineParams>, step: WorkflowStep) {
+    const { params, instance_id } = event.payload;
+    const rt = await runtimeFor(this.env);
+    const storage: Storage = createD1Storage(this.env.DB);
+    const out = await graphRunWorkflow(rt.service.graphDeps).run(
+      params as never,
+      engineStep(step, storage, instance_id),
+      { instanceId: instance_id, dryRun: true },
     );
     await step.do("complete", async () => {
       await storage.workflows.update(instance_id, { status: "complete", output: out ?? null });
@@ -317,20 +364,29 @@ export function cloudflareWorkflowPort(env: Env): WorkflowPort {
   return {
     start: async (workflow, params, o) => {
       if (await storage.workflows.get(o.id)) return; // already started (webhook replay)
+      const graph = workflow === GRAPH_WORKFLOW;
+      const taskId = (params as { task_id?: string }).task_id;
+      const playbook = graph
+        ? ((taskId ? await storage.tasks.get(taskId) : null)?.playbook ?? "graph")
+        : "claim_site";
       await storage.workflows.create({
         id: o.id,
         workflow,
-        playbook: "claim_site",
+        playbook,
         params,
-        dry_run: !(await externalActionsAllowed(storage, loadInfraConfig(), "claim_site")),
+        dry_run: !(await externalActionsAllowed(storage, loadInfraConfig(), playbook)),
         synthetic: o.synthetic,
       });
-      await env.ENGINE.create({ id: o.id, params: { workflow, params, instance_id: o.id } });
+      await (graph ? env.GRAPH : env.ENGINE).create({
+        id: o.id,
+        params: { workflow, params, instance_id: o.id },
+      });
     },
     sendEvent: async (id, type, payload) => {
       await storage.workflowEvents.add(id, type, payload);
       try {
-        await (await env.ENGINE.get(id)).sendEvent({ type, payload });
+        const graph = (await storage.workflows.get(id))?.workflow === GRAPH_WORKFLOW;
+        await (await (graph ? env.GRAPH : env.ENGINE).get(id)).sendEvent({ type, payload });
       } catch (e) {
         console.error("sendEvent failed", id, type, (e as Error).message);
       }

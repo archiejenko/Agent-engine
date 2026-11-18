@@ -495,3 +495,17 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   `web_fetch`). Its SKILL.md is unchanged.
 - **Found:** the old runner restarts a gateless playbook (`human_report`) from step 0 after a
   twice-failed check is approved. Not changed (frozen path); reported to Archie.
+
+## 2026-11-18 — Task graph G2
+
+- **`GraphRunWorkflow`** runs graphs on Cloudflare Workflows. It sits behind the `GRAPH_ENGINE_ENABLED`
+  var, which is off by default, and only `sme_outreach` is switched. Role nodes run as `graph_node` jobs
+  on the `JOBS` queue (with its dead-letter queue) and report back with `gd-…` events.
+- **Pauses before every node:** queue pause, the playbook's kill switch, the graph budget, and the pool.
+  The pool is enforced only with a real model. The global kill switch keeps its meaning: tools run dry.
+- **An unanswered approval** defaults after 7 days: nothing is sent, and it's recorded as "defaulted".
+- **State values are capped at 512 KiB.** Checked against Cloudflare docs on 2026-11-18: a D1 row holds
+  2,000,000 bytes, and a Workflow step result holds 1 MiB.
+- **The G0 "no runtime change" criterion** is restated as "no runtime change by default".
+- **The old runner stays** until the flag has been on in production. Removing it now would break a
+  deployment with the flag off.

@@ -1,15 +1,18 @@
 import {
   type InfraConfig,
+  loadGraphPolicy,
   loadInfraConfig,
   loadModelsConfig,
   loadProductsConfig,
   loadUniverseConfig,
   type ModelsConfig,
 } from "@ae/config";
+import { compile, exportNodeLibrary } from "@ae/graph";
 import {
   assessCandidates,
   type BudgetPort,
   buildWorkflows,
+  bundledGraph,
   type Candidate,
   type Channel,
   createPrintBatch,
@@ -21,11 +24,16 @@ import {
   fakeOutreachWriter,
   fakeReplyWriter,
   fakeSiteWriter,
+  GRAPH_WORKFLOW,
+  type GraphNodeJob,
+  type GraphRuntimeDeps,
+  graphRunWorkflow,
   holdoutSize,
   type KeyRing,
   type LoadedPlaybook,
   LocalBudgetPort,
   LocalWorkflowEngine,
+  localWorkflowPort,
   outreachRoutes,
   type PlaybookImpl,
   PlaybookRunner,
@@ -40,10 +48,14 @@ import {
   registerMailboxTools,
   registerOutreachTools,
   registerStandardTools,
+  runGraphNodeJob,
   SME_LETTER,
   SME_OUTREACH,
+  sendGraphDecision,
   storageMailbox,
   ToolRegistry,
+  type WorkflowDef,
+  type WorkflowPort,
 } from "@ae/infra";
 import { fakeExplainer, moduleStatus } from "@ae/opportunity";
 import {
@@ -111,6 +123,15 @@ export interface ServiceDeps {
   budget?: BudgetPort;
   /** v3 rule 20: where tool keys come from (Secrets Store on Cloudflare). Absent = no keys (fakes). */
   keys?: KeyRing;
+  /**
+   * Task graph runtime (graph plan G2), behind GRAPH_ENGINE_ENABLED. Off: every task runs on the old
+   * runner exactly as before. On: the listed playbooks run as graphs on the `graph_run` workflow.
+   */
+  graphEngine?: { enabled: boolean; playbooks?: string[] };
+  /** Where graph_node jobs go (the queue on Cloudflare); locally they're drained in-process. */
+  graphDispatch?: (job: GraphNodeJob) => Promise<void>;
+  /** Starting workflows and sending them events (Cloudflare Workflows); defaults to the local engine. */
+  workflowPort?: WorkflowPort;
 }
 
 interface OpenCohort {
@@ -139,6 +160,13 @@ export class AgentService {
   readonly synthetic: boolean;
   /** Local workflow engine (claim fulfilment); on Cloudflare, Workflows runs them instead. */
   readonly workflows: LocalWorkflowEngine;
+  readonly workflowPort: WorkflowPort;
+  readonly graphEngine: { enabled: boolean; playbooks: string[] };
+  readonly graphDeps: GraphRuntimeDeps;
+  /** graph_node jobs waiting to run locally (on Cloudflare they go to the queue). */
+  readonly graphJobs: GraphNodeJob[] = [];
+  /** Test hooks applied to every locally processed graph job (gates inject crashes here). */
+  graphJobHooks: Parameters<typeof runGraphNodeJob>[3] = {};
 
   constructor(d: ServiceDeps) {
     this.storage = d.storage;
@@ -190,18 +218,155 @@ export class AgentService {
       impls: d.impls ?? PLAYBOOK_IMPLS,
       ...(d.now ? { now: d.now } : {}),
     });
+    this.graphEngine = {
+      enabled: d.graphEngine?.enabled === true,
+      playbooks: d.graphEngine?.playbooks ?? ["sme_outreach"],
+    };
+    this.graphDeps = {
+      storage: d.storage,
+      cfg: this.infra,
+      policy: loadGraphPolicy(),
+      models: d.models ?? loadModelsConfig(),
+      runner: this.runner,
+      dispatch:
+        d.graphDispatch ??
+        (async (job) => {
+          this.graphJobs.push(job);
+        }),
+      toolPrice: (t) => this.tools.get(t)?.cost_gbp_per_call ?? 0,
+      realSpend: this.model.name !== "fake-model",
+    };
     this.workflows = new LocalWorkflowEngine(
       d.storage,
       this.infra,
-      buildWorkflows({
-        storage: d.storage,
-        cfg: this.infra,
-        products: loadProductsConfig(),
-        tools: this.tools,
-        model: this.model,
-        playbooks: d.playbooks,
-      }),
+      [
+        ...buildWorkflows({
+          storage: d.storage,
+          cfg: this.infra,
+          products: loadProductsConfig(),
+          tools: this.tools,
+          model: this.model,
+          playbooks: d.playbooks,
+        }),
+        graphRunWorkflow(this.graphDeps) as WorkflowDef<never, unknown>,
+      ],
+      d.now,
     );
+    this.workflowPort = d.workflowPort ?? localWorkflowPort(this.workflows);
+  }
+
+  // ---- Task graph runtime (graph plan G2)
+
+  /** Is this task's playbook routed to the graph runtime? */
+  runsAsGraph(playbook: string): boolean {
+    return this.graphEngine.enabled && this.graphEngine.playbooks.includes(playbook);
+  }
+
+  /** Compiles the playbook's converted graph (stored once) and starts a graph_run for the task. */
+  async startGraphRun(task: StoredTask): Promise<StoredTask> {
+    const pb = this.playbooks.get(task.playbook) as LoadedPlaybook;
+    const spec = await bundledGraph(task.playbook);
+    if (!spec) throw new Error(`${task.playbook} has no graph.json`);
+    const lib = await exportNodeLibrary({
+      tools: this.tools.list(),
+      models: this.graphDeps.models,
+      policy: this.graphDeps.policy,
+      playbooks: [...this.playbooks.values()].map((p) => ({
+        name: p.spec.playbook,
+        version: p.spec.version,
+        autonomy: p.spec.autonomy,
+        revenue_path: p.spec.revenue_path,
+        steps: p.spec.steps as never,
+        stats: { runs: 0, success_rate: null, avg_cost_gbp: null },
+      })),
+    });
+    const r = await compile(spec, lib, this.graphDeps.policy, {
+      taskLane: task.lane,
+      perTaskCapGbp: pb.spec.budget_gbp,
+      earnedAutonomy: pb.spec.autonomy,
+    });
+    if (!r.compiled) {
+      await this.storage.tasks.update(task.task_id, {
+        status: "failed",
+        error: `graph rejected: ${r.errors.map((e) => `${e.rule}: ${e.message}`).join("; ")}`.slice(
+          0,
+          500,
+        ),
+      });
+      return (await this.storage.tasks.get(task.task_id)) as StoredTask;
+    }
+    const c = r.compiled;
+    const existing = await this.storage.graphSpecs.get(c.spec.graphId, c.spec.version);
+    if (!existing)
+      await this.storage.graphSpecs.add({
+        graph_id: c.spec.graphId,
+        version: c.spec.version,
+        parent_version: null,
+        task_id: c.spec.taskId,
+        opportunity_id: null,
+        hypothesis_id: null,
+        spec: c.spec,
+        content_hash: null,
+        registry_version: null,
+        compiled: null,
+        lane: null,
+        worst_case_cost_gbp: null,
+        autonomy: null,
+        shape_fingerprint: null,
+        status: "approved",
+        attempt: 1,
+        synthetic: false,
+        created_by: "converter",
+      });
+    if (!existing || existing.content_hash !== c.contentHash)
+      await this.storage.graphSpecs.setCompiled(c.spec.graphId, c.spec.version, {
+        content_hash: c.contentHash,
+        registry_version: c.registryVersion,
+        compiled: c,
+        lane: c.lane,
+        worst_case_cost_gbp: c.worstCaseCostGbp,
+        autonomy: c.autonomy,
+        shape_fingerprint: c.shapeFingerprint,
+      });
+    const run_id = crypto.randomUUID().replace(/-/g, "");
+    const instance_id = `graph-${run_id}`;
+    await this.storage.graphRuns.add({
+      run_id,
+      graph_id: c.spec.graphId,
+      version: c.spec.version,
+      instance_id,
+      mode: "live",
+      status: "pending",
+      started_at: new Date().toISOString(),
+      synthetic: this.synthetic,
+    });
+    await this.storage.tasks.update(task.task_id, {
+      status: "running",
+      state: {
+        ...(task.state ?? {}),
+        graph_run: { run_id, instance_id, graph_id: c.spec.graphId, version: c.spec.version },
+      },
+    });
+    await this.workflowPort.start(
+      GRAPH_WORKFLOW,
+      { run_id, task_id: task.task_id, graph_id: c.spec.graphId, version: c.spec.version },
+      { id: instance_id, synthetic: this.synthetic },
+    );
+    await this.processGraphJobs();
+    return (await this.storage.tasks.get(task.task_id)) as StoredTask;
+  }
+
+  /** Runs queued graph_node jobs locally until none are left (each one wakes its run). */
+  async processGraphJobs(
+    hooks: Parameters<typeof runGraphNodeJob>[3] = this.graphJobHooks,
+  ): Promise<number> {
+    let n = 0;
+    while (this.graphJobs.length) {
+      const job = this.graphJobs.shift() as GraphNodeJob;
+      await runGraphNodeJob(this.graphDeps, job, this.workflowPort, hooks);
+      n++;
+    }
+    return n;
   }
 
   /** Approved opportunities become tasks (idempotent on the opportunity id). */
@@ -424,6 +589,14 @@ export class AgentService {
   }
 
   async decide(taskId: string, decision: "approve" | "edit" | "reject", editedText: string | null) {
+    const task = await this.storage.tasks.get(taskId);
+    if (task && (task.state as { graph_run?: unknown }).graph_run) {
+      // A graph-run task: Archie's decision is the event its approval node is waiting for.
+      if (!(await sendGraphDecision(this.storage, this.workflowPort, task, decision, editedText)))
+        throw new Error(`task ${taskId} isn't waiting for approval`);
+      await this.processGraphJobs();
+      return (await this.storage.tasks.get(taskId)) as StoredTask;
+    }
     return this.runner.decide(taskId, decision, editedText);
   }
 
@@ -436,7 +609,11 @@ export class AgentService {
     const paused = await playbooksPausedByKeys(this.storage);
     const runnable = queued.filter((t) => !paused.has(t.playbook));
     for (const t of runnable.sort((a, b) => rank(a.priority) - rank(b.priority)).slice(0, max)) {
-      done.push(await this.runner.run(t.task_id));
+      done.push(
+        this.runsAsGraph(t.playbook)
+          ? await this.startGraphRun(t)
+          : await this.runner.run(t.task_id),
+      );
     }
     for (const q of QUEUE_ORDER) await this.queue.receive(q, 10_000); // drained: the table is the source of truth locally
     return done;

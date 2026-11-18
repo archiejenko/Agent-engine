@@ -30,3 +30,9 @@ export async function loadBundledPlaybooks(): Promise<Map<string, LoadedPlaybook
   }
   return out;
 }
+
+/** A playbook's bundled graph.json (graph plan G2), or null. */
+export async function bundledGraph(playbook: string): Promise<unknown | null> {
+  const { BUNDLED_GRAPHS } = await import("./playbooks.generated.ts");
+  return BUNDLED_GRAPHS[playbook] ?? null;
+}

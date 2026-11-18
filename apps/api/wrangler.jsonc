@@ -62,13 +62,19 @@
     { "tag": "v2", "new_sqlite_classes": ["BudgetObject"] }
   ],
   // Multi-step work over time (fulfilment, experiments, weekly loops) runs as Cloudflare Workflows.
-  "workflows": [{ "name": "ae-engine", "binding": "ENGINE", "class_name": "EngineWorkflow" }],
+  "workflows": [
+    { "name": "ae-engine", "binding": "ENGINE", "class_name": "EngineWorkflow" },
+    // Task graph layer (G2): one interpreter for every graph. Used only when GRAPH_ENGINE_ENABLED is "1".
+    { "name": "ae-graph", "binding": "GRAPH", "class_name": "GraphRunWorkflow" }
+  ],
   // Not secret. Filled in after Access is enabled (see docs/runbooks/deploy.md).
   // While empty, the Worker refuses every /api request (fails closed).
   "vars": {
     "ACCESS_TEAM_DOMAIN": "",
     "ACCESS_POLICY_AUD": "",
     // "1" (with the ANTHROPIC_API_KEY secret) switches the runtime from the fake model to Claude.
-    "MODEL_LIVE": ""
+    "MODEL_LIVE": "",
+    // "1" runs sme_outreach on the graph runtime (GraphRunWorkflow); empty keeps the old runner.
+    "GRAPH_ENGINE_ENABLED": ""
   }
 }

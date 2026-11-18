@@ -8,14 +8,15 @@
     "tick": "tsx src/main.ts"
   },
   "dependencies": {
-    "@ae/contracts": "workspace:*",
     "@ae/config": "workspace:*",
+    "@ae/contracts": "workspace:*",
+    "@ae/graph": "workspace:*",
     "@ae/infra": "workspace:*",
     "@ae/opportunity": "workspace:*",
     "@ae/ports": "workspace:*",
+    "@ae/products": "workspace:*",
     "@ae/storage": "workspace:*",
-    "@ae/verification": "workspace:*",
-    "@ae/products": "workspace:*"
+    "@ae/verification": "workspace:*"
   },
   "exports": {
     ".": "./src/index.ts",
