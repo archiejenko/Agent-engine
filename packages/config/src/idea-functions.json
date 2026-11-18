@@ -1,5 +1,5 @@
 {
-  "_note": "Per-idea business FUNCTION for the 220 seeded ideas whose category has no single taxonomy node (packages/config/src/idea-categories.json, node = null). Assigned from each idea's text by Claude in a build session on 2026-11-17, at Archie's request. Every value here is an ESTIMATE for Archie to spot-check (the list is in brain/build-reports/v3-seed-ideas.md). 'own product' = something we sell ourselves to AI agents or the public. Values must be a node in brain/taxonomy.md or 'own product' (a test checks). Ideas in the 14 mapped categories inherit their category's node instead.",
+  "_note": "Per-idea business FUNCTION for the 220 seeded ideas whose category has no single taxonomy node (packages/config/src/idea-categories.json, node = null). Assigned from each idea's text by Claude in a build session on 2026-11-17, at Archie's request. Archie spot-checked the list on 2026-11-18 and changed I217 and I239 to 'own product'. Every value here is still an ESTIMATE for Archie to spot-check (the list is in brain/build-reports/v3-seed-ideas.md). 'own product' = something we sell ourselves to AI agents or the public. Values must be a node in brain/taxonomy.md or 'own product' (a test checks). Ideas in the 14 mapped categories inherit their category's node instead.",
   "assigned_by": "claude (build session)",
   "assigned_at": "2026-11-17",
   "ideas": {
@@ -159,7 +159,7 @@
     "I214": "sales",
     "I215": "legal, risk and compliance",
     "I216": "marketing",
-    "I217": "legal, risk and compliance",
+    "I217": "own product",
     "I218": "own product",
     "I219": "facilities and property",
     "I220": "data and analytics",
@@ -181,7 +181,7 @@
     "I236": "own product",
     "I237": "own product",
     "I238": "own product",
-    "I239": "data and analytics",
+    "I239": "own product",
     "I240": "own product",
     "I261": "marketing",
     "I262": "sales",

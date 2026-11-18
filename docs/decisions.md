@@ -461,3 +461,6 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
     A function someone sets later survives re-imports.
   - **Market** is the buyer, plus the industry for the five industry categories.
   - The Vault filters by both now; idea cards and the Board will in Phase 6.
+- **Spot-check (2026-11-18):** Archie changed I217 (building rules guide) and I239 (council open-data
+  dashboards) to "own product" and kept the other 218 as assigned. On re-import, exactly those 2 ideas
+  changed and the other 498 stayed as they were.

@@ -95,9 +95,12 @@ a stage someone changed, and a function someone set are protected the same way.
 - **Filters:** Vault → Ideas sheet filters by function and by market now. Idea cards and the Board get the
   same filters in Phase 6.
 
-How the 220 split: own product 64, sales 53, marketing 23, legal, risk and compliance 15, finance 15, customer service and success 14, operations and delivery 8, procurement 7, strategy and M&A 6, data and analytics 4, HR 4, IT and security 3, facilities and property 2, product and R&D 1, supply chain and logistics 1.
+How the 220 split: own product 66, sales 53, marketing 23, legal, risk and compliance 14, finance 15, customer service and success 14, operations and delivery 8, procurement 7, strategy and M&A 6, data and analytics 3, HR 4, IT and security 3, facilities and property 2, product and R&D 1, supply chain and logistics 1.
 
-### Per-idea functions to spot-check (all estimates)
+### Per-idea functions (all estimates)
+
+**Spot-checked by Archie on 2026-11-18.** I217 and I239 were changed to "own product"; I220 and the other
+217 were kept as assigned. They stay labelled estimate, because they're still judgements, not outcomes.
 
 **Agent-readiness for SMEs**
 
@@ -171,7 +174,7 @@ How the 220 split: own product 64, sales 53, marketing 23, legal, risk and compl
 | I236 | Benchmark reports per trade from filed accounts | own product |
 | I237 | Audio briefings made from weekly data | own product |
 | I238 | E-book series on selling to a sector, with live data | own product |
-| I239 | Open-data dashboards licensed to councils and business districts | data and analytics |
+| I239 | Open-data dashboards licensed to councils and business districts | own product (changed by Archie, 2026-11-18) |
 | I240 | Paid data connector: UK business data for AI assistants | own product |
 
 **E-commerce and marketplaces** (market industry: this category)
@@ -294,7 +297,7 @@ How the 220 split: own product 64, sales 53, marketing 23, legal, risk and compl
 | I214 | Self-storage: dynamic pricing page | sales |
 | I215 | HMO licence checker by postcode | legal, risk and compliance |
 | I216 | Short-let hosts: listing optimisation and pricing notes | marketing |
-| I217 | Plain-English building rules guide per project | legal, risk and compliance |
+| I217 | Plain-English building rules guide per project | own product (changed by Archie, 2026-11-18) |
 | I218 | Snagging report for new-build buyers | own product |
 | I219 | Empty commercial unit report for expanding retailers | facilities and property |
 | I220 | Company-owned property portfolio lookup | data and analytics |
