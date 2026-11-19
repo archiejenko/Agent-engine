@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { extname, join } from "node:path";
+import { AgentService, loadPlaybooks, planCard } from "@ae/agent-runner";
 import type { Storage } from "@ae/storage";
 import { openSqliteStorage } from "@ae/storage/sqlite";
 import { serve } from "@hono/node-server";
@@ -52,6 +53,7 @@ let browser: Browser;
 const servers: { close(): void }[] = [];
 let seededUrl = "";
 let ideaCardId = "";
+let planId = "";
 let emptyUrl = "";
 let companyId = "";
 
@@ -88,6 +90,18 @@ beforeAll(async () => {
     ),
   ]);
   ideaCardId = seededIdeas[0]?.card.card_id ?? "";
+  // G4: plan the first idea, so the approval card renders with a real graph and sandbox reports.
+  const planner = new AgentService({
+    storage: seeded,
+    playbooks: await loadPlaybooks(join(ROOT, "playbooks")),
+    graphEngine: { enabled: true },
+  });
+  planId = (
+    await planCard(
+      { service: planner, sandboxStorage: () => openSqliteStorage(":memory:") },
+      ideaCardId,
+    )
+  ).graph_id;
   seededUrl = await start(seeded);
   emptyUrl = await start(await openSqliteStorage(":memory:"));
   browser = await chromium.launch();
@@ -151,9 +165,44 @@ describe("no sideways scroll on any page", () => {
     expect(x).toBeGreaterThan(1000);
   });
 
+  it("the plan approval card shows every field in the Dashboard list", async () => {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+    await page.goto(`${seededUrl}/#/plans/${planId}`);
+    await page.waitForSelector("svg[aria-label='Plan graph']");
+    const text = (await page.evaluate(() => document.body.textContent)) ?? "";
+    await page.close();
+    // graph, goal, success metric, stop conditions, budget beside expected value and worst case, autonomy,
+    // sandbox per node and scenario with guardrail hits, probes, diff, the note, and the three actions.
+    for (const want of [
+      "Goal",
+      "Success metric",
+      "Stop conditions",
+      "Budget",
+      "worst case",
+      "Expected value",
+      "Autonomy",
+      "Sandbox",
+      "guardrail hits",
+      "Probes",
+      "Changes since the previous attempt",
+      "Sandbox proves mechanics and cost, not demand.",
+      "Approve",
+      "Edit",
+      "Reject",
+      "acts externally",
+    ])
+      expect(text, want).toContain(want);
+  }, 60_000);
+
   for (const width of [390, 1440]) {
     it(`seeded data at ${width}px`, async () => {
-      const pages = [...PAGES, `/crm/${companyId}`, "/crm/99999999", `/ideas/${ideaCardId}`];
+      const pages = [
+        ...PAGES,
+        `/crm/${companyId}`,
+        "/crm/99999999",
+        `/ideas/${ideaCardId}`,
+        `/plans/${planId}`,
+      ];
       const over: string[] = [];
       for (const p of pages) {
         const x = await sidewaysScroll(seededUrl, p, width);

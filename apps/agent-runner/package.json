@@ -16,7 +16,8 @@
     "@ae/ports": "workspace:*",
     "@ae/products": "workspace:*",
     "@ae/storage": "workspace:*",
-    "@ae/verification": "workspace:*"
+    "@ae/verification": "workspace:*",
+    "zod": "4.6.7"
   },
   "exports": {
     ".": "./src/index.ts",

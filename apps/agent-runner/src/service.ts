@@ -7,6 +7,7 @@ import {
   loadUniverseConfig,
   type ModelsConfig,
 } from "@ae/config";
+import type { CompiledGraph } from "@ae/contracts";
 import { compile, exportNodeLibrary } from "@ae/graph";
 import {
   assessCandidates,
@@ -82,6 +83,7 @@ import {
 } from "@ae/products";
 import type { Storage, StoredTask } from "@ae/storage";
 import { defaultContext, fakeWebsiteExtractor, type VerificationContext } from "@ae/verification";
+import { fakePlanner } from "./fake-planner.ts";
 
 export const PLAYBOOK_IMPLS = new Map<string, PlaybookImpl>([
   ["sme_outreach", SME_OUTREACH],
@@ -102,6 +104,7 @@ export function fakeModel(): FakeModel {
     post_reply_draft: fakeReplyWriter,
     claim_site_draft: fakeSiteWriter,
     idea_answer: fakeIdeaAnswerer,
+    graph_plan: fakePlanner,
   });
 }
 
@@ -296,24 +299,26 @@ export class AgentService {
     return this.graphEngine.enabled && this.graphEngine.playbooks.includes(playbook);
   }
 
+  /** A task created from an approved plan: runs that graph (compiled when it was planned). */
+  async startPlannedRun(task: StoredTask): Promise<StoredTask> {
+    const ref = (task.state as { graph_spec: { graph_id: string; version: number } }).graph_spec;
+    const row = await this.storage.graphSpecs.get(ref.graph_id, ref.version);
+    if (row?.status !== "approved" || !row.compiled) {
+      await this.storage.tasks.update(task.task_id, {
+        status: "failed",
+        error: `plan ${ref.graph_id}@${ref.version} isn't approved`,
+      });
+      return (await this.storage.tasks.get(task.task_id)) as StoredTask;
+    }
+    return this.startCompiledRun(task, row.compiled as CompiledGraph);
+  }
+
   /** Compiles the playbook's converted graph (stored once) and starts a graph_run for the task. */
   async startGraphRun(task: StoredTask): Promise<StoredTask> {
     const pb = this.playbooks.get(task.playbook) as LoadedPlaybook;
     const spec = await bundledGraph(task.playbook);
     if (!spec) throw new Error(`${task.playbook} has no graph.json`);
-    const lib = await exportNodeLibrary({
-      tools: this.tools.list(),
-      models: this.graphDeps.models,
-      policy: this.graphDeps.policy,
-      playbooks: [...this.playbooks.values()].map((p) => ({
-        name: p.spec.playbook,
-        version: p.spec.version,
-        autonomy: p.spec.autonomy,
-        revenue_path: p.spec.revenue_path,
-        steps: p.spec.steps as never,
-        stats: { runs: 0, success_rate: null, avg_cost_gbp: null },
-      })),
-    });
+    const lib = await this.nodeLibrary();
     const r = await compile(spec, lib, this.graphDeps.policy, {
       taskLane: task.lane,
       perTaskCapGbp: pb.spec.budget_gbp,
@@ -329,7 +334,28 @@ export class AgentService {
       });
       return (await this.storage.tasks.get(task.task_id)) as StoredTask;
     }
-    const c = r.compiled;
+    return this.startCompiledRun(task, r.compiled);
+  }
+
+  /** The node library the compiler and the planner see: registered tools, roles, functions, playbooks. */
+  async nodeLibrary() {
+    return exportNodeLibrary({
+      tools: this.tools.list(),
+      models: this.graphDeps.models,
+      policy: this.graphDeps.policy,
+      playbooks: [...this.playbooks.values()].map((p) => ({
+        name: p.spec.playbook,
+        version: p.spec.version,
+        autonomy: p.spec.autonomy,
+        revenue_path: p.spec.revenue_path,
+        steps: p.spec.steps as never,
+        stats: { runs: 0, success_rate: null, avg_cost_gbp: null },
+      })),
+    });
+  }
+
+  /** Starts a graph_run for the task from an already compiled graph (a playbook's, or an approved plan). */
+  async startCompiledRun(task: StoredTask, c: CompiledGraph): Promise<StoredTask> {
     const existing = await this.storage.graphSpecs.get(c.spec.graphId, c.spec.version);
     if (!existing)
       await this.storage.graphSpecs.add({
@@ -644,9 +670,11 @@ export class AgentService {
     const runnable = queued.filter((t) => !paused.has(t.playbook));
     for (const t of runnable.sort((a, b) => rank(a.priority) - rank(b.priority)).slice(0, max)) {
       done.push(
-        this.runsAsGraph(t.playbook)
-          ? await this.startGraphRun(t)
-          : await this.runner.run(t.task_id),
+        (t.state as { graph_spec?: unknown }).graph_spec
+          ? await this.startPlannedRun(t)
+          : this.runsAsGraph(t.playbook)
+            ? await this.startGraphRun(t)
+            : await this.runner.run(t.task_id),
       );
     }
     for (const q of QUEUE_ORDER) await this.queue.receive(q, 10_000); // drained: the table is the source of truth locally

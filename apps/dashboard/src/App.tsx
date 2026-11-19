@@ -7,6 +7,7 @@ import { Home } from "./Home.tsx";
 import { Ideas } from "./Ideas.tsx";
 import { Inbox } from "./Inbox.tsx";
 import { ControlsTabs, Keys } from "./Keys.tsx";
+import { Plan } from "./Plan.tsx";
 import { Vault } from "./Vault.tsx";
 
 /** Tiny hash router. v3: seven pages; old links redirect to where their content moved. */
@@ -76,6 +77,8 @@ export function App() {
           <ControlsTabs tab="controls" />
           <Controls />
         </>
+      ) : route.startsWith("/plans/") ? (
+        <Plan id={route.slice(7)} />
       ) : route.startsWith("/ideas") ? (
         <Ideas route={route} />
       ) : route.startsWith("/board") ? (

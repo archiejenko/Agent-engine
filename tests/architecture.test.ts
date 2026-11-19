@@ -180,3 +180,13 @@ describe("v3 rule 20: keys are write-only and read in one place", () => {
     expect(/\bvalue\b|ciphertext/i.test(sql.replace(/--.*$/gm, ""))).toBe(false);
   });
 });
+
+describe("planner eval isolation (rule 13: the proposer never grades itself)", () => {
+  it("the planner's code can't read or write the eval set", () => {
+    for (const f of ["apps/agent-runner/src/planner.ts", "apps/agent-runner/src/fake-planner.ts"]) {
+      const src = readFileSync(join(ROOT, f), "utf8");
+      expect(src, f).not.toMatch(/evals\//);
+      expect(src, f).not.toMatch(/node:fs|from "fs"/);
+    }
+  });
+});

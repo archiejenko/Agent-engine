@@ -32,6 +32,12 @@ export async function loadBundledPlaybooks(): Promise<Map<string, LoadedPlaybook
 }
 
 /** A playbook's bundled graph.json (graph plan G2), or null. */
+/** A bundled prompt that isn't a playbook (playbooks/_<name>/SKILL.md), e.g. "_planner". */
+export async function bundledPrompt(name: string): Promise<string | null> {
+  const { BUNDLED_PROMPTS } = await import("./playbooks.generated.ts");
+  return BUNDLED_PROMPTS[name] ?? null;
+}
+
 export async function bundledGraph(playbook: string): Promise<unknown | null> {
   const { BUNDLED_GRAPHS } = await import("./playbooks.generated.ts");
   return BUNDLED_GRAPHS[playbook] ?? null;

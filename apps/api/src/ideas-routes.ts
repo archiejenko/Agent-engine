@@ -1,4 +1,5 @@
-import type { IdeaCard } from "@ae/contracts";
+import { loadGraphPolicy } from "@ae/config";
+import { type CompiledGraph, type GraphSpec, type IdeaCard, SANDBOX_NOTE } from "@ae/contracts";
 import {
   addComment,
   boardView,
@@ -6,6 +7,8 @@ import {
   type DecisionDeps,
   ideaFeed,
   needsLegalCheck,
+  planDiff,
+  planStatusFor,
   requestAndDecide,
 } from "@ae/infra";
 import type { Storage } from "@ae/storage";
@@ -32,13 +35,7 @@ export function mountIdeas(
   accessUser: (c: any) => string,
   ask: ((env: unknown) => AskQuestion) | undefined,
 ) {
-  const planStatus = async (s: Storage, cardId: string) => {
-    const specs = (await s.graphSpecs.list({ limit: 500 })).filter(
-      (g) => g.opportunity_id === cardId,
-    );
-    const last = specs.at(-1);
-    return last ? last.status : "not planned yet";
-  };
+  const planStatus = (s: Storage, cardId: string) => planStatusFor(s, cardId);
 
   app.get("/api/ideas", async (c) => {
     const s = storageFor(c.env);
@@ -124,6 +121,78 @@ export function mountIdeas(
       accessUser(c),
     );
     return c.json({ ok: true, version: r.card.version, status: r.status });
+  });
+
+  // G4: the approval card for one plan (latest version), with everything Archie judges it on.
+  app.get("/api/plans/:graph", async (c) => {
+    const s = storageFor(c.env);
+    const versions = await s.graphSpecs.versions(c.req.param("graph"));
+    const row = versions.at(-1);
+    if (!row) return c.json({ error: "not_found" }, 404);
+    const spec = row.spec as GraphSpec;
+    const compiled = row.compiled as CompiledGraph | null;
+    const prev = [...versions]
+      .reverse()
+      .find((v) => v.version < row.version && (v.spec as GraphSpec).nodes);
+    const card = row.opportunity_id
+      ? ((await s.ideaCards.latest(row.opportunity_id))?.card as IdeaCard | undefined)
+      : undefined;
+    const policy = loadGraphPolicy();
+    const sends = new Set(policy.guardrails.outreach_send_tools);
+    const external = (n: GraphSpec["nodes"][number]) =>
+      (n.kind === "role" && n.ref === "operator") || (n.kind === "tool" && sends.has(n.ref));
+    const category = (n: GraphSpec["nodes"][number]) =>
+      n.kind === "approval"
+        ? "needs_you"
+        : n.kind === "role" || n.kind === "subgraph"
+          ? "agent"
+          : "deterministic";
+    const reports = (await s.sandboxReports.forGraph(row.graph_id, row.version)) as {
+      report: unknown;
+    }[];
+    const probes = (await s.sandboxReports.forGraph(`${row.graph_id}-probe`.slice(0, 64))) as {
+      report: unknown;
+    }[];
+    const open = await s.decisions.openFor("graph_plan", `graph:${row.graph_id}@${row.version}`);
+    return c.json({
+      graph_id: row.graph_id,
+      version: row.version,
+      status: row.status,
+      plan_status: row.opportunity_id ? await planStatus(s, row.opportunity_id) : row.status,
+      card_id: row.opportunity_id,
+      graph: spec.nodes
+        ? {
+            nodes: spec.nodes.map((n) => ({
+              id: n.id,
+              kind: n.kind,
+              ref: n.ref,
+              category: category(n),
+              external: external(n),
+              max_cost_gbp: n.budget.maxCostGbp,
+            })),
+            edges: spec.edges,
+            layers: compiled?.plan.layers ?? [spec.nodes.map((n) => n.id)],
+          }
+        : null,
+      goal: spec.goal ?? null,
+      success_metric: spec.successMetric ?? null,
+      stop_conditions: spec.stopConditions ?? [],
+      budget_gbp: spec.budgetGbp ?? null,
+      expected_value_gbp: card ? card.economics.expected_profit : null,
+      worst_case_gbp: compiled?.worstCaseCostGbp ?? null,
+      autonomy: compiled?.autonomy ?? null,
+      sandbox: reports.map((r) => r.report),
+      probes: probes.map((r) => r.report),
+      diff: spec.nodes ? planDiff(prev ? (prev.spec as GraphSpec) : null, spec) : null,
+      note: SANDBOX_NOTE,
+      actions: open ? { decision_id: open.id, options: open.options } : null,
+      rationale: spec.planner ?? null,
+      history: versions.map((v) => ({
+        version: v.version,
+        status: v.status,
+        created_by: v.created_by,
+      })),
+    });
   });
 
   app.get("/api/board", async (c) => c.json({ tiles: await boardView(storageFor(c.env)) }));

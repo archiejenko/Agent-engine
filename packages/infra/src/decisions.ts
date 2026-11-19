@@ -12,6 +12,7 @@ import {
   parseCardRef,
 } from "./idea-cards.ts";
 import { recordOutcome } from "./ledger.ts";
+import { applyGraphPlanOption, parsePlanRef } from "./plans.ts";
 import { decidePrintBatch } from "./playbooks/sme_letter.ts";
 import type { WorkflowPort } from "./workflow.ts";
 
@@ -340,7 +341,10 @@ async function supersedeStale(d: DecisionDeps) {
     else if (kind === "effect")
       live = ["started", "unknown"].includes((await storage.effects.get(id))?.status ?? "");
     else if (kind === "key") live = (await storage.keyRegistry.get(id))?.status === "failing";
-    else if (kind === "card") {
+    else if (kind === "graph") {
+      const { graph_id, version } = parsePlanRef(x.source_ref);
+      live = (await storage.graphSpecs.get(graph_id, version))?.status === "ready";
+    } else if (kind === "card") {
       const { card_id, version } = parseCardRef(x.source_ref);
       const st = (await storage.ideaCards.get(card_id, version))?.status;
       live = x.type === "idea" ? st === "proposed" : st === "budget_pending" || st === "succeeded";
@@ -625,6 +629,16 @@ async function apply(
       await applyIdeaBudgetOption(ideaDeps(d), x.source_ref, option, {
         approvalId: o.approvalId,
         defaulted: o.defaulted,
+      });
+      return;
+    case "graph_plan":
+      // source_ref "graph:<graph_id>@<version>". Edit/reject text → decision log (never the ledger).
+      await applyGraphPlanOption(storage, x.source_ref, option, {
+        by: o.by ?? "default",
+        text: o.payload.reason ?? o.payload.edited_text ?? null,
+        defaulted: o.defaulted,
+        decisionId: x.id,
+        ...(d.now ? { now: d.now() } : {}),
       });
       return;
     case "board":

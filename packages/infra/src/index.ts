@@ -25,6 +25,7 @@ export * from "./letters/render.ts";
 export * from "./lift.ts";
 export * from "./mailbox.ts";
 export * from "./outreach.ts";
+export * from "./plans.ts";
 export * from "./playbook.ts";
 export * from "./playbooks/post_reply.ts";
 export * from "./playbooks/sme_letter.ts";

@@ -1,0 +1,11 @@
+{
+  "_note": "Results per planner prompt version. A new version must not do worse than any earlier one (G4 gate).",
+  "versions": {
+    "1": {
+      "passed": 18,
+      "reuse": 0.9,
+      "sandbox": 0.9,
+      "at": "2026-11-19T12:17:19.836Z"
+    }
+  }
+}

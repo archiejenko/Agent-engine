@@ -249,6 +249,15 @@ function CardView({ id }: { id: string }) {
         {c.what_changed ? ` · what changed: ${c.what_changed}` : ""}
       </p>
       {msg && <p className="muted">{msg}</p>}
+      <p className="small">
+        Plan: {feedRow?.plan_status ?? "not planned yet"}
+        {feedRow && feedRow.plan_status !== "not planned yet" && (
+          <>
+            {" "}
+            · <a href={`#/plans/plan-${c.card_id.replace(/^card-/, "")}`}>open the plan</a>
+          </>
+        )}
+      </p>
       {feedRow && (
         <Actions
           row={feedRow}

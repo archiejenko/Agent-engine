@@ -98,6 +98,9 @@ importers:
       '@ae/verification':
         specifier: workspace:*
         version: link:../../packages/verification
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
 
   apps/api:
     dependencies:

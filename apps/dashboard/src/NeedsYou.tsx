@@ -39,6 +39,7 @@ const TYPE: Record<string, string> = {
   idea: "Idea",
   idea_budget: "Test budget",
   board: "Board",
+  graph_plan: "Plan",
 };
 
 function due(deadline: string) {
@@ -133,6 +134,13 @@ function Card({ d, onDone }: { d: Decision; onDone: (msg: string) => void }) {
         {due(d.deadline)} · if you don't decide: <i>{safe?.label}</i> ({safe?.effect})
       </p>
       {d.type === "draft" && <DraftBody d={d} text={text} setText={setText} />}
+      {d.type === "graph_plan" && d.context?.graph_id ? (
+        <p>
+          <a href={`#/plans/${d.context.graph_id as string}`}>
+            Open the plan (graph, sandbox, costs)
+          </a>
+        </p>
+      ) : null}
       {d.type === "print_batch" && (
         <p>
           <a href="#/inbox/letters">Open the batch (PDF, flagged letters)</a>

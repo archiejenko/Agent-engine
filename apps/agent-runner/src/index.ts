@@ -5,5 +5,6 @@ export * from "./gates/phase3.ts";
 export * from "./gates/synthetic-world.ts";
 export * from "./jobs.ts";
 export * from "./load-playbooks.ts";
+export * from "./planner.ts";
 export * from "./sandbox.ts";
 export * from "./service.ts";

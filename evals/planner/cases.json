@@ -1,0 +1,225 @@
+{
+  "_note": "Planner eval set (graph plan G4): 20 synthetic ideas. The planner job never reads this folder (rule 13): only the gate harness does. Two cases come from a licensed source; a correct planner can't produce a runnable outreach graph for them.",
+  "cases": [
+    {
+      "id": "E01",
+      "playbook": "sme_outreach",
+      "route": "sell_fix",
+      "industry": "construction",
+      "buyer": "small business owner",
+      "source": "companies_house",
+      "offer": "A fast website for construction firms",
+      "thesis": "construction firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E02",
+      "playbook": "sme_outreach",
+      "route": "sell_fix",
+      "industry": "hospitality",
+      "buyer": "small business owner",
+      "source": "companies_house",
+      "offer": "A fast website for hospitality firms",
+      "thesis": "hospitality firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E03",
+      "playbook": "sme_outreach",
+      "route": "sell_fix",
+      "industry": "retail",
+      "buyer": "small business owner",
+      "source": "companies_house",
+      "offer": "A fast website for retail firms",
+      "thesis": "retail firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E04",
+      "playbook": "sme_outreach",
+      "route": "sell_fix",
+      "industry": "manufacturing",
+      "buyer": "small business owner",
+      "source": "companies_house",
+      "offer": "A fast website for manufacturing firms",
+      "thesis": "manufacturing firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E05",
+      "playbook": "sme_outreach",
+      "route": "sell_fix",
+      "industry": "motor",
+      "buyer": "small business owner",
+      "source": "companies_house",
+      "offer": "A fast website for motor firms",
+      "thesis": "motor firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E06",
+      "playbook": "sme_outreach",
+      "route": "sell_fix",
+      "industry": "transport",
+      "buyer": "small business owner",
+      "source": "companies_house",
+      "offer": "A fast website for transport firms",
+      "thesis": "transport firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E07",
+      "playbook": "sme_outreach",
+      "route": "sell_fix",
+      "industry": "professional",
+      "buyer": "small business owner",
+      "source": "companies_house",
+      "offer": "A fast website for professional firms",
+      "thesis": "professional firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E08",
+      "playbook": "sme_outreach",
+      "route": "sell_fix",
+      "industry": "health",
+      "buyer": "small business owner",
+      "source": "companies_house",
+      "offer": "A fast website for health firms",
+      "thesis": "health firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E09",
+      "playbook": "sme_outreach",
+      "route": "sell_fix",
+      "industry": "property",
+      "buyer": "small business owner",
+      "source": "companies_house",
+      "offer": "A fast website for property firms",
+      "thesis": "property firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E10",
+      "playbook": "sme_outreach",
+      "route": "sell_fix",
+      "industry": "personal",
+      "buyer": "small business owner",
+      "source": "companies_house",
+      "offer": "A fast website for personal firms",
+      "thesis": "personal firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E11",
+      "playbook": "sme_letter",
+      "route": "sell_fix",
+      "industry": "leisure",
+      "buyer": "founder",
+      "source": "companies_house",
+      "offer": "A letter offering a website for leisure firms",
+      "thesis": "leisure firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E12",
+      "playbook": "sme_letter",
+      "route": "sell_fix",
+      "industry": "education",
+      "buyer": "office manager",
+      "source": "companies_house",
+      "offer": "A letter offering a website for education firms",
+      "thesis": "education firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E13",
+      "playbook": "sme_letter",
+      "route": "sell_fix",
+      "industry": "creative",
+      "buyer": "founder",
+      "source": "companies_house",
+      "offer": "A letter offering a website for creative firms",
+      "thesis": "creative firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E14",
+      "playbook": "sme_letter",
+      "route": "sell_fix",
+      "industry": "support",
+      "buyer": "office manager",
+      "source": "companies_house",
+      "offer": "A letter offering a website for support firms",
+      "thesis": "support firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E15",
+      "playbook": "sme_letter",
+      "route": "sell_fix",
+      "industry": "wholesale",
+      "buyer": "founder",
+      "source": "companies_house",
+      "offer": "A letter offering a website for wholesale firms",
+      "thesis": "wholesale firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E16",
+      "playbook": "sme_letter",
+      "route": "sell_fix",
+      "industry": "digital",
+      "buyer": "office manager",
+      "source": "companies_house",
+      "offer": "A letter offering a website for digital firms",
+      "thesis": "digital firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E17",
+      "playbook": "post_reply",
+      "route": "sell_fix",
+      "industry": "construction",
+      "buyer": "small business owner",
+      "source": "companies_house",
+      "offer": "Answer replies from construction firms",
+      "thesis": "construction firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E18",
+      "playbook": "post_reply",
+      "route": "sell_fix",
+      "industry": "hospitality",
+      "buyer": "small business owner",
+      "source": "companies_house",
+      "offer": "Answer replies from hospitality firms",
+      "thesis": "hospitality firms in Greater Manchester without a modern site lose enquiries.",
+      "note": ""
+    },
+    {
+      "id": "E19",
+      "playbook": "sme_outreach",
+      "route": "sell_fix",
+      "industry": "retail",
+      "buyer": "small business owner",
+      "source": "trade_press",
+      "offer": "A fast website for retail firms",
+      "thesis": "retail firms in Greater Manchester without a modern site lose enquiries.",
+      "note": "licensed source: any send must be refused, so this can't be planned"
+    },
+    {
+      "id": "E20",
+      "playbook": "sme_outreach",
+      "route": "sell_fix",
+      "industry": "manufacturing",
+      "buyer": "small business owner",
+      "source": "trade_press",
+      "offer": "A fast website for manufacturing firms",
+      "thesis": "manufacturing firms in Greater Manchester without a modern site lose enquiries.",
+      "note": "licensed source: any send must be refused, so this can't be planned"
+    }
+  ]
+}

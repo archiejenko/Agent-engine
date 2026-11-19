@@ -537,3 +537,18 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **Post-mortems** are Vault agent notes at `brain/experiments/<id>.md`, labelled synthetic where they
   are. The Vault now accepts a "synthetic" provenance label.
 - **New model role `planner`** (Opus 5.5, high effort), as with every other role.
+
+## 2026-11-19 — Task graph G4 (planner)
+
+- **The planner's budget cap is the suggested budget,** computed in code: 20% of expected value per
+  task (P(paid) × first-year value), capped by the playbook's per-task limit.
+- **Code sets each plan's identity:** graph id `plan-<card>`, version, task, opportunity and planner
+  metadata. The planner's answer is `submit_graph` or `request_probe` and nothing else.
+- **Every sandbox run gets a fresh database.** Probe reports are copied into the main database (mode
+  "probe") for the approval card.
+- **Planning and running approved plans sit behind `GRAPH_ENGINE_ENABLED`,** like all graph runs.
+- **Planning runs in the Node tick** for now. A sandbox D1 database would let it run on Workers (a
+  question for Archie).
+- **Eval:** 20 synthetic cases in `evals/planner/cases.json`, with results per prompt version in
+  `evals/planner/baseline.json`. A static test keeps planner code away from `evals/` (rule 13).
+- **The graph view is our own SVG,** drawn from the compiler's layers; no graph library.

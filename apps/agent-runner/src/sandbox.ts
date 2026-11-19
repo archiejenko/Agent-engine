@@ -1,5 +1,5 @@
 import { loadGraphPolicy, loadInfraConfig } from "@ae/config";
-import { SANDBOX_NOTE, SandboxReport } from "@ae/contracts";
+import { type CompiledGraph, SANDBOX_NOTE, SandboxReport } from "@ae/contracts";
 import { rollUp } from "@ae/graph";
 import { createTask, K, type LoadedPlaybook } from "@ae/infra";
 import type { FakeModel, ModelClient } from "@ae/ports";
@@ -170,6 +170,10 @@ export async function runSandbox(o: {
   playbook: string;
   scenario: SandboxScenario;
   model?: ModelClient;
+  /** A compiled graph to run instead of the playbook's own (a planner attempt, or a probe). */
+  compiled?: CompiledGraph;
+  /** "probe": a planner probe (read-only, ≤ 5 nodes); reported and stored as a probe. */
+  mode?: "sandbox" | "probe";
   attempt?: number;
   expectedValueGbp?: number | null;
   now?: () => Date;
@@ -196,7 +200,7 @@ export async function runSandbox(o: {
   const pb = o.playbooks.get(o.playbook);
   if (!pb) throw new Error(`no playbook ${o.playbook}`);
   const { task } = await createTask(o.storage, loadInfraConfig(), o.playbooks, service.queue, {
-    idempotency_key: `sandbox:${o.playbook}:${o.scenario.name}`,
+    idempotency_key: `sandbox:${o.playbook}:${o.scenario.name}:${o.compiled?.contentHash ?? "playbook"}`,
     playbook: o.playbook,
     revenue_path: pb.spec.revenue_path as never,
     source_ref: fx.source_ref,
@@ -208,7 +212,12 @@ export async function runSandbox(o: {
   const failures: string[] = [];
   if (o.scenario.killSwitch) await o.storage.controls.set(K.playbook(o.playbook), true, "sandbox");
   try {
-    await service.runQueued();
+    if (o.compiled) {
+      // A planner graph: start it directly (the task is only its carrier), not the playbook's graph.
+      const t = (await o.storage.tasks.get(task.task_id)) as StoredTask;
+      await o.storage.tasks.update(t.task_id, { status: "running" });
+      await service.startCompiledRun(t, o.compiled);
+    } else await service.runQueued();
   } catch (e) {
     failures.push(`run: ${(e as Error).message}`);
   }
@@ -279,7 +288,7 @@ export async function runSandbox(o: {
     attempt: o.attempt ?? 1,
     asOf: (o.now?.() ?? new Date()).toISOString(),
     scenario: o.scenario.name,
-    mode: "sandbox",
+    mode: o.mode ?? "sandbox",
     model: model.name === "fake-model" ? "fake" : "real",
     pass: failures.length === 0,
     nodes,
@@ -299,7 +308,7 @@ export async function runSandbox(o: {
     version: report.version,
     attempt: report.attempt,
     scenario: report.scenario,
-    mode: "sandbox",
+    mode: o.mode ?? "sandbox",
     as_of: report.asOf,
     pass: report.pass,
     report,

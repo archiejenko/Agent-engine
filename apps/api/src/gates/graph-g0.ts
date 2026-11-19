@@ -177,7 +177,8 @@ export async function runGraphG0Gate(storage: Storage, root: string) {
   ]).filter((f) => {
     if (/gates\/|\.test\.|__tests__|packages\/graph\//.test(f)) return false;
     // The flag-gated entry point, and the sandbox (runs only when a gate or the planner calls it).
-    if (/apps\/agent-runner\/src\/(service|sandbox)\.ts$/.test(f)) return false;
+    // The planner too: it plans and starts approved plans only when the flag is on.
+    if (/apps\/agent-runner\/src\/(service|sandbox|planner)\.ts$/.test(f)) return false;
     const t = readFileSync(f, "utf8");
     const app = /\/apps\//.test(f) && /from "@ae\/graph"/.test(t);
     const callsDriver =
@@ -255,7 +256,7 @@ export async function runGraphG0Gate(storage: Storage, root: string) {
         runtimeImporters.length === 0 && flagDefault === false && wranglerFlag === ""
           ? "passed (synthetic)"
           : "failed",
-      evidence: `only the runner service and the sandbox import the graph layer (others: ${runtimeImporters.length}); flag default ${flagDefault ? "on" : "off"}, Worker var "${wranglerFlag}"; nothing outside gates/tests calls the G1 driver; \`pnpm check\` (every v1–v3 gate test included) is green at this commit`,
+      evidence: `only the runner service, the sandbox and the planner import the graph layer (others: ${runtimeImporters.length}); flag default ${flagDefault ? "on" : "off"}, Worker var "${wranglerFlag}"; nothing outside gates/tests calls the G1 driver; \`pnpm check\` (every v1–v3 gate test included) is green at this commit`,
     },
   ];
   return { criteria };

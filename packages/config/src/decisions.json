@@ -14,7 +14,8 @@
     "key_failing": 168,
     "idea": 168,
     "idea_budget": 72,
-    "board": 24
+    "board": 24,
+    "graph_plan": 168
   },
   "max_open_leads": 50,
   "digest_hour_utc": 6

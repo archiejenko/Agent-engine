@@ -18,7 +18,8 @@
       "sources": [
         { "name": "companies_house", "lane": "open", "reuse_allowed": true },
         { "name": "gazette", "lane": "open", "reuse_allowed": true },
-        { "name": "company_website", "lane": "open", "reuse_allowed": true }
+        { "name": "company_website", "lane": "open", "reuse_allowed": true },
+        { "name": "trade_press", "lane": "licensed", "reuse_allowed": false }
       ]
     },
     {

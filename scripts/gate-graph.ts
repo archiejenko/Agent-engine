@@ -7,6 +7,7 @@ import { runGraphG0Gate } from "../apps/api/src/gates/graph-g0.ts";
 import { runGraphG1Gate } from "../apps/api/src/gates/graph-g1.ts";
 import { runGraphG2Gate } from "../apps/api/src/gates/graph-g2.ts";
 import { runGraphG3Gate } from "../apps/api/src/gates/graph-g3.ts";
+import { runGraphG4Gate } from "../apps/api/src/gates/graph-g4.ts";
 import { ROOT } from "./lib.ts";
 
 // Task graph gates: `pnpm gate:graph --gate N` writes docs/gates/graph-gN.md (graph plan).
@@ -19,6 +20,8 @@ const GATES: Record<
   "1": (s) => runGraphG1Gate(s, ROOT),
   "2": (s) => runGraphG2Gate(s, ROOT, { workerBuild: true }),
   "3": (s) => runGraphG3Gate(s, ROOT),
+  // Records this prompt version's eval result in evals/planner/baseline.json.
+  "4": (s) => runGraphG4Gate(s, ROOT, { record: true }),
 };
 const run = GATES[values.gate as string];
 if (!run) throw new Error(`no graph gate ${values.gate}`);
