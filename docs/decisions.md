@@ -521,3 +521,19 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   `failed` with the reason, and raises a `graph_failed` alert. Before, the run was left at "running".
 - **Probes:** at most 5 nodes, read-only, with no operator, approval, wait or external tool, including
   tools a role's step lists. They run with the planner (G4).
+
+## 2026-11-19 — v3 Phase 6 (Ideas feed, Board, research agents)
+
+- **Signals** are strict: a value is a number, a boolean or a short lowercase code; the buyer comes from
+  the closed `buyers` list; the industry must be a sector key. A sentence can't ride in a signal, so
+  nothing a scout read can reach the planner as text.
+- **Card economics** are computed in code. A derived figure takes the weakest label of its inputs and
+  carries their assumptions. Review minutes per send are assumed at 1 until logged minutes exist.
+- **A card without a seeded hypothesis is its own hypothesis record.** Its failed versions block an
+  unchanged re-raise. Seeded hypotheses still get Fail plus a fingerprint.
+- **Fail reasons** go to `decision_log` (subject "idea"), never the outcome ledger.
+- **Pass** follows D3, plus a send-volume slot check: weekly sends ÷ the smallest sample in play.
+- **Board pin and kill** are recorded through `requestAndDecide` (type "board"; safe default "unpin").
+- **Post-mortems** are Vault agent notes at `brain/experiments/<id>.md`, labelled synthetic where they
+  are. The Vault now accepts a "synthetic" provenance label.
+- **New model role `planner`** (Opus 5.5, high effort), as with every other role.

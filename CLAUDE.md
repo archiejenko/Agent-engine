@@ -198,7 +198,7 @@ pnpm gate:v2-phase4           # claim this site (test mode), fulfilment workflow
 pnpm --filter @ae/agent-runner tick   # one scheduled run locally (same jobs the Worker's cron enqueues)
 
 # v3 (Milestone C)
-pnpm gate:v3 --phase N         # v3 gate N (1–5) → docs/gates/v3-phaseN.md
+pnpm gate:v3 --phase N         # v3 gate N (1–6) → docs/gates/v3-phaseN.md
 pnpm gate:v3 --phase seed      # seeded ideas import → docs/gates/v3-seed.md
 
 # Task graph layer (plan: brain/build-reports/graph-plan.md)

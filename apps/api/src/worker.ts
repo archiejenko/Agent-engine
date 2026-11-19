@@ -88,6 +88,11 @@ function buildWith(
       keys,
       storage: (e) => createD1Storage((e as Env).DB),
       workflows: (e) => cloudflareWorkflowPort(e as Env),
+      // Questions on idea cards are answered by the planner in the queue consumer.
+      ask: (e) => async (card_id, text, by) => {
+        await (e as Env).JOBS.send({ kind: "idea_question", card_id, text, by });
+        return { queued: true };
+      },
       auth,
       ...(payments ? { payments } : {}),
     });
@@ -99,6 +104,11 @@ function buildWith(
     keys,
     storage: (e) => createD1Storage((e as Env).DB),
     workflows: (e) => cloudflareWorkflowPort(e as Env),
+    // Questions on idea cards are answered by the planner in the queue consumer.
+    ask: (e) => async (card_id, text, by) => {
+      await (e as Env).JOBS.send({ kind: "idea_question", card_id, text, by });
+      return { queued: true };
+    },
     auth,
     ...(payments ? { payments } : {}),
     x402: {

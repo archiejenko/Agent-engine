@@ -31,7 +31,6 @@ import {
   type WorkflowPort,
   weekStart,
 } from "@ae/infra";
-
 import { reviewQueue } from "@ae/opportunity";
 import {
   FakeKeyStore,
@@ -55,6 +54,7 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { BRAIN_NOTES } from "./brain.generated.ts";
 import { claimWebhook, mountClaims } from "./claim-route.ts";
+import { type AskQuestion, mountIdeas } from "./ideas-routes.ts";
 import { mountLetters } from "./letters-route.ts";
 import { mountV3 } from "./v3-routes.ts";
 import { mountX402, type X402Deps } from "./x402-route.ts";
@@ -84,6 +84,8 @@ export interface AppDeps {
   keys?: (env: unknown) => KeyStore;
   /** Starting workflows and sending them events (claim fulfilment). Absent = claims disabled. */
   workflows?: (env: unknown) => WorkflowPort;
+  /** v3 Phase 6: the planner answers a question on an idea card (in-process locally; queued on Workers). */
+  ask?: (env: unknown) => AskQuestion;
 }
 
 const Decision = z.object({ decision: z.enum(["approve", "reject"]) });
@@ -612,6 +614,7 @@ export function createApp(deps: AppDeps) {
     deps.vault ?? (async () => BRAIN_NOTES),
     deps.keys ?? (() => fallbackKeys),
   );
+  mountIdeas(app, deps.storage, decisionDeps, accessUser, deps.ask);
   mountClaims(app, {
     storage: deps.storage,
     ...(deps.payments ? { payments: deps.payments } : {}),

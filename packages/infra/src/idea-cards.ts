@@ -94,6 +94,8 @@ export interface ScoutRecord {
   raw_text?: string;
 }
 
+const SECTOR_KEYS = () => new Set(loadSicSectors().sectors.map((x) => x.key));
+
 export const marketKeyOf = (field: string, buyer: string, industry: string | null) =>
   `${field}:${slug(industry ?? buyer)}`;
 
@@ -115,6 +117,14 @@ export async function scoutSignals(
     const source = field.sources.find((s) => s.name === r.source_name);
     if (!source) {
       rejected.push({ index, reason: `${r.source_name} isn't a source for ${fieldId}` });
+      continue;
+    }
+    if (!icfg.buyers.includes(r.buyer)) {
+      rejected.push({ index, reason: "buyer: not one of the configured buyer types" });
+      continue;
+    }
+    if (r.industry !== null && !SECTOR_KEYS().has(r.industry)) {
+      rejected.push({ index, reason: "industry: not a known sector" });
       continue;
     }
     const candidate = {
@@ -237,7 +247,7 @@ async function marketSize(storage: Storage, industry: string | null): Promise<nu
       .filter((r) => {
         const codes = Array.isArray(r.value) ? (r.value as string[]) : [String(r.value)];
         const s = sectorFor(codes, sectors);
-        return slug(s.key) === want || slug(s.label) === want;
+        return s.key === industry || slug(s.label) === want;
       })
       .map((r) => r.entity_id),
   ).size;

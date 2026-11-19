@@ -397,3 +397,31 @@ div.scroll {
 p.error {
   color: #8a1c1c;
 }
+
+.small {
+  font-size: 0.85rem;
+}
+
+/* v3 Phase 6: the Board. Columns stack on a phone; a grid from tablet width. No sideways scroll. */
+.board {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+.board-col {
+  min-width: 0;
+}
+.board-col h3 {
+  text-transform: capitalize;
+  margin: 0.25rem 0;
+}
+@media (min-width: 760px) {
+  .board {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1200px) {
+  .board {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}

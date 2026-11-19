@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { AgentService, loadPlaybooks } from "@ae/agent-runner";
-import { KeyRing, localWorkflowPort } from "@ae/infra";
+import { askQuestion, KeyRing, localWorkflowPort } from "@ae/infra";
 import { envKeyStore, FakeStripe } from "@ae/ports";
 import { FakeFacilitator } from "@ae/products";
 import { openSqliteStorage } from "@ae/storage/sqlite";
@@ -32,6 +32,9 @@ const app = createApp({
   // Claim fulfilment runs on the local workflow engine (Cloudflare Workflows in production).
   workflows: () => localWorkflowPort(service.workflows),
   decide: (taskId, decision, editedText) => service.decide(taskId, decision, editedText),
+  // Questions on idea cards: the planner answers in-process (the fake model until cutover).
+  ask: () => (cardId, text, by) =>
+    askQuestion({ storage, cfg: service.infra, model: service.model }, cardId, text, by),
   // Locally x402 uses the FAKE facilitator (no money moves; localhost only).
   // Locally card payments use FAKE Stripe (no money moves).
   payments: {

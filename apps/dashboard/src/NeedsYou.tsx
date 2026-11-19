@@ -36,6 +36,9 @@ const TYPE: Record<string, string> = {
   spend_tier: "Spend tier",
   autonomy: "Autonomy",
   key_failing: "Key failing",
+  idea: "Idea",
+  idea_budget: "Test budget",
+  board: "Board",
 };
 
 function due(deadline: string) {

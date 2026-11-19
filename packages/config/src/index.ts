@@ -607,6 +607,7 @@ const KillCriterionCfg = z.object({
 export const IdeasConfig = z.object({
   auto_start_test_gbp: z.number().nonnegative(),
   auto_start_is_assumption: z.boolean(),
+  buyers: z.array(z.string().min(1)).min(1),
   fields: z
     .array(
       z.object({

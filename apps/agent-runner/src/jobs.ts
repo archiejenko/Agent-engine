@@ -5,6 +5,7 @@ import {
   type TriggersConfig,
 } from "@ae/config";
 import {
+  askQuestion,
   type CompanyEvent,
   chunkEvents,
   dailyDigest,
@@ -36,6 +37,8 @@ export type Job =
   | { kind: "reverify"; entity_id: string; reason: string }
   | { kind: "workflows_tick" }
   | { kind: "decisions" }
+  /** v3 Phase 6: the planner answers Archie's question on an idea card. */
+  | { kind: "idea_question"; card_id: string; text: string; by: string }
   /** Task graph runtime (graph plan G2): run one role node, then wake its graph_run. */
   | GraphNodeJob;
 
@@ -113,6 +116,18 @@ export async function handleJob(rt: JobRuntime, job: Job): Promise<unknown> {
       return rt.workflows ? rt.workflows.tick() : 0;
     case "graph_node":
       return runGraphNodeJob(rt.service.graphDeps, job, rt.workflowPort ?? rt.service.workflowPort);
+    case "idea_question":
+      return askQuestion(
+        {
+          storage,
+          cfg: rt.service.infra,
+          model: rt.service.model,
+          workflows: rt.workflowPort ?? rt.service.workflowPort,
+        },
+        job.card_id,
+        job.text,
+        job.by,
+      );
     case "decisions": {
       // Sync the Needs-you queue, apply safe defaults to expired decisions, build yesterday's digest.
       const d = {

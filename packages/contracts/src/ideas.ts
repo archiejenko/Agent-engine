@@ -43,7 +43,14 @@ export const Signal = z
     lane: z.enum(["open", "licensed"]),
     entity_id: z.string().max(20).nullable(),
     signal_type: z.string().regex(/^[a-z][a-z0-9_]{1,40}$/),
-    value: z.union([z.number().finite(), z.boolean(), PlainShort]),
+    /** A number, a boolean, or a short lowercase token (a status or code): never a sentence. */
+    value: z.union([
+      z.number().finite(),
+      z.boolean(),
+      z
+        .string()
+        .regex(/^[a-z0-9][a-z0-9_.-]{0,59}$/, "a value is a number, a boolean or a short code"),
+    ]),
     taxonomy_node: z.string().regex(/^[a-z][a-z0-9_]{1,60}$/),
     market: z.object({ buyer: PlainShort, industry: PlainShort.nullable() }).strict(),
     observed_at: z.string().datetime(),

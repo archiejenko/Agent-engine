@@ -2,6 +2,14 @@
   "_note": "v3 Phase 6 (Ideas feed and Board, with v2 Phase 7). Every money and time figure below is a PLACEHOLDER (assumption) until Archie sets it; cards show them labelled 'assumed' with the assumption stated.",
   "auto_start_test_gbp": 5,
   "auto_start_is_assumption": true,
+  "_buyers_note": "The closed list of buyer types a signal may name. Anything else is rejected (a scout can't put free text in front of the planner). Industries must be a sector key from sic-sectors.json.",
+  "buyers": [
+    "small business owner",
+    "office manager",
+    "finance director",
+    "founder",
+    "practice manager"
+  ],
   "fields": [
     {
       "id": "sme_websites",

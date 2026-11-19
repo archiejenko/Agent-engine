@@ -12,6 +12,7 @@ import { type Browser, chromium } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../apps/api/src/app.ts";
 import { runPhase5Gate } from "../apps/api/src/gates/phase5.ts";
+import { seedIdeaFixtures } from "../apps/api/src/gates/v3-phase6.ts";
 
 /**
  * Layout guard: every dashboard page, at phone (390px) and desktop (1440px) widths, with seeded data
@@ -50,6 +51,7 @@ const TYPES: Record<string, string> = {
 let browser: Browser;
 const servers: { close(): void }[] = [];
 let seededUrl = "";
+let ideaCardId = "";
 let emptyUrl = "";
 let companyId = "";
 
@@ -79,6 +81,13 @@ beforeAll(async () => {
   const seeded = await openSqliteStorage(":memory:");
   await runPhase5Gate(seeded, ROOT, { count: 400, leads: 3, letters: 3 });
   companyId = (await seeded.facts.listCurrent({ limit: 1, offset: 0 })).rows[0]?.entity_id ?? "";
+  // Phase 6: idea cards (one with a question answered) and Board tiles, so those pages have real content.
+  const seededIdeas = await seedIdeaFixtures(seeded, [
+    ...new Set(
+      (await seeded.facts.listCurrent({ limit: 200, offset: 0 })).rows.map((f) => f.entity_id),
+    ),
+  ]);
+  ideaCardId = seededIdeas[0]?.card.card_id ?? "";
   seededUrl = await start(seeded);
   emptyUrl = await start(await openSqliteStorage(":memory:"));
   browser = await chromium.launch();
@@ -144,7 +153,7 @@ describe("no sideways scroll on any page", () => {
 
   for (const width of [390, 1440]) {
     it(`seeded data at ${width}px`, async () => {
-      const pages = [...PAGES, `/crm/${companyId}`, "/crm/99999999"];
+      const pages = [...PAGES, `/crm/${companyId}`, "/crm/99999999", `/ideas/${ideaCardId}`];
       const over: string[] = [];
       for (const p of pages) {
         const x = await sidewaysScroll(seededUrl, p, width);

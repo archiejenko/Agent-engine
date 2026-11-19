@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
+import { Board } from "./Board.tsx";
 import { Controls } from "./Controls.tsx";
 import { Crm } from "./Crm.tsx";
 import { useTableLabels } from "./format.tsx";
 import { Home } from "./Home.tsx";
+import { Ideas } from "./Ideas.tsx";
 import { Inbox } from "./Inbox.tsx";
 import { ControlsTabs, Keys } from "./Keys.tsx";
-import { Placeholder } from "./Placeholder.tsx";
 import { Vault } from "./Vault.tsx";
 
 /** Tiny hash router. v3: seven pages; old links redirect to where their content moved. */
@@ -76,19 +77,9 @@ export function App() {
           <Controls />
         </>
       ) : route.startsWith("/ideas") ? (
-        <Placeholder
-          title="Ideas"
-          text={
-            route.startsWith("/ideas/")
-              ? `The card for idea ${route.slice(7)} (Pass / Fail / Question) arrives with the Ideas feed in Milestone D (Phase 6). Its row and estimated scores are in Vault → Ideas sheet.`
-              : "The ideas feed arrives in Milestone D (Phase 6). The 500 seeded ideas are already in the backlog: see Vault → Ideas sheet."
-          }
-        />
+        <Ideas route={route} />
       ) : route.startsWith("/board") ? (
-        <Placeholder
-          title="Board"
-          text="Markets and industries as tiles arrive in Milestone D (Phase 6)."
-        />
+        <Board />
       ) : route.startsWith("/vault") ? (
         <Vault route={route} />
       ) : (
