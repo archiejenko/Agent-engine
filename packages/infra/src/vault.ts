@@ -17,7 +17,7 @@ export interface Provenance {
   at: string | null;
   sources: string[];
   ledger_rows: number[];
-  labels: ("licensed" | "untrusted" | "assumed")[];
+  labels: ("licensed" | "untrusted" | "assumed" | "synthetic")[];
 }
 
 export interface VaultNote {

@@ -15,7 +15,8 @@ export interface ModelRequest {
     | "checker"
     | "explainer"
     | "adjudicator"
-    | "verifier";
+    | "verifier"
+    | "planner";
   system: string;
   /** Untrusted content (web pages, emails) must be passed in `untrusted`, never mixed into `system`. */
   user: string;

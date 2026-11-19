@@ -20,6 +20,7 @@ import {
   drawHoldout,
   estimatePaid,
   evGate,
+  fakeIdeaAnswerer,
   fakeLetterWriter,
   fakeOutreachWriter,
   fakeReplyWriter,
@@ -100,6 +101,7 @@ export function fakeModel(): FakeModel {
     sme_letter_draft: fakeLetterWriter,
     post_reply_draft: fakeReplyWriter,
     claim_site_draft: fakeSiteWriter,
+    idea_answer: fakeIdeaAnswerer,
   });
 }
 

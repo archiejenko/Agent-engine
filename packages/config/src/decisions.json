@@ -11,7 +11,10 @@
     "quarantine": 720,
     "spend_tier": 72,
     "autonomy": 72,
-    "key_failing": 168
+    "key_failing": 168,
+    "idea": 168,
+    "idea_budget": 72,
+    "board": 24
   },
   "max_open_leads": 50,
   "digest_hour_utc": 6

@@ -5,6 +5,12 @@ import { promotePlaybook } from "./autonomy.ts";
 import { type SpendTier, setSpendTier } from "./budget.ts";
 import { contactStatus } from "./contact.ts";
 import { estimatePaid } from "./ev.ts";
+import {
+  applyBoardOption,
+  applyIdeaBudgetOption,
+  applyIdeaOption,
+  parseCardRef,
+} from "./idea-cards.ts";
 import { recordOutcome } from "./ledger.ts";
 import { decidePrintBatch } from "./playbooks/sme_letter.ts";
 import type { WorkflowPort } from "./workflow.ts";
@@ -17,6 +23,13 @@ import type { WorkflowPort } from "./workflow.ts";
  * is written, and the decision is recorded as "defaulted". This file is the only creator of owner
  * approvals (a test enforces it).
  */
+const ideaDeps = (d: DecisionDeps) => ({
+  storage: d.storage,
+  cfg: d.cfg,
+  ...(d.workflows ? { workflows: d.workflows } : {}),
+  ...(d.now ? { now: d.now } : {}),
+});
+
 export interface DecisionDeps {
   storage: Storage;
   cfg: InfraConfig;
@@ -327,6 +340,11 @@ async function supersedeStale(d: DecisionDeps) {
     else if (kind === "effect")
       live = ["started", "unknown"].includes((await storage.effects.get(id))?.status ?? "");
     else if (kind === "key") live = (await storage.keyRegistry.get(id))?.status === "failing";
+    else if (kind === "card") {
+      const { card_id, version } = parseCardRef(x.source_ref);
+      const st = (await storage.ideaCards.get(card_id, version))?.status;
+      live = x.type === "idea" ? st === "proposed" : st === "budget_pending" || st === "succeeded";
+    }
     if (!live)
       await storage.decisions.close(x.id, {
         status: "superseded",
@@ -349,7 +367,7 @@ export async function decide(
   id: string,
   option: string,
   by: string,
-  payload: { edited_text?: string | null; exclude?: string[] } = {},
+  payload: { edited_text?: string | null; exclude?: string[]; reason?: string | null } = {},
 ): Promise<DecisionRow> {
   const x = await d.storage.decisions.get(id);
   if (!x) throw new DecisionError("not_found");
@@ -373,7 +391,7 @@ export async function decide(
   )
     throw new DecisionError("already_decided");
   try {
-    await apply(d, x, option, { approvalId, payload, defaulted: false });
+    await apply(d, x, option, { approvalId, payload, defaulted: false, by });
   } catch (e) {
     await d.storage.decisions.setError(x.id, (e as Error).message);
     throw e;
@@ -411,7 +429,7 @@ export async function expireDecisions(d: DecisionDeps): Promise<number> {
 export async function requestAndDecide(
   d: DecisionDeps,
   r: {
-    type: "spend_tier" | "autonomy";
+    type: "spend_tier" | "autonomy" | "board";
     source_ref: string;
     summary: string;
     option: string;
@@ -444,8 +462,9 @@ async function apply(
   option: string,
   o: {
     approvalId: string | null;
-    payload: { edited_text?: string | null; exclude?: string[] };
+    payload: { edited_text?: string | null; exclude?: string[]; reason?: string | null };
     defaulted: boolean;
+    by?: string;
   },
 ) {
   const { storage, cfg } = d;
@@ -591,6 +610,25 @@ async function apply(
           last_error: null,
           updated_by: "archie (retry)",
         });
+      return;
+    case "idea":
+      // source_ref "card:<card_id>@<version>". Fail's reason goes to the decision log, never the ledger.
+      await applyIdeaOption(ideaDeps(d), x.source_ref, option, {
+        approvalId: o.approvalId,
+        reason: o.payload.reason ?? null,
+        by: o.by ?? "default",
+        defaulted: o.defaulted,
+        decisionId: x.id,
+      });
+      return;
+    case "idea_budget":
+      await applyIdeaBudgetOption(ideaDeps(d), x.source_ref, option, {
+        approvalId: o.approvalId,
+        defaulted: o.defaulted,
+      });
+      return;
+    case "board":
+      if (!o.defaulted) await applyBoardOption(ideaDeps(d), x.source_ref, option, o.by ?? "archie");
       return;
     default:
       throw new Error(`no handler for decision type ${x.type}`);

@@ -82,6 +82,8 @@ const Decide = z.object({
   option: z.string().min(1).max(40),
   edited_text: z.string().min(1).max(5000).nullable().optional(),
   exclude: z.array(z.string().max(100)).max(1000).optional(),
+  /** Archie's reason (failing an idea): kept in the decision log, never the outcome ledger. */
+  reason: z.string().min(1).max(2000).nullable().optional(),
 });
 
 export function mountV3(
@@ -223,6 +225,7 @@ export function mountV3(
       const x = await decide(decisionDeps(c.env), c.req.param("id"), b.data.option, accessUser(c), {
         ...(b.data.edited_text ? { edited_text: b.data.edited_text } : {}),
         ...(b.data.exclude ? { exclude: b.data.exclude } : {}),
+        ...(b.data.reason ? { reason: b.data.reason } : {}),
       });
       return c.json({ ok: !x.error, decision: x }, x.error ? 409 : 200);
     } catch (e) {

@@ -139,6 +139,18 @@ export const IdeaCard = z
     playbooks: z.array(z.string()).min(1),
     /** Required when the card re-raises a hypothesis Archie failed: what is different this time. */
     what_changed: z.string().min(1).max(500).nullable(),
+    /** Assumptions the planner revised in answer to Archie (each revision is a new version). */
+    overrides: z
+      .object({
+        first_year_value_gbp: z.number().positive().optional(),
+        budget_gbp: z.number().positive().optional(),
+        sample_size: z.number().int().positive().optional(),
+        time_cap_days: z.number().int().positive().optional(),
+        why: z.string().min(1).max(200),
+      })
+      .strict()
+      .nullable()
+      .default(null),
     created_by: z.string().min(1),
     created_at: z.string(),
   })

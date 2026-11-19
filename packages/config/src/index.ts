@@ -147,6 +147,7 @@ const RoleName = z.enum([
   "explainer",
   "adjudicator",
   "verifier",
+  "planner",
 ]);
 export const ModelsConfig = z
   .object({

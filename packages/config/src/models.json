@@ -39,6 +39,10 @@
     }
   },
   "roles": {
+    "planner": {
+      "model": "claude-opus-5-5",
+      "effort": "high"
+    },
     "extractor": {
       "model": "claude-opus-5-5",
       "effort": "low"
