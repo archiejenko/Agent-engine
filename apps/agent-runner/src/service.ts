@@ -54,7 +54,9 @@ import {
   SME_LETTER,
   SME_OUTREACH,
   sendGraphDecision,
+  settleGraphRuns,
   storageMailbox,
+  suggestPromotions,
   ToolRegistry,
   type WorkflowDef,
   type WorkflowPort,
@@ -398,7 +400,7 @@ export class AgentService {
       mode: this.sandbox ? "sandbox" : "live",
       status: "pending",
       started_at: new Date().toISOString(),
-      synthetic: this.synthetic,
+      synthetic: this.synthetic || task.synthetic,
     });
     await this.storage.tasks.update(task.task_id, {
       status: "running",
@@ -410,7 +412,7 @@ export class AgentService {
     await this.workflowPort.start(
       GRAPH_WORKFLOW,
       { run_id, task_id: task.task_id, graph_id: c.spec.graphId, version: c.spec.version },
-      { id: instance_id, synthetic: this.synthetic },
+      { id: instance_id, synthetic: this.synthetic || task.synthetic },
     );
     await this.processGraphJobs();
     return (await this.storage.tasks.get(task.task_id)) as StoredTask;
@@ -733,6 +735,11 @@ export class AgentService {
     const followups = await this.processFollowups(now);
     const intake = await this.intakeApproved();
     const decisions = await this.applyPendingDecisions();
+    // Task graph G5 (behind GRAPH_ENGINE_ENABLED): settle finished runs, then suggest promotions.
+    if (this.graphEngine.enabled) {
+      await settleGraphRuns(this.storage, this.graphDeps.policy, { now });
+      await suggestPromotions(this.storage, this.graphDeps.policy, now);
+    }
     const ran = await this.runQueued(max);
     const timedOut = await this.runner.timeoutStuck();
     // Weekly print batch of prepared letters (at most one per batch_every_days).

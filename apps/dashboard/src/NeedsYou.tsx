@@ -40,6 +40,7 @@ const TYPE: Record<string, string> = {
   idea_budget: "Test budget",
   board: "Board",
   graph_plan: "Plan",
+  promotion: "Promotion",
 };
 
 function due(deadline: string) {

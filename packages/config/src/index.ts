@@ -581,6 +581,8 @@ export const GraphPolicy = z.object({
     max_breaches: z.number().int().min(0),
     wilson_z: z.number().positive(),
     min_success_lower_bound: z.number().min(0).max(1),
+    /** A finished run is settled (its success metric read from the ledger) this many days after it ends. */
+    settle_after_days: z.number().int().min(0),
   }),
 });
 export type GraphPolicy = z.infer<typeof GraphPolicy>;

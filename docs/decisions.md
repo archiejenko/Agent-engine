@@ -552,3 +552,16 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **Eval:** 20 synthetic cases in `evals/planner/cases.json`, with results per prompt version in
   `evals/planner/baseline.json`. A static test keeps planner code away from `evals/` (rule 13).
 - **The graph view is our own SVG,** drawn from the compiler's layers; no graph library.
+
+## 2026-11-19 — Task graph G5 (promotion)
+
+- **Settling:** `promotion.settle_after_days` (14) after a run ends, its metric is read from the ledger
+  (`count_replies`, `count_paid`, `draft_approved`). Only live-mode, non-synthetic, non-dry-run runs
+  count. The gate's synthetic history uses a test-only switch, which no production file may use (a
+  test checks this).
+- **Promotion** needs ≥ 5 runs, 0 breaches and a Wilson lower bound of at least 0.6 (z 1.645). It's a
+  `promotion` decision; approving writes `promoted_playbooks` at L1 and sets that name's autonomy
+  control. A defaulted promotion decision never promotes.
+- **A breach** drops the shape, and its promoted playbook, one level.
+- **Graph runs inherit their task's synthetic flag.**
+- **Subgraphs that can send are opaque to the compiler:** guardrails are re-required around them.

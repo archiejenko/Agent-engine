@@ -14,6 +14,7 @@ import {
 import { recordOutcome } from "./ledger.ts";
 import { applyGraphPlanOption, parsePlanRef } from "./plans.ts";
 import { decidePrintBatch } from "./playbooks/sme_letter.ts";
+import { applyPromotionOption } from "./promotion.ts";
 import type { WorkflowPort } from "./workflow.ts";
 
 /**
@@ -640,6 +641,15 @@ async function apply(
         decisionId: x.id,
         ...(d.now ? { now: d.now() } : {}),
       });
+      return;
+    case "promotion":
+      // source_ref "shape:<fingerprint>". Only Archie's recorded approval promotes (never a default).
+      await applyPromotionOption(
+        storage,
+        x.source_ref,
+        o.defaulted ? "not_now" : option,
+        o.approvalId,
+      );
       return;
     case "board":
       if (!o.defaulted) await applyBoardOption(ideaDeps(d), x.source_ref, option, o.by ?? "archie");
