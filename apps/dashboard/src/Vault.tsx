@@ -74,6 +74,101 @@ const SCORES: [ScoreKey, string][] = [
   ["low_risk", "Low risk"],
 ];
 
+interface MatrixRow {
+  id: string;
+  rank: number;
+  idea: string;
+  build_angle: string;
+  fit: number;
+  speed_to_cash: number;
+  demand: number;
+  solo_build: number;
+  score: number;
+  imported: boolean;
+  decision: string | null;
+}
+
+/** Archie's ranked matrix: its own four scores (1–5, max 20), labelled estimate. */
+function IdeaMatrix() {
+  const [d, setD] = useState<{
+    present: boolean;
+    note?: string | null;
+    ok?: boolean;
+    rows?: MatrixRow[];
+    mismatches?: { id: string; field: string; file: number; computed: number }[];
+    backlog?: { ideas: number };
+  } | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = useCallback(() => {
+    getJson<NonNullable<typeof d>>("/api/vault/ideas/matrix").then(setD, () =>
+      setD({ present: false }),
+    );
+  }, []);
+  useEffect(load, [load]);
+  if (!d) return <p>Loading…</p>;
+  if (!d.present)
+    return <p className="empty">No ranked ideas file (brain/ideas/ranked-ideas.csv) yet.</p>;
+  const importNow = async () => {
+    const r = await fetch("/api/vault/ideas/matrix/import", { method: "POST" });
+    const b = (await r.json()) as {
+      created?: number;
+      updated?: number;
+      unchanged?: number;
+      message?: string;
+    };
+    setMsg(
+      r.ok
+        ? `Imported: ${b.created} new, ${b.updated} updated, ${b.unchanged} unchanged. Your decisions and comments are never overwritten.`
+        : (b.message ?? "Import failed"),
+    );
+    load();
+  };
+  return (
+    <>
+      <p className="muted">
+        {d.note} <span className="kind kind-estimated">estimate</span>
+      </p>
+      <p className="muted">
+        Score and rank are recomputed from the four scores, not copied from the file
+        {d.mismatches?.length
+          ? ` (${d.mismatches.length} differ from the file)`
+          : " (all match the file)"}
+        . In the backlog: {d.backlog?.ideas ?? 0} of {d.rows?.length ?? 0}.{" "}
+        <button type="button" onClick={() => void importNow()} disabled={d.ok === false}>
+          Import into the backlog
+        </button>
+      </p>
+      {msg && <p className="muted">{msg}</p>}
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Idea</th>
+            <th>Fit · Speed · Demand · Solo</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {d.rows?.map((r) => (
+            <tr key={r.id}>
+              <td>{r.rank}</td>
+              <td>
+                <b>{r.idea}</b>
+                <div className="muted small">{r.build_angle}</div>
+              </td>
+              <td>
+                {r.fit} · {r.speed_to_cash} · {r.demand} · {r.solo_build}
+              </td>
+              <td>
+                {r.score}/20{r.decision ? ` · ${r.decision}` : ""}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
 function IdeasSheet() {
   const [d, setD] = useState<Ideas | null>(null);
   const [q, setQ] = useState("");
@@ -402,6 +497,8 @@ export function Vault({ route }: { route: string }) {
         <p>
           <a href="#/vault">← All notes</a>
         </p>
+        <h2>Ranked ideas</h2>
+        <IdeaMatrix />
         <h2>Ideas sheet</h2>
         <IdeasSheet />
       </>

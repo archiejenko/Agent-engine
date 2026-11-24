@@ -40,7 +40,8 @@
     "gate:v2-phase4": "tsx scripts/gate-v2-phase4.ts",
     "gate:v3": "tsx scripts/gate-v3.ts",
     "gate:graph": "tsx scripts/gate-graph.ts",
-    "gen:graphs": "tsx scripts/gen-graphs.ts"
+    "gen:graphs": "tsx scripts/gen-graphs.ts",
+    "ideas:import": "tsx scripts/import-ideas.ts"
   },
   "devDependencies": {
     "@ae/agent-runner": "workspace:*",

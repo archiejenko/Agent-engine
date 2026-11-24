@@ -11,9 +11,12 @@ import {
   decide,
   type GitNote,
   homeFigures,
+  IDEA_MATRIX_PATH,
   IDEAS_PATH,
   IdeaImportError,
+  IdeaMatrixImportError,
   ideasSheetView,
+  importIdeaMatrix,
   importIdeas,
   KeyError,
   KeyRing,
@@ -21,6 +24,7 @@ import {
   searchVault,
   stage5Review,
   storageMailbox,
+  validateIdeaMatrix,
   vaultNotes,
   writeArchieNote,
 } from "@ae/infra";
@@ -187,6 +191,40 @@ export function mountV3(
         last_import: await s.hypotheses.lastImport(),
       },
     });
+  });
+  // Archie's ranked idea matrix (its own four scores; see packages/infra/src/idea-matrix.ts).
+  app.get("/api/vault/ideas/matrix", async (c) => {
+    const sheet = (await notes(c.env)).find((n) => n.path === IDEA_MATRIX_PATH);
+    if (!sheet) return c.json({ present: false, path: IDEA_MATRIX_PATH });
+    const s = storageFor(c.env);
+    const report = validateIdeaMatrix(sheet.body);
+    const stored = new Map((await s.ideaMatrix.list()).map((r) => [r.id, r]));
+    return c.json({
+      present: true,
+      path: IDEA_MATRIX_PATH,
+      ...report,
+      rows: report.rows.map((r) => ({
+        ...r,
+        score_source: "estimate",
+        imported: stored.has(r.id),
+        decision: stored.get(r.id)?.decision ?? null,
+      })),
+      backlog: { ideas: await s.ideaMatrix.count() },
+    });
+  });
+  app.post("/api/vault/ideas/matrix/import", async (c) => {
+    const sheet = (await notes(c.env)).find((n) => n.path === IDEA_MATRIX_PATH);
+    if (!sheet) return c.json({ error: "no_matrix_file", path: IDEA_MATRIX_PATH }, 404);
+    try {
+      return c.json({
+        ok: true,
+        ...(await importIdeaMatrix(storageFor(c.env), sheet.body, { by: accessUser(c) })),
+      });
+    } catch (e) {
+      if (e instanceof IdeaMatrixImportError)
+        return c.json({ error: "rejected", message: e.message, ...e.report, rows: undefined }, 422);
+      throw e;
+    }
   });
   // Imports the sheet into the hypothesis backlog (idempotent on id; the whole file is rejected if any
   // row is invalid). Not an approval: it changes no decision Archie has made.

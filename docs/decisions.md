@@ -578,3 +578,15 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **Public routes** (`/x402/*`, webhooks, demo, opt-out, claim) are unreachable from outside while the
   domain-wide app covers them. When one goes live it gets its own hostname with an Access **Bypass** app
   (replaces the earlier `check.oast-ai.com` suggestion). Runbook: `docs/runbooks/deploy.md`.
+
+## 2026-11-24 — Ranked idea matrix (Archie)
+
+- **Archie's 41-idea matrix** (`brain/ideas/ranked-ideas.csv`, kept as he wrote it) goes into the backlog
+  with **its own four scores**: fit, speed to £, demand, solo-build (1–5, max 20). They aren't forced
+  into the six seeded scores, so nothing is invented (Archie's choice). Table `idea_matrix`, migration
+  0024 (with its down file).
+- **Score (the sum) and rank (competition ranking) are recomputed in code** and compared with the
+  file; all 41 match. Ids are `R` + the sheet's List #, so re-imports update the same rows and never
+  overwrite Archie's decisions or comments. Every score is labelled estimate (rule 23).
+- **Importing:** locally with `pnpm ideas:import --sheet ranked`; on Cloudflare from Vault → Ideas sheet
+  → Ranked ideas → Import.

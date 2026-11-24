@@ -2,6 +2,7 @@ import { Claim, VerifiedFact, VerifiedFactVersion } from "@ae/contracts";
 import { claimsStorage } from "./claims.ts";
 import type { SqlDriver, SqlStatement, SqlValue } from "./driver.ts";
 import { graphStorage } from "./graph.ts";
+import { ideaMatrixStorage } from "./idea-matrix.ts";
 import { ideasStorage } from "./ideas.ts";
 import { lettersStorage } from "./letters.ts";
 import { phase2 } from "./phase2.ts";
@@ -154,6 +155,7 @@ export class SqlStorage implements Storage {
       v3Storage(db),
       graphStorage(db),
       ideasStorage(db),
+      ideaMatrixStorage(db),
     );
   }
   declare signals: Storage["signals"];
@@ -205,6 +207,7 @@ export class SqlStorage implements Storage {
   declare keyRegistry: Storage["keyRegistry"];
   declare audit: Storage["audit"];
   declare hypotheses: Storage["hypotheses"];
+  declare ideaMatrix: Storage["ideaMatrix"];
   declare scoutSignals: Storage["scoutSignals"];
   declare ideaCards: Storage["ideaCards"];
   declare ideaThread: Storage["ideaThread"];

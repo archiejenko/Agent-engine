@@ -18,6 +18,7 @@ export * from "./ev.ts";
 export * from "./graph-legacy.ts";
 export * from "./graph-runtime.ts";
 export * from "./idea-cards.ts";
+export * from "./idea-matrix.ts";
 export * from "./ideas.ts";
 export * from "./keys.ts";
 export * from "./ledger.ts";
