@@ -565,3 +565,16 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **A breach** drops the shape, and its promoted playbook, one level.
 - **Graph runs inherit their task's synthetic flag.**
 - **Subgraphs that can send are opaque to the compiler:** guardrails are re-required around them.
+
+## 2026-11-24 — Dashboard on engine.ejtech.co.uk (Archie)
+
+- **The Worker is served on the Custom Domain `engine.ejtech.co.uk`; `workers.dev` is off.** Archie put
+  the whole ejtech.co.uk domain (`ejtech.co.uk` + `*.ejtech.co.uk`) behind one Access app that allows
+  only his email. The `workers.dev` hostname sits outside that app, so it's switched off rather than
+  left reachable. Supersedes "one-click Access on the workers.dev URL" (2026-11 entries above).
+- **The in-Worker JWT check is unchanged:** `ACCESS_POLICY_AUD` is now the AUD of the domain-wide Access
+  app. Until it and `ACCESS_TEAM_DOMAIN` are set, `/api` still fails closed.
+- **The old `agent-house` Worker stays as it is.** Archie chose not to delete it.
+- **Public routes** (`/x402/*`, webhooks, demo, opt-out, claim) are unreachable from outside while the
+  domain-wide app covers them. When one goes live it gets its own hostname with an Access **Bypass** app
+  (replaces the earlier `check.oast-ai.com` suggestion). Runbook: `docs/runbooks/deploy.md`.

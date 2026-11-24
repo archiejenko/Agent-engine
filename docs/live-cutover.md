@@ -45,10 +45,10 @@ call, with the screen date stored per number, like the email suppression list.
 Keys and accounts
 - [ ] Cloudflare account on Workers Paid ($5/month)
 - [ ] `wrangler login` on your laptop (or an API token with Workers Edit + D1 Edit, as a GitHub secret)
-- [ ] Cloudflare Access on the workers.dev URL; copy the AUD tag and team domain into `apps/api/wrangler.jsonc` vars
+- [ ] Cloudflare Access app covering `ejtech.co.uk` + `*.ejtech.co.uk` (your email only); copy its AUD tag and the team domain into `apps/api/wrangler.jsonc` vars
 
 Live run
-- [ ] `pnpm cf:deploy`, enable Access, redeploy; open the URL logged out (blocked) and logged in (health ok)
+- [ ] `pnpm cf:deploy`, fill in the Access vars, redeploy; open https://engine.ejtech.co.uk logged out (blocked) and logged in (health ok)
 
 v2 runtime (all in `apps/api/wrangler.jsonc`; `wrangler deploy` creates the queues and Durable Objects)
 - [ ] D1 migrations 0010–0013 applied (`pnpm cf:deploy` applies them); `/api/health` shows 13
