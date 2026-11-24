@@ -590,3 +590,14 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   overwrite Archie's decisions or comments. Every score is labelled estimate (rule 23).
 - **Importing:** locally with `pnpm ideas:import --sheet ranked`; on Cloudflare from Vault → Ideas sheet
   → Ranked ideas → Import.
+
+## 2026-11-24 — First deploy prepared from the cloud session
+
+- **D1 database `agent-engine` created in Western Europe (WEUR)**, nearest to Manchester, and all 24
+  migrations applied. Its id is in `apps/api/wrangler.jsonc` (not secret).
+- **Queues `ae-jobs` and `ae-jobs-dlq` created** by hand. `wrangler deploy` doesn't create queues;
+  the earlier checklist line saying it did was wrong and is corrected.
+- **The Worker publish moves to Archie's laptop** (`wrangler login`). In a cloud session the Cloudflare
+  token is added to requests by the network proxy, which replaces the one-off ticket wrangler uses to
+  upload the dashboard files (401 on `workers/assets/upload`). Everything else (API calls, D1) works
+  with the proxy-injected token. The checklist is in `docs/runbooks/deploy.md`.

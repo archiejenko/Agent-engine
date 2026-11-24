@@ -32,6 +32,8 @@
     {
       "binding": "DB",
       "database_name": "agent-engine",
+      // Created 2026-11-24 (region WEUR). Not secret: it names the database, it grants nothing.
+      "database_id": "2714afcd-59c7-4ee1-a6ea-5251a0b08fb4",
       "migrations_dir": "../../packages/storage/migrations"
     }
   ],

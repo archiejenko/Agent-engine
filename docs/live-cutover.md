@@ -50,9 +50,12 @@ Keys and accounts
 Live run
 - [ ] `pnpm cf:deploy`, fill in the Access vars, redeploy; open https://engine.ejtech.co.uk logged out (blocked) and logged in (health ok)
 
-v2 runtime (all in `apps/api/wrangler.jsonc`; `wrangler deploy` creates the queues and Durable Objects)
-- [ ] D1 migrations 0010–0013 applied (`pnpm cf:deploy` applies them); `/api/health` shows 13
-- [ ] Queues `ae-jobs` and `ae-jobs-dlq` exist; the Cron Trigger (every 5 min) appears on the Worker
+v2 runtime (all in `apps/api/wrangler.jsonc`; `wrangler deploy` creates the Durable Objects and Workflows,
+but **not** the queues: create those first with `wrangler queues create`)
+- [x] D1 database `agent-engine` created (WEUR) and **all 24 migrations applied** (2026-11-24, checked:
+  24 rows in `d1_migrations`, 83 tables); `/api/health` should show 24
+- [x] Queues `ae-jobs` and `ae-jobs-dlq` exist (created 2026-11-24)
+- [ ] The Cron Trigger (every 5 min) appears on the Worker
 - [ ] Durable Objects `ChangeFeed` and `BudgetObject` (SQLite-backed) and the `ae-engine` Workflow exist
 - [ ] Controls → Runtime health: "Scheduled trigger", "Agent loop" and "Job queue" ran in the last 10 minutes
 - [ ] Force one failing job (e.g. a `reverify` for a made-up company with the CH key removed) and check it
@@ -60,11 +63,12 @@ v2 runtime (all in `apps/api/wrangler.jsonc`; `wrangler deploy` creates the queu
 - [ ] Controls → Budgets shows today's spend against the caps; leave every playbook on S0 at first
 
 v3 dashboard (Milestone C)
-- [ ] D1 migrations 0014–0019 applied (decisions, mailbox, Vault versions, key registry, ideas backlog, idea function and market); `/api/health` shows 19
+- [x] D1 migrations 0014–0019 applied (decisions, mailbox, Vault versions, key registry, ideas backlog, idea function and market): applied with the rest, 2026-11-24
 - [ ] Open the root URL: it goes straight to the dashboard (Home). There is no public landing page
 - [ ] Needs you shows decisions; the daily digest appears on Home after the first 06:00 UTC run
 - [ ] Vault lists `brain/` (bundled at deploy by `pnpm gen:brain`, which `pnpm cf:deploy` runs). Then
-  check Vault → Ideas sheet shows the 500 ideas labelled "estimate", then press "Import into the backlog"
+  check Vault → Ideas sheet shows the 500 ideas labelled "estimate", then press "Import into the backlog".
+  Do the same for **Ranked ideas** (your 41, four scores each) on the same page
 
 ### Stage 1b — Keys (v3, decision D4; runbook `docs/runbooks/keys.md`)
 - [ ] Secrets Store created; store ID copied. **Check that Secrets Store is out of beta, or that its beta

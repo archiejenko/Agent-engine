@@ -7,11 +7,49 @@ it sits outside the ejtech.co.uk Access app.
 
 It doesn't touch the older `agent-house` Worker; both can run side by side.
 
+## First deploy: your laptop checklist (everything else is done)
+
+Done already (2026-11-24, from the cloud session):
+- the queues `ae-jobs` and `ae-jobs-dlq`;
+- the D1 database `agent-engine` (its id is in `wrangler.jsonc`), with all 24 migrations applied;
+- `ejtech.co.uk` checked as an active zone on your account, with no existing record for
+  `engine.ejtech.co.uk`.
+
+The cloud session couldn't publish the Worker itself. Its token is added by a proxy, and that clashes
+with the one-off ticket wrangler uses to upload the dashboard files. So the publish runs from your
+laptop:
+
+1. **Get the code.** `git pull` on branch `claude/nifty-curie-91l1nq`, then `pnpm install`. You need
+   Node 22; run `corepack enable` if `pnpm` is missing.
+2. **Log in.** `pnpm --filter @ae/api exec wrangler login`, and approve it in the browser. Then
+   `pnpm --filter @ae/api exec wrangler whoami` should show your account.
+3. **Deploy.** `pnpm cf:deploy`. It publishes the `agent-engine` Worker and attaches
+   `engine.ejtech.co.uk`. It should end with "No migrations to apply". It does **not** touch
+   `agent-house`.
+4. **Fill in Access.** In Zero Trust, open your ejtech.co.uk Access app and copy two values into
+   `apps/api/wrangler.jsonc` → `vars`:
+   - the Application Audience (**AUD**) tag → `ACCESS_POLICY_AUD`;
+   - `https://<team>.cloudflareaccess.com` → `ACCESS_TEAM_DOMAIN`.
+
+   Then run `pnpm check`, commit ("Fill in Access vars for engine.ejtech.co.uk"), push, and run
+   `pnpm cf:deploy` again.
+5. **Check it.**
+   - `curl -sI https://engine.ejtech.co.uk/api/health` must be blocked (a redirect to
+     cloudflareaccess.com, or a 403), never a 200.
+   - In a private window, https://engine.ejtech.co.uk asks for your email, and then the dashboard shows
+     **API health: ok** with **24** migrations.
+6. **Optional, one click each:** Vault → Ideas sheet → **Import into the backlog**, for the 500 seeded
+   ideas and for your 41 ranked ideas.
+7. **Tidy up.** The cloud session's Cloudflare token is saved on the `agent-engine` cloud environment.
+   You can delete that network secret, or the token itself in Cloudflare, once the deploy works.
+
+If step 3 fails on Queues, Workflows or Durable Objects, check the account is on **Workers Paid**.
+
 ## One-time setup
 
 1. **Cloudflare account on the Workers Paid plan** ($5/month). Queues and Workflows need it.
 2. **ejtech.co.uk is an active zone on the same Cloudflare account.**
-3. **No existing DNS record for `engine.ejtech.co.uk`.** The deploy creates it. A Custom Domain can't
+3. **No existing DNS record for `engine.ejtech.co.uk`** (checked 2026-11-24: none). The deploy creates it. A Custom Domain can't
    be created on a hostname that already has a CNAME record, so delete one if it's there.
 4. **Log in from your laptop:** `pnpm --filter @ae/api exec wrangler login` (opens a browser).
    (Or, for automated deploys, create an API token — see "API token" below.)
@@ -24,7 +62,10 @@ pnpm cf:deploy
 ```
 
 This builds the dashboard, deploys the Worker, attaches `engine.ejtech.co.uk` (creating its DNS record
-and certificate), creates the D1 database the first time, then applies any pending database migrations.
+and certificate), then applies any pending database migrations. On a brand-new account, create the
+queues first (`wrangler queues create ae-jobs` and `ae-jobs-dlq`) and the database
+(`wrangler d1 create agent-engine`, with its id put in `wrangler.jsonc`); `wrangler deploy` doesn't
+create them.
 
 ## Connect Cloudflare Access (one-time, ~2 minutes)
 
