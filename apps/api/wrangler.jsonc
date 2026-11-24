@@ -5,7 +5,10 @@
   "compatibility_date": "2026-08-01",
   // The official x402 middleware uses Node's Buffer.
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": true,
+  // The dashboard lives on engine.ejtech.co.uk, which the ejtech.co.uk Access app covers.
+  // workers.dev is off: that hostname sits outside the ejtech.co.uk Access app.
+  "workers_dev": false,
+  "routes": [{ "pattern": "engine.ejtech.co.uk", "custom_domain": true }],
   // Version/preview URLs off until Access covers them too.
   "preview_urls": false,
   "observability": { "enabled": true },
