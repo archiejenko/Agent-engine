@@ -54,20 +54,25 @@ jobs:
       - name: Check the site is still behind Access
         run: |
           sleep 15
-          # The Worker's own lock (empty Access vars) also blocks /api, so a non-200 alone isn't enough:
-          # both the page and the API must be redirected to the Cloudflare Access login.
-          for path in / /api/health; do
-            read -r code location < <(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "https://engine.ejtech.co.uk$path")
-            echo "Unauthenticated $path returned HTTP $code -> ${location:-no redirect}"
-            if [ "$code" = "200" ]; then
-              echo "::error::engine.ejtech.co.uk$path is reachable without Access. Fix the Access app now."
+          # The Worker's own lock also blocks /api, so a non-200 alone doesn't prove Access is in front.
+          # 1) The page, asked for like a browser, must redirect to the Cloudflare Access login.
+          read -r code location < <(curl -s -o /dev/null -H 'Accept: text/html' -w '%{http_code} %{redirect_url}' https://engine.ejtech.co.uk/)
+          echo "Unauthenticated / returned HTTP $code -> ${location:-no redirect}"
+          case "$code $location" in
+            30[1237]\ https://*.cloudflareaccess.com/*) ;;
+            *)
+              echo "::error::engine.ejtech.co.uk/ is not redirected to the Cloudflare Access login. Check the Access app 'engine' covers engine.ejtech.co.uk."
               exit 1
-            fi
-            case "$location" in
-              https://*.cloudflareaccess.com/*) ;;
-              *)
-                echo "::error::engine.ejtech.co.uk$path is not redirected to the Cloudflare Access login. Check the Access app covers engine.ejtech.co.uk."
-                exit 1
-                ;;
-            esac
-          done
+              ;;
+          esac
+          # 2) The API must never answer without a login. Access may redirect (default) or return 401
+          #    (Managed OAuth / non-browser setting); the Worker's own lock returns 401/403.
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://engine.ejtech.co.uk/api/health)
+          echo "Unauthenticated /api/health returned HTTP $code"
+          case "$code" in
+            30[1237]|401|403) ;;
+            *)
+              echo "::error::engine.ejtech.co.uk/api/health answered HTTP $code without a login. Expected a redirect, 401 or 403."
+              exit 1
+              ;;
+          esac

@@ -43,6 +43,22 @@ Each deploy:
 
 It only runs when you start it. Nothing deploys on push. Two runs never overlap: a second one waits.
 
+## Why a deploy can fail, and what stops it
+
+The GitHub token can **publish** the `agent-engine` Worker and apply D1 migrations. It can't
+**create** Cloudflare resources, and shouldn't. So every resource the Worker uses is created by hand
+first and its id pinned in `apps/api/wrangler.jsonc`.
+
+| Cause | What it looks like | Guard |
+|---|---|---|
+| A new binding without an id (D1, KV) | "bindings need to be provisioned", then `Authentication error [10000]` | `apps/api/src/wrangler-config.test.ts` fails in the **Tests** step, before anything is deployed. Create the resource (from a cloud session, the Cloudflare dashboard or `wrangler … create` on the laptop), pin its id, push. |
+| A bound resource that doesn't exist (R2 bucket, queue) | `R2 bucket '…' not found [10085]` | Create it before pushing the binding. Current set: D1 `agent-engine`, `agent-engine-facts`, `agent-engine-telemetry`; R2 `agent-engine-files`; KV `agent-engine-cache`; queues `ae-jobs`, `ae-jobs-dlq`; Workflows `ae-engine`, `ae-graph`. |
+| Token scope | `No access to the specified service` | Token's Workers permission: **All Workers** (Admin to create, Editor after). Plus Zone → Workers Routes → Write on `ejtech.co.uk`, and D1 Edit. |
+| A migration fails | the **Deploy to Cloudflare** step stops at `wrangler d1 migrations apply` | Migrations run **before** the Worker is published, so a failure leaves the old code live and nothing half-done. Migrations must stay additive (old code must still work on the new schema). |
+| A Durable Object class without a migration tag | wrangler refuses the deploy | Caught by the same config test. |
+| Access missing or misconfigured | **Check the site is still behind Access** fails | The page must redirect to `*.cloudflareaccess.com`; `/api/health` must answer 3xx, 401 or 403. Access vars are format-checked by the config test. |
+| Another session pushes while you deploy | the run deploys whatever is on the branch at that moment | The config test runs on that same commit, so an unpinned binding still stops it before deploying. |
+
 ## Deploy from your laptop (fallback)
 
 Use this only if the GitHub route isn't working.
@@ -84,21 +100,20 @@ If the deploy step fails on Queues, Workflows or Durable Objects, check the acco
 
 ## What `pnpm cf:deploy` does
 
-**Since the data layer change (2026-11-26), the next deploy also creates these.** They're declared in
-`wrangler.jsonc` without IDs, so wrangler makes them the first time:
+**The data layer's resources (2026-11-26).** All are pinned in `wrangler.jsonc`, so a deploy creates
+nothing:
 - the D1 databases `agent-engine-facts` and `agent-engine-telemetry`;
-- the R2 bucket `agent-engine-files`;
-- the `RunState` Durable Object class (migration tag v3).
+- the KV namespace `agent-engine-cache`;
+- the `RunState` Durable Object class (migration tag v3), which a deploy sets up itself.
 
-It then applies each database's migrations (DB, FACTS, TELEMETRY, in that order).
+Check that the R2 bucket `agent-engine-files` exists before the next deploy (Storage & databases →
+R2). It's named but has no id to pin; if it's missing, create it there. Never use
+`agent-house-files`.
 
-On `agent-engine` (core), migration `0026_split` drops the tables that moved to facts and telemetry.
-Those tables are empty remotely, so nothing is lost; locally, rows are copied first.
-
-None of this touches `agent-house`, its KV namespace or its bucket.
-
-Also created at that deploy: the KV namespace for the 60-second dashboard cache (binding `CACHE`;
-its name starts with `agent-engine`). It's never the `agent-house-cache` namespace.
+`pnpm cf:deploy` applies each database's migrations (DB, FACTS, TELEMETRY) and then publishes. On
+`agent-engine` (core), `0026_split` drops the tables that moved to facts and telemetry (empty
+remotely); `0029_indexes` rebuilds two small tables WITHOUT ROWID, keeping their rows. Both still work
+with the previous Worker code, since migrations run first.
 
 To check: `/api/health` (behind Access) reports `databases: { core: 29, facts: 2, telemetry: 3 }`.
 

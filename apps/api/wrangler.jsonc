@@ -41,11 +41,14 @@
     {
       "binding": "FACTS",
       "database_name": "agent-engine-facts",
+      // Created by the deploy of 2026-11-26. Pinned so no deploy has to create anything.
+      "database_id": "83986f18-fbe0-4d83-a10a-7d57ce1f27c5",
       "migrations_dir": "../../packages/storage/migrations/facts"
     },
     {
       "binding": "TELEMETRY",
       "database_name": "agent-engine-telemetry",
+      "database_id": "4094a443-4fc7-4afe-bfeb-6dc5b1fe444e",
       "migrations_dir": "../../packages/storage/migrations/telemetry"
     }
   ],
@@ -80,8 +83,9 @@
   // the next deploy. Never the agent-house-files bucket.
   "r2_buckets": [{ "binding": "FILES", "bucket_name": "agent-engine-files" }],
   // Data layer step 4: a 60-second cache for heavy dashboard aggregates (never spend caps or Budgets).
-  // No id: wrangler creates the namespace at the next deploy. Never the agent-house-cache namespace.
-  "kv_namespaces": [{ "binding": "CACHE" }],
+  // Namespace agent-engine-cache, created 2026-11-26 from a cloud session. Pinned because the deploy
+  // token can't create KV namespaces (and shouldn't). Never the agent-house-cache namespace.
+  "kv_namespaces": [{ "binding": "CACHE", "id": "87778fcc88174364b8c33372511edfcc" }],
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["ChangeFeed"] },
     { "tag": "v2", "new_sqlite_classes": ["BudgetObject"] },
