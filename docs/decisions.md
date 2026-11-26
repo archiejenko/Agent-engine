@@ -767,3 +767,17 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **Not converted yet** (each makes a few single writes; flagged in the report): outreach send
   internals, `decide()`, `storeSignals` with its Board tile, the idea-card store, an experiment's
   end, and letters with their print batch.
+
+## 2026-11-26 — Deploys never create resources; migrations run before publish
+
+- **KV namespace `agent-engine-cache`** (id `87778fcc88174364b8c33372511edfcc`) created from a cloud
+  session; the `CACHE` binding is pinned to it. The FACTS and TELEMETRY D1 ids (created by the deploy of
+  2026-11-26) are pinned too. Why: deploy run 4 failed because wrangler tried to create the KV namespace
+  and the GitHub token has no KV permission. Keeping the token unable to create resources is deliberate.
+- **Guard:** `apps/api/src/wrangler-config.test.ts` fails CI if any D1/KV binding lacks an id, an R2
+  binding has no bucket name, a Durable Object class has no migration, a binding names an agent-house
+  resource, or the Access vars are malformed.
+- **`cf:deploy` applies D1 migrations first, then `wrangler deploy`.** A failed migration now leaves the
+  old code live instead of new code on an old schema. Migrations must stay additive.
+- **Access check:** `/` must redirect to `*.cloudflareaccess.com`; `/api/health` may answer 3xx, 401 or
+  403 (Access answers non-browser clients with 401 when Managed OAuth is on).

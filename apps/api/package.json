@@ -8,7 +8,7 @@
     "dev:worker": "wrangler dev",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json",
     "cf-typegen": "wrangler types --strict-vars=false",
-    "cf:deploy": "wrangler deploy && wrangler d1 migrations apply DB --remote && wrangler d1 migrations apply FACTS --remote && wrangler d1 migrations apply TELEMETRY --remote"
+    "cf:deploy": "wrangler d1 migrations apply DB --remote && wrangler d1 migrations apply FACTS --remote && wrangler d1 migrations apply TELEMETRY --remote && wrangler deploy"
   },
   "dependencies": {
     "@ae/agent-runner": "workspace:*",
