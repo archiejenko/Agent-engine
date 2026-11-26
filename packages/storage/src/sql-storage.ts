@@ -11,6 +11,7 @@ import { phase2 } from "./phase2.ts";
 import { phase3 } from "./phase3.ts";
 import { phase4 } from "./phase4.ts";
 import { phase5 } from "./phase5.ts";
+import { storeOf } from "./placement.ts";
 import { runtimeStorage } from "./runtime.ts";
 import type {
   EntityRow,
@@ -818,6 +819,38 @@ export class SqlStorage implements Storage {
       return rows.map((r) => r.entity_id);
     },
   };
+
+  /**
+   * A unit of work (data layer plan, step 5): every write inside `fn` is queued and then sent as ONE
+   * batch per database, in order; if `fn` throws, nothing is written. Reads inside `fn` see the
+   * database as it was before the unit (they don't see the unit's own queued writes), so use it for
+   * write-only stretches, such as the end of an agent step. A store's batch is atomic; two stores'
+   * batches are not (D1 can't span databases), so the core batch is sent first.
+   */
+  async unit<T>(fn: (s: SqlStorage) => Promise<T>): Promise<T> {
+    const queued: SqlStatement[] = [];
+    const deferred: SqlDriver = {
+      dialect: this.db.dialect,
+      all: (sql, params) => this.db.all(sql, params),
+      run: async (sql, params) => {
+        queued.push({ sql, params: params ?? [] });
+        return { changes: 0 };
+      },
+      batch: async (statements) => {
+        queued.push(...statements);
+      },
+      close: async () => {},
+    };
+    const out = await fn(new SqlStorage(deferred, this.blobs));
+    const byStore = new Map<string, SqlStatement[]>();
+    for (const st of queued) {
+      const k = storeOf(st.sql);
+      byStore.set(k, [...(byStore.get(k) ?? []), st]);
+    }
+    for (const k of ["core", "facts", "telemetry", "local"])
+      if (byStore.has(k)) await this.db.batch(byStore.get(k) as SqlStatement[]);
+    return out;
+  }
 
   /** Migrations applied per database (core, facts, telemetry). `migrations` is core's, as before. */
   async health() {

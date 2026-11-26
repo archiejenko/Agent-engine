@@ -55,6 +55,8 @@ export interface RunStore {
   /** Live rows while the run is open; the archive once it's closed. */
   nodeRuns(runId: string): Promise<GraphNodeRunRow[]>;
   put(v: StateValueRow): Promise<void>;
+  /** Several values in one call and one transaction (a node's writes; data layer plan, step 5). */
+  putMany(vs: StateValueRow[]): Promise<void>;
   /** The latest iteration of each key. */
   latest(runId: string): Promise<Omit<StateValueRow, "run_id">[]>;
   /** Archive the run to the blob store, then delete its rows. Safe to call twice. */
@@ -167,7 +169,7 @@ export function sqlRunStore(
       out.push(await resolve(r));
     return out;
   };
-  return {
+  const store: RunStore = {
     async start(runId, nodeId, iteration) {
       await ensure();
       await db.run(
@@ -204,19 +206,26 @@ export function sqlRunStore(
       return (await readArchive(blobs, runId))?.node_runs ?? [];
     },
     async put(v) {
+      await store.putMany([v]);
+    },
+    async putMany(vs) {
+      if (!vs.length) return;
       await ensure();
-      await db.run(
-        "INSERT INTO run_state_values (run_id, key, iteration, value, untrusted, lane, written_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (run_id, key, iteration) DO UPDATE SET value = excluded.value, untrusted = excluded.untrusted, lane = excluded.lane, written_by = excluded.written_by",
-        [
-          v.run_id,
-          v.key,
-          v.iteration,
-          JSON.stringify(v.value),
-          v.untrusted ? 1 : 0,
-          v.lane,
-          v.written_by,
-          nowIso(),
-        ],
+      const at = nowIso();
+      await db.batch(
+        vs.map((v) => ({
+          sql: "INSERT INTO run_state_values (run_id, key, iteration, value, untrusted, lane, written_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (run_id, key, iteration) DO UPDATE SET value = excluded.value, untrusted = excluded.untrusted, lane = excluded.lane, written_by = excluded.written_by",
+          params: [
+            v.run_id,
+            v.key,
+            v.iteration,
+            JSON.stringify(v.value),
+            v.untrusted ? 1 : 0,
+            v.lane,
+            v.written_by,
+            at,
+          ],
+        })),
       );
     },
     async latest(runId) {
@@ -263,6 +272,7 @@ export function sqlRunStore(
       return { archive_key: key, node_runs: node_runs.length, state_values: state.length };
     },
   };
+  return store;
 }
 
 /** The archive of a closed run, or null. */

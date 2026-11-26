@@ -230,6 +230,8 @@ async function recordInfra(
     price_table_version: rates.price_table_version,
     synthetic: false,
     dry_run: true,
+    playbook: task.playbook,
+    step_id: null,
   });
 }
 
@@ -334,8 +336,8 @@ export function graphRunWorkflow(d: GraphRuntimeDeps): WorkflowDef<GraphRunParam
       const entity = task.source_ref.match(/entity:([^:]+)$/)?.[1] ?? "";
       const rs0: RunState = newRunState(p.run_id, compiled, { entity_ref: entity });
       await step.do("init", async () => {
-        for (const [k, v] of Object.entries(rs0.values))
-          await d.runs.put({
+        await d.runs.putMany(
+          Object.entries(rs0.values).map(([k, v]) => ({
             run_id: p.run_id,
             key: k,
             iteration: 0,
@@ -343,7 +345,8 @@ export function graphRunWorkflow(d: GraphRuntimeDeps): WorkflowDef<GraphRunParam
             untrusted: false,
             lane: compiled.lane,
             written_by: "input",
-          });
+          })),
+        );
         await d.storage.graphRuns.update(p.run_id, {
           status: "running",
           instance_id: wctx.instanceId,
@@ -360,8 +363,10 @@ export function graphRunWorkflow(d: GraphRuntimeDeps): WorkflowDef<GraphRunParam
         writes: Record<string, unknown>,
         extraCost: number,
       ) => {
-        for (const [k, v] of Object.entries(writes))
-          await d.runs.put({
+        // One call (one transaction) to the run's Durable Object, then one core batch: the run's cost
+        // and the node's infra cost event (data layer plan, step 5).
+        await d.runs.putMany(
+          Object.entries(writes).map(([k, v]) => ({
             run_id: p.run_id,
             key: k,
             iteration: ctx.iteration,
@@ -369,9 +374,12 @@ export function graphRunWorkflow(d: GraphRuntimeDeps): WorkflowDef<GraphRunParam
             untrusted: !!compiled.spec.state[k]?.untrusted,
             lane: compiled.lane,
             written_by: ctx.node.id,
-          });
-        if (extraCost) await d.storage.graphRuns.addCost(p.run_id, extraCost);
-        await recordInfra(d, task, p.run_id, compiled, ctx.node);
+          })),
+        );
+        await d.storage.unit(async (s) => {
+          if (extraCost) await s.graphRuns.addCost(p.run_id, extraCost);
+          await recordInfra({ ...d, storage: s }, task, p.run_id, compiled, ctx.node);
+        });
         await checkBudgetAlerts(d, p.run_id, compiled);
       };
 

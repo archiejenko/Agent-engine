@@ -171,34 +171,39 @@ export class ToolRegistry {
       });
       const out = { ...raw, result: scrub(raw.result, secrets) };
       if (injected && this.keys) for (const k of reg.keys ?? []) await this.keys.used(k, true);
-      if (effectKey) await this.storage.effects.finish(effectKey, "done", out.result);
-      if (reg.cost_gbp_per_call > 0)
-        await this.storage.tasks.addCost(ctx.task.task_id, reg.cost_gbp_per_call);
+      // After the call: the effect's result, the task cost and the call's cost event in ONE batch
+      // (data layer plan, step 5), so none can be written without the others. The effect's start was
+      // recorded on its own before the call ran (rule 17).
       // One cost event per completed call, written now (data layer plan, commit 0). A dry-run call
       // didn't incur its price: recorded as dry_run at £0, so it never counts as live spend.
       const m = { ...taskMeter(ctx.task, null), ...(ctx.meter ?? {}) };
-      await this.storage.costEvents.add({
-        event_id: crypto.randomUUID(),
-        at: new Date(this.now()).toISOString(),
-        run_id: m.run_id ?? null,
-        graph_id: m.graph_id ?? null,
-        graph_version: m.graph_version ?? null,
-        node_id: m.node_id ?? null,
-        task_id: ctx.task.task_id,
-        opportunity_id: m.opportunity_id ?? null,
-        revenue_path: m.revenue_path ?? null,
-        shape_fingerprint: m.shape ?? null,
-        mode: m.mode ?? (this.sandbox ? "sandbox" : "live"),
-        category: "tool",
-        unit: `call:${name}`,
-        quantity: 1,
-        unit_price_gbp: reg.cost_gbp_per_call,
-        amount_gbp: dryRun ? 0 : reg.cost_gbp_per_call,
-        price_table_version: this.priceTableVersion,
-        synthetic: m.synthetic === true,
-        dry_run: dryRun,
-        playbook: m.playbook ?? null,
-        step_id: m.step_id ?? null,
+      await this.storage.unit(async (s) => {
+        if (effectKey) await s.effects.finish(effectKey, "done", out.result);
+        if (reg.cost_gbp_per_call > 0)
+          await s.tasks.addCost(ctx.task.task_id, reg.cost_gbp_per_call);
+        await s.costEvents.add({
+          event_id: crypto.randomUUID(),
+          at: new Date(this.now()).toISOString(),
+          run_id: m.run_id ?? null,
+          graph_id: m.graph_id ?? null,
+          graph_version: m.graph_version ?? null,
+          node_id: m.node_id ?? null,
+          task_id: ctx.task.task_id,
+          opportunity_id: m.opportunity_id ?? null,
+          revenue_path: m.revenue_path ?? null,
+          shape_fingerprint: m.shape ?? null,
+          mode: m.mode ?? (this.sandbox ? "sandbox" : "live"),
+          category: "tool",
+          unit: `call:${name}`,
+          quantity: 1,
+          unit_price_gbp: reg.cost_gbp_per_call,
+          amount_gbp: dryRun ? 0 : reg.cost_gbp_per_call,
+          price_table_version: this.priceTableVersion,
+          synthetic: m.synthetic === true,
+          dry_run: dryRun,
+          playbook: m.playbook ?? null,
+          step_id: m.step_id ?? null,
+        });
       });
       this.calls.push({ tool: name, args, result: out.result, blocked: false, error: null });
       return { result: out.result, untrusted: out.untrusted ?? false, dry_run: dryRun };

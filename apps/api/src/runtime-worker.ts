@@ -379,6 +379,9 @@ export class RunState extends DurableObject<Env> {
   put(v: StateValueRow) {
     return this.store.put(v);
   }
+  putMany(vs: StateValueRow[]) {
+    return this.store.putMany(vs);
+  }
   latest(runId: string) {
     return this.store.latest(runId);
   }
@@ -405,6 +408,12 @@ export function durableRunStore(env: Env): RunStore {
       (await runArchive(blobs, r))?.node_runs ?? ((await stub(r).nodeRuns(r)) as GraphNodeRunRow[]),
     put: async (v) => {
       await stub(v.run_id).put(v);
+    },
+    putMany: async (vs) => {
+      const runId = vs[0]?.run_id;
+      if (!runId) return;
+      if (vs.some((v) => v.run_id !== runId)) throw new Error("putMany: one run at a time");
+      await stub(runId).putMany(vs);
     },
     latest: async (r) => (await stub(r).latest(r)) as Awaited<ReturnType<RunStore["latest"]>>,
     close: async (r) => (await stub(r).close(r)) as RunCloseResult,

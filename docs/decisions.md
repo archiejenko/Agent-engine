@@ -731,3 +731,27 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   database, HttpOnly, `/api` only), so Archie always reads their own writes. Any other request uses
   `first-primary`. Turning replication on is a dashboard switch per database (runbook). For Archie,
   near the primary, it helps little; it's there for the public x402 check.
+
+## 2026-11-26 — Batched writes (data layer plan, step 5)
+
+- **`storage.unit(fn)`.** Every write inside `fn` is queued, then sent as one batch per database
+  (core first). If `fn` throws, nothing is written. Reads inside it see the database as it was
+  before, so it's used only for write-only stretches.
+- **Converted:**
+  - **The end of every agent step** (`runner.execStep`): the budget settlement, the task cost and the
+    task's advanced state go in one core batch, and the run log in one telemetry batch. The
+    spend-cap check now runs right after that batch, so a cap hit can't throw away the step's
+    records.
+  - **After a tool call:** the effect's result, the task cost and the call's cost event go in one
+    batch, so none can be written without the others.
+  - **A graph node's writes:** its state values go in one call (one transaction) to the run's
+    Durable Object (`putMany`); the run cost and the infra cost event go in one core batch.
+- **Kept separate on purpose:**
+  - the rule 17 effect pre-write and the budget reservation, both recorded before the call;
+  - each model call's cost event, written as the call returns, so the live tracker is never behind.
+- **Measured** (one sme_outreach run to its approval gate, 3 steps): core writes went from 15 to 11,
+  that is from 5 per step to 3 per step plus the two status changes. Telemetry stays at one per step,
+  now a batch. `apps/api/src/batching.test.ts` keeps these limits.
+- **Not converted yet** (each makes a few single writes; flagged in the report): outreach send
+  internals, `decide()`, `storeSignals` with its Board tile, the idea-card store, an experiment's
+  end, and letters with their print batch.

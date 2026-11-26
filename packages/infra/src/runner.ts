@@ -159,7 +159,31 @@ export class PlaybookRunner {
           state.next_step++;
           continue;
         }
-        const res = await this.execStep(task, pb, impl, state, state.next_step, null);
+        // A passing step's advanced state is saved in the step's own end-of-step batch.
+        let advanced = false;
+        const res = await this.execStep(
+          task,
+          pb,
+          impl,
+          state,
+          state.next_step,
+          null,
+          undefined,
+          async (s, r) => {
+            if (r.check && !r.check.passed) return;
+            advanced = true;
+            await s.tasks.update(task.task_id, {
+              state: { ...state, next_step: state.next_step + 1 } as unknown as Record<
+                string,
+                unknown
+              >,
+            });
+          },
+        );
+        if (advanced) {
+          state.next_step++;
+          continue;
+        }
         if (res.check && !res.check.passed) {
           // Retry the step that produced the checked output, once, with the reasons.
           const producerIdx = state.next_step - 1;
@@ -222,6 +246,8 @@ export class PlaybookRunner {
     idx: number,
     retryReason: string | null,
     tags?: StepTags,
+    /** Extra writes that belong in the step's end-of-step batch (the task's advanced state). */
+    onCommit?: (s: Storage, res: RoleStepResult) => Promise<void>,
   ): Promise<RoleStepResult> {
     const step = pb.spec.steps[idx];
     if (!step || !("role" in step)) throw new Error(`step ${idx} is not a role step`);
@@ -298,12 +324,6 @@ export class PlaybookRunner {
       ? (this.d.models.prices[res.model] ?? this.d.models.prices["fake-model"])
       : undefined;
     const cost = price ? costGbp(usage, price, this.d.models.usd_to_gbp) : 0;
-    if (reservation && this.d.budget)
-      await settleStep(this.d.storage, this.d.budget, reservation, fresh, hold, cost);
-    // The call's cost event is already written (by the metered model), so the daily caps see it; only
-    // the task budget still needs this cost added. A cap hit now no longer loses the call's cost.
-    if (cost > 0)
-      await checkSpend(this.d.storage, this.d.infra, fresh, cost, this.now(), { recorded: true });
     state.outputs[step.output] = res.output;
     const calls = this.d.tools
       .drainCalls()
@@ -312,23 +332,35 @@ export class PlaybookRunner {
           ? { ...c, result: "[untrusted content withheld from log]" }
           : c,
       );
-    await this.d.storage.runLog.append({
-      task_id: task.task_id,
-      step_id: retryReason ? `${step.id}` : step.id,
-      role: step.role,
-      model: res.model ?? null,
-      tool_calls: calls as never,
-      output: (res.output ?? null) as never,
-      check_result: res.check ?? null,
-      tokens: { input: usage.input_tokens, output: usage.output_tokens },
-      cost_gbp: cost,
-      duration_ms: Date.now() - started,
-      timestamp: this.now().toISOString(),
-      ...(tags
-        ? { graph_id: tags.graph_id, graph_version: tags.graph_version, node_id: tags.node_id }
-        : {}),
+    // The end of the step is ONE batch per database (data layer plan, step 5): the budget settlement,
+    // the task's cost and (via onCommit) its new state in core; the run log in telemetry. The call's
+    // cost event was already written as the call returned, so the tracker never waits for this.
+    await this.d.storage.unit(async (s) => {
+      if (reservation && this.d.budget)
+        await settleStep(s, this.d.budget, reservation, fresh, hold, cost);
+      await s.runLog.append({
+        task_id: task.task_id,
+        step_id: retryReason ? `${step.id}` : step.id,
+        role: step.role,
+        model: res.model ?? null,
+        tool_calls: calls as never,
+        output: (res.output ?? null) as never,
+        check_result: res.check ?? null,
+        tokens: { input: usage.input_tokens, output: usage.output_tokens },
+        cost_gbp: cost,
+        duration_ms: Date.now() - started,
+        timestamp: this.now().toISOString(),
+        ...(tags
+          ? { graph_id: tags.graph_id, graph_version: tags.graph_version, node_id: tags.node_id }
+          : {}),
+      });
+      if (cost > 0) await s.tasks.addCost(task.task_id, cost);
+      await onCommit?.(s, res);
     });
-    if (cost > 0) await this.d.storage.tasks.addCost(task.task_id, cost);
+    // After the batch, so a cap hit can never throw away the step's own records. The daily caps
+    // already see the cost event; the task budget adds this step's cost to the total read before it.
+    if (cost > 0)
+      await checkSpend(this.d.storage, this.d.infra, fresh, cost, this.now(), { recorded: true });
     return res;
   }
 

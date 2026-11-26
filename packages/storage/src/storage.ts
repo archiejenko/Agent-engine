@@ -208,6 +208,8 @@ export interface Storage
     /** Universe members (included) with no current facts at all: should be zero (100% anchored). */
     unanchoredMembers(universe: string): Promise<string[]>;
   };
+  /** A unit of work: writes in `fn` go as one batch per database (data layer plan, step 5). */
+  unit<T>(fn: (s: Storage) => Promise<T>): Promise<T>;
   health(): Promise<{
     ok: boolean;
     migrations: number;
