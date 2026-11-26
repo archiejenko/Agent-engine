@@ -350,8 +350,42 @@ export function storageSuite(adapter: string, makeHarness: () => Promise<Harness
         duration_ms: 12,
         timestamp: "2026-11-08T10:00:00Z",
       });
-      expect(await s.runLog.spendSince("2026-11-08T00:00:00Z")).toBeCloseTo(0.05, 12);
-      expect(await s.runLog.spendSince("2026-11-08T00:00:00Z", "other")).toBe(0);
+      // Spend lives in cost_events (written at call time); the run log is telemetry only.
+      const ev = (o: Partial<Parameters<typeof s.costEvents.add>[0]>) =>
+        s.costEvents.add({
+          event_id: crypto.randomUUID(),
+          at: "2026-11-08T10:00:00.000Z",
+          run_id: null,
+          graph_id: null,
+          graph_version: null,
+          node_id: null,
+          task_id: a.task_id,
+          opportunity_id: null,
+          revenue_path: "sme_outreach",
+          shape_fingerprint: null,
+          mode: "live",
+          category: "model",
+          unit: "model_call",
+          quantity: 1,
+          unit_price_gbp: 0.05,
+          amount_gbp: 0.05,
+          price_table_version: "t",
+          synthetic: false,
+          dry_run: false,
+          playbook: "sme_outreach",
+          step_id: "draft",
+          ...o,
+        });
+      await ev({});
+      await ev({ mode: "sandbox", amount_gbp: 1 }); // never live
+      await ev({ dry_run: true, amount_gbp: 1, category: "tool" }); // simulated: not incurred
+      await ev({ step_id: "print_and_post", amount_gbp: 2 }); // excluded step
+      const since = "2026-11-08T00:00:00Z";
+      expect(
+        await s.costEvents.spendSince(since, { excludeSteps: ["print_and_post"] }),
+      ).toBeCloseTo(0.05, 12);
+      expect(await s.costEvents.spendSince(since, { playbook: "other" })).toBe(0);
+      expect(await s.costEvents.spendSince(since)).toBeCloseTo(2.05, 12);
       expect((await s.runLog.forTask(a.task_id))[0]?.output).toEqual({ text: "hi" });
 
       await s.approvals.add({

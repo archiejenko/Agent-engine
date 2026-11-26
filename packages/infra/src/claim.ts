@@ -410,6 +410,12 @@ export function fulfilmentWorkflow(d: FulfilmentDeps): WorkflowDef<{ claim_id: s
             }),
             untrusted: JSON.stringify(details),
             max_tokens: 800,
+            meter: {
+              playbook: "claim_site",
+              revenue_path: "claim_site",
+              step_id: "draft_site",
+              synthetic: claim.synthetic === true,
+            },
           };
           const res = await d.model.complete(req);
           const out = JSON.parse(res.text) as {

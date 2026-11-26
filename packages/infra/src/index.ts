@@ -25,6 +25,7 @@ export * from "./ledger.ts";
 export * from "./letters/render.ts";
 export * from "./lift.ts";
 export * from "./mailbox.ts";
+export * from "./metered-model.ts";
 export * from "./outreach.ts";
 export * from "./plans.ts";
 export * from "./playbook.ts";

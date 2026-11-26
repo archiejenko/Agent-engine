@@ -36,6 +36,7 @@ import {
   LocalBudgetPort,
   LocalWorkflowEngine,
   localWorkflowPort,
+  meteredModel,
   outreachRoutes,
   type PlaybookImpl,
   PlaybookRunner,
@@ -210,7 +211,14 @@ export class AgentService {
     this.infra = d.infra ?? loadInfraConfig();
     this.queue = d.queue ?? new InMemoryQueue();
     this.playbooks = d.playbooks;
-    this.model = d.model ?? fakeModel();
+    // Every model call the service makes (runner, workflows, planner, Q&A) writes its cost event at
+    // call time (data layer plan, commit 0). Wrapping is idempotent, so the runner's own wrap is a no-op.
+    this.model = meteredModel(d.model ?? fakeModel(), {
+      storage: d.storage,
+      models: d.models ?? loadModelsConfig(),
+      mode: this.sandbox ? "sandbox" : "live",
+      ...(d.now ? { now: d.now } : {}),
+    });
     this.tools = new ToolRegistry(d.storage, this.infra);
     this.tools.keys = d.keys ?? null;
     this.tools.sandbox = this.sandbox;
@@ -254,6 +262,7 @@ export class AgentService {
       playbooks: d.playbooks,
       budget: d.budget ?? new LocalBudgetPort(),
       impls: d.impls ?? PLAYBOOK_IMPLS,
+      costMode: this.sandbox ? "sandbox" : "live",
       ...(d.now ? { now: d.now } : {}),
     });
     this.graphEngine = {

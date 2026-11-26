@@ -5,6 +5,7 @@ import type { Storage, StoredTask } from "@ae/storage";
 import { type BudgetPort, releaseStep, reserveForStep, settleStep } from "./budget.ts";
 import { checkSpend, queuePaused, SpendCapError } from "./controls.ts";
 import { playbooksPausedByKeys } from "./keys.ts";
+import { type CostMode, meteredModel, taskMeter, withMeter } from "./metered-model.ts";
 import type { LoadedPlaybook } from "./playbook.ts";
 import type { ToolCallRecord, ToolRegistry, ToolResult } from "./tools.ts";
 
@@ -62,6 +63,18 @@ export interface RunnerDeps {
   now?: () => Date;
   /** Hard budgets (v2 Phase 3): reserve before each step, settle at the real cost. */
   budget?: BudgetPort;
+  /** Mode stamped on this runner's cost events ("sandbox" in a sandbox service). */
+  costMode?: CostMode;
+}
+
+/** Graph tags for a role step: kept on the run log (first three) and on its cost events (all). */
+export interface StepTags {
+  graph_id: string;
+  graph_version: number;
+  node_id: string;
+  run_id?: string;
+  shape?: string;
+  mode?: CostMode;
 }
 
 async function hash01(text: string): Promise<number> {
@@ -72,7 +85,17 @@ async function hash01(text: string): Promise<number> {
 const initialState = (): TaskState => ({ next_step: 0, outputs: {}, retried: [], attempts: 0 });
 
 export class PlaybookRunner {
-  constructor(private readonly d: RunnerDeps) {}
+  /** Every model call this runner makes writes its own cost event (data layer plan, commit 0). */
+  private readonly model: ModelClient;
+
+  constructor(private readonly d: RunnerDeps) {
+    this.model = meteredModel(d.model, {
+      storage: d.storage,
+      models: d.models,
+      ...(d.costMode ? { mode: d.costMode } : {}),
+      ...(d.now ? { now: d.now } : {}),
+    });
+  }
 
   private now() {
     return this.d.now ? this.d.now() : new Date();
@@ -198,7 +221,7 @@ export class PlaybookRunner {
     state: TaskState,
     idx: number,
     retryReason: string | null,
-    tags?: { graph_id: string; graph_version: number; node_id: string },
+    tags?: StepTags,
   ): Promise<RoleStepResult> {
     const step = pb.spec.steps[idx];
     if (!step || !("role" in step)) throw new Error(`step ${idx} is not a role step`);
@@ -209,6 +232,18 @@ export class PlaybookRunner {
 
     const untrustedSeen: ToolCallRecord[] = [];
     const started = Date.now();
+    const meter = taskMeter(fresh, step.id, {
+      ...(tags
+        ? {
+            graph_id: tags.graph_id,
+            graph_version: tags.graph_version,
+            node_id: tags.node_id,
+            run_id: tags.run_id ?? null,
+            shape: tags.shape ?? null,
+          }
+        : {}),
+      ...(tags?.mode ? { mode: tags.mode } : {}),
+    });
     const ctx: RoleStepContext = {
       task: fresh,
       stepId: step.id,
@@ -222,6 +257,7 @@ export class PlaybookRunner {
             task: fresh,
             role: step.role,
             step_tools: step.tools,
+            meter,
           });
           if (r.untrusted)
             untrustedSeen.push({
@@ -234,7 +270,7 @@ export class PlaybookRunner {
           return r;
         },
       },
-      model: this.d.model,
+      model: withMeter(this.model, meter),
       examples: (await this.d.storage.examples.list(task.playbook, step.id, 3)).map((e) => ({
         original: e.original,
         edited: e.edited,
@@ -264,7 +300,10 @@ export class PlaybookRunner {
     const cost = price ? costGbp(usage, price, this.d.models.usd_to_gbp) : 0;
     if (reservation && this.d.budget)
       await settleStep(this.d.storage, this.d.budget, reservation, fresh, hold, cost);
-    if (cost > 0) await checkSpend(this.d.storage, this.d.infra, fresh, cost, this.now());
+    // The call's cost event is already written (by the metered model), so the daily caps see it; only
+    // the task budget still needs this cost added. A cap hit now no longer loses the call's cost.
+    if (cost > 0)
+      await checkSpend(this.d.storage, this.d.infra, fresh, cost, this.now(), { recorded: true });
     state.outputs[step.output] = res.output;
     const calls = this.d.tools
       .drainCalls()
@@ -285,7 +324,9 @@ export class PlaybookRunner {
       cost_gbp: cost,
       duration_ms: Date.now() - started,
       timestamp: this.now().toISOString(),
-      ...(tags ?? {}),
+      ...(tags
+        ? { graph_id: tags.graph_id, graph_version: tags.graph_version, node_id: tags.node_id }
+        : {}),
     });
     if (cost > 0) await this.d.storage.tasks.addCost(task.task_id, cost);
     return res;
@@ -300,7 +341,7 @@ export class PlaybookRunner {
     stepId: string,
     inputs: Record<string, unknown>,
     retryReason: string | null,
-    tags: { graph_id: string; graph_version: number; node_id: string },
+    tags: StepTags,
   ): Promise<RoleStepResult> {
     const { task, pb, impl } = await this.load(taskId);
     const idx = pb.spec.steps.findIndex((s) => s.id === stepId);

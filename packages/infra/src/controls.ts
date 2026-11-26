@@ -69,8 +69,12 @@ export async function checkSpend(
   task: { task_id: string; playbook: string; budget_gbp: number; cost_gbp: number },
   extraGbp: number,
   now = new Date(),
+  o: { recorded?: boolean } = {},
 ): Promise<void> {
   const day = startOfDay(now);
+  // `recorded`: the cost is already in cost_events (written at call time), so the daily sums include
+  // it and only the task budget still needs `extraGbp` added.
+  const dailyExtra = o.recorded ? 0 : extraGbp;
   const problems: string[] = [];
   if (task.cost_gbp + extraGbp > task.budget_gbp + 1e-9)
     problems.push(`task budget £${task.budget_gbp.toFixed(2)}`);
@@ -79,10 +83,14 @@ export async function checkSpend(
     cfg.caps.per_playbook_per_day_gbp.default ??
     0;
   const ex = cfg.caps.exclude_steps;
-  if ((await storage.runLog.spendSince(day, task.playbook, ex)) + extraGbp > pbCap + 1e-9)
+  if (
+    (await storage.costEvents.spendSince(day, { playbook: task.playbook, excludeSteps: ex })) +
+      dailyExtra >
+    pbCap + 1e-9
+  )
     problems.push(`${task.playbook} daily cap £${pbCap}`);
   if (
-    (await storage.runLog.spendSince(day, undefined, ex)) + extraGbp >
+    (await storage.costEvents.spendSince(day, { excludeSteps: ex })) + dailyExtra >
     cfg.caps.global_per_day_gbp + 1e-9
   )
     problems.push(`global daily cap £${cfg.caps.global_per_day_gbp}`);

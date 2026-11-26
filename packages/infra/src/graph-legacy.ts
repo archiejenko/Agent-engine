@@ -27,6 +27,8 @@ export interface LegacyGraphDeps {
   storage: Storage;
   cfg: InfraConfig;
   runner: PlaybookRunner;
+  /** The cost mode node spend is labelled with (the graph runtime's: "sandbox" in a sandbox). */
+  mode?: "live" | "sandbox" | "probe" | "planner";
 }
 
 interface GraphTaskState {
@@ -42,6 +44,9 @@ export function legacyBindings(d: LegacyGraphDeps, task: StoredTask): Bindings {
     graph_id: ctx.compiled.spec.graphId,
     graph_version: ctx.compiled.spec.version,
     node_id: ctx.node.id,
+    run_id: ctx.runId,
+    shape: ctx.compiled.shapeFingerprint,
+    ...(d.mode ? { mode: d.mode } : {}),
   });
   return {
     async run(ctx): Promise<NodeOutcome> {

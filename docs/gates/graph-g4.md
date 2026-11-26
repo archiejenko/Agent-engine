@@ -1,6 +1,6 @@
 # Phase graph-g4 gate report
 
-Generated 2026-11-19T12:25:22.478Z on SYNTHETIC data with fake external systems.
+Generated 2026-11-26T20:25:01.877Z on SYNTHETIC data with fake external systems.
 
 | Criterion | Status | Evidence |
 |---|---|---|

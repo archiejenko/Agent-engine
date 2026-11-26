@@ -1,6 +1,6 @@
 # Phase v2-3 gate report
 
-Generated 2026-11-16T20:04:11.436Z on SYNTHETIC data with fake external systems.
+Generated 2026-11-26T20:25:24.618Z on SYNTHETIC data with fake external systems.
 
 | Criterion | Status | Evidence |
 |---|---|---|

@@ -459,19 +459,6 @@ export function phase2(db: SqlDriver) {
           ]),
         );
       },
-      /** Spend in GBP since `since`, optionally for one playbook, leaving out the given step ids. */
-      spendSince: async (since: string, playbook?: string, excludeSteps: string[] = []) => {
-        const ex = excludeSteps.length
-          ? ` AND r.step_id NOT IN (${excludeSteps.map(() => "?").join(", ")})`
-          : "";
-        const rows = await db.all<{ s: number }>(
-          playbook
-            ? `SELECT COALESCE(SUM(r.cost_gbp), 0) AS s FROM run_log r JOIN tasks t ON t.task_id = r.task_id WHERE r.timestamp >= ? AND t.playbook = ?${ex}`
-            : `SELECT COALESCE(SUM(r.cost_gbp), 0) AS s FROM run_log r WHERE r.timestamp >= ?${ex}`,
-          playbook ? [since, playbook, ...excludeSteps] : [since, ...excludeSteps],
-        );
-        return Number(rows[0]?.s ?? 0);
-      },
     },
 
     approvals: {

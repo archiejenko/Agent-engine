@@ -38,8 +38,7 @@ export async function buildDigest(
       .filter((r) => r.event === e && r.value_kind === "actual")
       .reduce((a, r) => a + (r.value_gbp ?? 0), 0);
   const spent =
-    (await storage.runLog.spendSince(from, undefined, [])) -
-    (await storage.runLog.spendSince(to, undefined, []));
+    (await storage.costEvents.spendSince(from)) - (await storage.costEvents.spendSince(to));
   const open = await storage.decisions.list({ status: "open", limit: 1000 });
   const closed = (await storage.decisions.since(from)).filter((x) => (x.decided_at ?? "") < to);
   void cfg;

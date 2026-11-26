@@ -1,13 +1,15 @@
 import { loadGraphPolicy } from "@ae/config";
 import { type CompiledGraph, type CompileError, GraphSpec, type IdeaCard } from "@ae/contracts";
-import { checkProbe, compile, type NodeLibrary, priceModelCall } from "@ae/graph";
+import { checkProbe, compile, type NodeLibrary } from "@ae/graph";
 import {
   bundledGraph,
   bundledPrompt,
   MAX_PLAN_ATTEMPTS,
+  meteredModel,
   openPlanDecision,
   planGraphId,
   splitFrontMatter,
+  withMeter,
 } from "@ae/infra";
 import type { ModelClient } from "@ae/ports";
 import type { Storage } from "@ae/storage";
@@ -147,7 +149,15 @@ const summarise = (r: SandboxRunResult) => ({
 export async function planCard(d: PlannerDeps, cardId: string): Promise<PlanResult> {
   const { service } = d;
   const storage = service.storage;
-  const model = d.model ?? service.model;
+  // Every planner call writes its own cost event at call time (mode "planner": never live spend).
+  const model = withMeter(
+    meteredModel(d.model ?? service.model, {
+      storage,
+      models: service.graphDeps.models,
+      mode: "planner",
+    }),
+    { mode: "planner" },
+  );
   const policy = loadGraphPolicy();
   const prompt = await plannerPrompt();
   const row = await storage.ideaCards.latest(cardId);
@@ -217,8 +227,8 @@ export async function planCard(d: PlannerDeps, cardId: string): Promise<PlanResu
       system: prompt.system,
       user: JSON.stringify(input),
       max_tokens: 8000,
+      meter: { mode: "planner", graph_id: graphId, opportunity_id: cardId },
     });
-    await recordPlannerCost(storage, service, res, cardId, graphId);
     const parsed = (() => {
       try {
         return PlannerAnswer.safeParse(JSON.parse(res.text));
@@ -507,45 +517,6 @@ async function runProbe(
     })),
     cost_gbp: res.report.totals.sandboxCostGbp,
   };
-}
-
-/** One cost event per planner call (mode "planner"): what deciding costs per idea. */
-async function recordPlannerCost(
-  storage: Storage,
-  service: AgentService,
-  res: { model: string; usage: { input_tokens: number; output_tokens: number } },
-  cardId: string,
-  graphId: string,
-) {
-  const fake = res.model === "fake-model";
-  const models = service.graphDeps.models;
-  // A fake call costs nothing; its projection prices the same tokens on the planner role's model.
-  const priced = priceModelCall(
-    fake ? (models.roles.planner?.model ?? "claude-opus-5-5") : res.model,
-    res.usage,
-    models,
-  );
-  await storage.costEvents.add({
-    event_id: crypto.randomUUID(),
-    at: new Date().toISOString(),
-    run_id: null,
-    graph_id: graphId,
-    graph_version: null,
-    node_id: null,
-    task_id: null,
-    opportunity_id: cardId,
-    revenue_path: null,
-    shape_fingerprint: null,
-    mode: "planner",
-    category: "model",
-    unit: "model_call",
-    quantity: 1,
-    unit_price_gbp: priced.total_gbp,
-    amount_gbp: fake ? 0 : priced.total_gbp,
-    price_table_version: models.price_table_version,
-    synthetic: fake,
-    dry_run: true,
-  });
 }
 
 /** Plans every passed idea that has no plan yet, or whose last plan Archie sent back with an edit. */

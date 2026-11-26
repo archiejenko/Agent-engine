@@ -581,7 +581,7 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 
 ## 2026-11-24 — Ranked idea matrix (Archie)
 
-- **Archie's 41-idea matrix** (`brain/ideas/ranked-ideas.csv`, kept as he wrote it) goes into the backlog
+- **Archie's 41-idea matrix** (`brain/ideas/ranked-ideas.csv`, kept as they wrote it) goes into the backlog
   with **its own four scores**: fit, speed to £, demand, solo-build (1–5, max 20). They aren't forced
   into the six seeded scores, so nothing is invented (Archie's choice). Table `idea_matrix`, migration
   0024 (with its down file).
@@ -601,3 +601,26 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   token is added to requests by the network proxy, which replaces the one-off ticket wrangler uses to
   upload the dashboard files (401 on `workers/assets/upload`). Everything else (API calls, D1) works
   with the proxy-injected token. The checklist is in `docs/runbooks/deploy.md`.
+
+## 2026-11-26 — All spend on the cost ledger, written at call time (data layer plan, commit 0)
+
+- **`cost_events` is now the one money truth.** Every agent-side model call goes through
+  `meteredModel` (`packages/infra/src/metered-model.ts`), which writes one row the moment the call
+  returns. The tool registry writes one row per completed tool call. Printing and postage for approved
+  letters write a `third_party` row. Callers only label a call (`meter`); they never write cost rows.
+- **Newly covered:** the claim-this-site draft, idea-card Q&A and every planner call. Before, these
+  model calls were either unrecorded or recorded only by the graph runtime.
+- **Spend caps, the digest and the Budgets page read `cost_events`** (`costEvents.spendSince`):
+  `mode = 'live' AND dry_run = 0`, per playbook from the new `playbook` column, with `exclude_steps`
+  matched on the new `step_id` column. Migration 0025 adds both columns and an index, with a down file.
+  `runLog.spendSince` (the `run_log ⨝ tasks` join that would have crossed the database split) is removed.
+- **What `dry_run` means:** the cost wasn't actually incurred, i.e. a simulated paid action, recorded at
+  £0 with its would-be price in `unit_price_gbp`. A real model call is never `dry_run`, even while
+  external actions run dry. Fake-model calls are marked `synthetic` but priced as before, so the caps
+  and budget gates still bite in tests. Sandbox and planner spend is recorded under its own mode and is
+  never live.
+- **Bug fixed on the way:** the call that pushed a task over a cap used to lose its cost, because the
+  cap check ran before the cost was recorded. It's now recorded first.
+- **Not covered:** the website extractor in the bulk ingestion scripts
+  (`packages/verification/src/sources/website/ingest.ts`) uses its own model in Node scripts run by
+  hand. Its spend still isn't on the ledger.

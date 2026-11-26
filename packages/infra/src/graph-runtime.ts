@@ -132,72 +132,22 @@ export async function pauseReason(
 }
 
 /**
- * Cost events for one finished step: exactly one per model call and one per tool call, plus the step's
- * infra allocation. Fake-model calls are recorded but marked synthetic (not real money).
+ * What one finished step cost in real money (fake-model calls and dry-run tool calls are £0). The cost
+ * EVENTS were already written at call time, by the metered model and the tool registry (data layer
+ * plan, commit 0), so nothing is written here: this only totals the same calls for the node's result.
  */
-export async function recordStepCosts(
-  d: Pick<GraphRuntimeDeps, "storage" | "models" | "toolPrice">,
-  o: {
-    entry: StoredRunLog;
-    task: StoredTask;
-    run_id: string | null;
-    graph_id: string | null;
-    graph_version: number | null;
-    node_id: string | null;
-    shape: string | null;
-    mode: "live" | "sandbox" | "probe" | "planner";
-    dry_run: boolean;
-  },
-): Promise<number> {
-  const at = new Date().toISOString();
-  const base = {
-    at,
-    run_id: o.run_id,
-    graph_id: o.graph_id,
-    graph_version: o.graph_version,
-    node_id: o.node_id,
-    task_id: o.task.task_id,
-    opportunity_id: o.task.source_ref.match(/^opportunity:([^:]+)/)?.[1] ?? null,
-    revenue_path: o.task.revenue_path,
-    shape_fingerprint: o.shape,
-    mode: o.mode,
-    price_table_version: d.models.price_table_version,
-    dry_run: o.dry_run,
-  };
+export function stepCost(
+  d: Pick<GraphRuntimeDeps, "models" | "toolPrice">,
+  o: { entry: StoredRunLog; dry_run: boolean },
+): number {
   let total = 0;
-  if (o.entry.model) {
-    const priced = priceModelCall(
+  if (o.entry.model && o.entry.model !== "fake-model")
+    total += priceModelCall(
       o.entry.model,
       { input_tokens: o.entry.tokens.input, output_tokens: o.entry.tokens.output },
       d.models,
-    );
-    await d.storage.costEvents.add({
-      ...base,
-      event_id: crypto.randomUUID(),
-      category: "model",
-      unit: "model_call",
-      quantity: 1,
-      unit_price_gbp: priced.total_gbp,
-      amount_gbp: priced.total_gbp,
-      synthetic: o.entry.model === "fake-model",
-    });
-    total += o.entry.model === "fake-model" ? 0 : priced.total_gbp;
-  }
-  for (const c of o.entry.tool_calls) {
-    if (c.blocked) continue;
-    const price = d.toolPrice(c.tool);
-    await d.storage.costEvents.add({
-      ...base,
-      event_id: crypto.randomUUID(),
-      category: "tool",
-      unit: `call:${c.tool}`,
-      quantity: 1,
-      unit_price_gbp: price,
-      amount_gbp: o.dry_run ? 0 : price,
-      synthetic: false,
-    });
-    total += o.dry_run ? 0 : price;
-  }
+    ).total_gbp;
+  if (!o.dry_run) for (const c of o.entry.tool_calls) if (!c.blocked) total += d.toolPrice(c.tool);
   return total;
 }
 
@@ -323,7 +273,10 @@ export async function runGraphNodeJob(
   let out: NodeOutcome | null = null;
   let failure: string | null = null;
   try {
-    out = await legacyBindings({ storage: d.storage, cfg: d.cfg, runner: d.runner }, task).run({
+    out = await legacyBindings(
+      { storage: d.storage, cfg: d.cfg, runner: d.runner, mode: d.mode ?? "live" },
+      task,
+    ).run({
       runId: job.run_id,
       node,
       iteration: job.iteration,
@@ -337,18 +290,7 @@ export async function runGraphNodeJob(
   if (!failure && out?.status !== "done") failure = `role node ${node.id} didn't finish`;
   const log = (await d.storage.runLog.forTask(task.task_id)).slice(before);
   let cost = 0;
-  for (const entry of log)
-    cost += await recordStepCosts(d, {
-      entry,
-      task,
-      run_id: job.run_id,
-      graph_id: compiled.spec.graphId,
-      graph_version: compiled.spec.version,
-      node_id: node.id,
-      shape: compiled.shapeFingerprint,
-      mode: d.mode ?? "live",
-      dry_run: true,
-    });
+  for (const entry of log) cost += stepCost(d, { entry, dry_run: true });
   if (failure || out?.status !== "done") {
     const failed = { error: failure ?? "no result", cost_gbp: cost };
     await d.storage.graphNodeRuns.finish(job.run_id, job.node_id, job.iteration, {
@@ -407,7 +349,10 @@ export function graphRunWorkflow(d: GraphRuntimeDeps): WorkflowDef<GraphRunParam
         return true;
       });
       let pauses = 0;
-      const legacy = legacyBindings({ storage: d.storage, cfg: d.cfg, runner: d.runner }, task);
+      const legacy = legacyBindings(
+        { storage: d.storage, cfg: d.cfg, runner: d.runner, mode: d.mode ?? "live" },
+        task,
+      );
       const persist = async (
         ctx: NodeContext,
         writes: Record<string, unknown>,

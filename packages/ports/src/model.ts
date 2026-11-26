@@ -24,6 +24,27 @@ export interface ModelRequest {
   /** JSON schema the answer must follow (structured output). */
   json_schema?: Record<string, unknown>;
   max_tokens: number;
+  /**
+   * Who this call's cost belongs to (data layer plan, commit 0). Read only by the metering wrapper,
+   * which writes one cost event per call; never sent to the model.
+   */
+  meter?: CostMeter;
+}
+
+/** Cost attribution for one model or tool call. Every field is optional; unknown means unattributed. */
+export interface CostMeter {
+  task_id?: string | null;
+  playbook?: string | null;
+  step_id?: string | null;
+  revenue_path?: string | null;
+  opportunity_id?: string | null;
+  run_id?: string | null;
+  graph_id?: string | null;
+  graph_version?: number | null;
+  node_id?: string | null;
+  shape?: string | null;
+  mode?: "live" | "sandbox" | "probe" | "planner";
+  synthetic?: boolean;
 }
 
 export interface ModelResult {

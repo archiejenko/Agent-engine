@@ -664,6 +664,7 @@ export async function askQuestion(d: IdeaDeps, cardId: string, question: string,
       required: ["answer", "evidence"],
     },
     max_tokens: 800,
+    meter: { mode: "planner", opportunity_id: cardId },
   });
   let a: PlannerAnswer | null = null;
   try {

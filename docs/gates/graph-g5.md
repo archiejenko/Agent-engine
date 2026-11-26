@@ -1,6 +1,6 @@
 # Phase graph-g5 gate report
 
-Generated 2026-11-19T12:38:25.909Z on SYNTHETIC data with fake external systems.
+Generated 2026-11-26T20:25:23.072Z on SYNTHETIC data with fake external systems.
 
 | Criterion | Status | Evidence |
 |---|---|---|
@@ -9,6 +9,6 @@ Generated 2026-11-19T12:38:25.909Z on SYNTHETIC data with fake external systems.
 | In production mode, synthetic or dry-run runs never count | passed (synthetic) | the same 5-run history settled in production mode: 0 counted (synthetic: never counts); shapes recorded: 0; suggestions: 0; opportunity outcomes written: 0 |
 | A breach drops a shape or playbook one level | passed (synthetic) | shape L1 → L0; promoted_sme_outreach_be8833f0 L1 → L0 |
 | A bespoke graph never runs above L1; a composed graph takes the lowest level among its subgraphs | passed (synthetic) | planner graph (bespoke): L1; composed of post_reply (L0) and monitoring_subscription (L3): L0 (lowest: L0) |
-| Each finished run writes an outcome linked to its shape; only real, settled outcomes count | passed (synthetic) | 5 runs carry their outcome (met/missed + shape); outcomes become counted records only for real, settled runs (criterion 3); the test-only switch appears in no production file (59 scanned) |
+| Each finished run writes an outcome linked to its shape; only real, settled outcomes count | passed (synthetic) | 5 runs carry their outcome (met/missed + shape); outcomes become counted records only for real, settled runs (criterion 3); the test-only switch appears in no production file (61 scanned) |
 
 Synthetic data, fakes only, dry-run, kill switch on. Nothing external happened.

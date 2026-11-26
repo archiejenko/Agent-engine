@@ -372,7 +372,11 @@ export const CostEvent = z.object({
   amount_gbp: z.number().finite(),
   price_table_version: z.string().min(1),
   synthetic: z.boolean(),
+  /** True when the cost wasn't actually incurred (a simulated paid action). Never counts as live spend. */
   dry_run: z.boolean(),
+  /** Copied from the task so per-playbook caps need no join. Null for unattributed calls. */
+  playbook: z.string().nullable().default(null),
+  step_id: z.string().nullable().default(null),
 });
 export type CostEvent = z.infer<typeof CostEvent>;
 

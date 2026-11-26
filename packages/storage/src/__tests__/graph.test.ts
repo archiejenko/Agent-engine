@@ -34,7 +34,8 @@ describe("graph migrations (0020–0022)", () => {
   });
 
   it("run up, down, then up again: the schema returns exactly to before and after", async () => {
-    const all = loadMigrations();
+    // Up to 0022 only: later migrations (0025 alters cost_events) build on these tables.
+    const all = loadMigrations().filter((m) => m.name < "0023");
     const before = sqliteDriver(":memory:");
     await migrate(
       before,
@@ -50,6 +51,29 @@ describe("graph migrations (0020–0022)", () => {
     }
     expect(await snapshot(db)).toEqual(await snapshot(before));
     expect(await migrate(db, all)).toEqual(GRAPH_MIGRATIONS);
+    expect(await snapshot(db)).toEqual(up);
+  });
+});
+
+describe("cost attribution migration (0025)", () => {
+  it("runs up, down and up again, back to exactly the same schema", async () => {
+    const n = "0025_cost_event_attribution.sql";
+    const all = loadMigrations().filter((m) => m.name <= n);
+    const before = sqliteDriver(":memory:");
+    await migrate(
+      before,
+      all.filter((m) => m.name !== n),
+    );
+    const db = sqliteDriver(":memory:");
+    await migrate(db, all);
+    const up = await snapshot(db);
+    await rollback(
+      db,
+      all.find((x) => x.name === n) as never,
+      loadDownMigrations().get(n) as string,
+    );
+    expect(await snapshot(db)).toEqual(await snapshot(before));
+    expect(await migrate(db, all)).toEqual([n]);
     expect(await snapshot(db)).toEqual(up);
   });
 });

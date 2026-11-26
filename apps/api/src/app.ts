@@ -877,13 +877,13 @@ export function createApp(deps: AppDeps) {
         playbook: p,
         tier,
         cap_gbp: playbookDailyCap(cfg, p, tier),
-        spent_today_gbp: await s.runLog.spendSince(day, p, ex),
+        spent_today_gbp: await s.costEvents.spendSince(day, { playbook: p, excludeSteps: ex }),
       });
     }
     return c.json({
       global: {
         cap_gbp: cfg.caps.global_per_day_gbp,
-        spent_today_gbp: await s.runLog.spendSince(day, undefined, ex),
+        spent_today_gbp: await s.costEvents.spendSince(day, { excludeSteps: ex }),
       },
       explore: {
         share: cfg.caps.explore_share,

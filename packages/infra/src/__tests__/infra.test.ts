@@ -9,6 +9,7 @@ import { defaultContext, ingestClaims, stableUuid } from "@ae/verification";
 import { beforeEach, describe, expect, it } from "vitest";
 import { playbookStats, promotePlaybook, recordBreach } from "../autonomy.ts";
 import { externalActionsAllowed, K, SpendCapError, setKillSwitch } from "../controls.ts";
+import { meteredModel, withMeter } from "../metered-model.ts";
 import { checkSend, composeEmail, processInbox, registerOutreachTools } from "../outreach.ts";
 import { type LoadedPlaybook, parsePlaybook } from "../playbook.ts";
 import {
@@ -447,18 +448,35 @@ describe("sme_outreach at L0", () => {
     const t = await makeRunner(big).run(task.task_id);
     expect(t.status).toBe("failed");
     expect(t.error).toMatch(/task budget/);
-    await storage.runLog.append({
+    // The call that broke the budget is still on the cost ledger (written at call time).
+    const own = (
+      await storage.costEvents.range({ from: "2000-01-01T00:00:00Z", to: "2100-01-01T00:00:00Z" })
+    ).filter((e) => e.task_id === task.task_id && e.category === "model");
+    expect(own.length).toBeGreaterThan(0);
+    expect(own.every((e) => e.playbook === "sme_outreach" && e.mode === "live")).toBe(true);
+    // Today's spend comes from cost_events: £30 more pushes the playbook over its daily cap.
+    await storage.costEvents.add({
+      event_id: "spend-30",
+      at: new Date().toISOString(),
+      run_id: null,
+      graph_id: null,
+      graph_version: null,
+      node_id: null,
       task_id: task.task_id,
+      opportunity_id: null,
+      revenue_path: "sme_outreach",
+      shape_fingerprint: null,
+      mode: "live",
+      category: "model",
+      unit: "model_call",
+      quantity: 1,
+      unit_price_gbp: 30,
+      amount_gbp: 30,
+      price_table_version: "t",
+      synthetic: false,
+      dry_run: false,
+      playbook: "sme_outreach",
       step_id: "x",
-      role: "writer",
-      model: "fake-model",
-      tool_calls: [],
-      output: null,
-      check_result: null,
-      tokens: { input: 0, output: 0 },
-      cost_gbp: 30,
-      duration_ms: 1,
-      timestamp: new Date().toISOString(),
     });
     const t2 = (await newTask("other")).task;
     const r2 = await makeRunner(new FakeModel({ sme_outreach_draft: fakeOutreachWriter })).run(
@@ -705,5 +723,80 @@ describe("Phase 5: sending under guardrails, follow-ups, replies, autonomy", () 
     expect(e).toContain(infra.sender.name);
     expect(e).toContain(infra.sender.opt_out_text);
     expect(e.endsWith(tradingDisclosure(infra.sender))).toBe(true);
+  });
+});
+
+describe("cost ledger at call time (data layer plan, commit 0)", () => {
+  const ALL = { from: "2000-01-01T00:00:00Z", to: "2100-01-01T00:00:00Z" };
+
+  it("one cost event per model call and per completed tool call, labelled with the task", async () => {
+    const { task } = await newTask();
+    await makeRunner(new FakeModel({ sme_outreach_draft: fakeOutreachWriter })).run(task.task_id);
+    const log = await storage.runLog.forTask(task.task_id);
+    const events = (await storage.costEvents.range(ALL)).filter((e) => e.task_id === task.task_id);
+    const model = events.filter((e) => e.category === "model");
+    const tool = events.filter((e) => e.category === "tool");
+    expect(model.length).toBe(log.filter((l) => l.model).length);
+    expect(tool.length).toBe(log.flatMap((l) => l.tool_calls).filter((c) => !c.blocked).length);
+    expect(model.length).toBeGreaterThan(0);
+    for (const e of events) {
+      expect(e.playbook).toBe("sme_outreach");
+      expect(e.mode).toBe("live");
+      expect(e.step_id).toBeTruthy();
+    }
+    // The fake model is synthetic but priced as before, so the caps still bite in tests.
+    expect(model.every((e) => e.synthetic)).toBe(true);
+    // External tools ran dry: recorded at £0 and never counted. Internal tools are real (and priced).
+    expect(tool.filter((e) => e.dry_run).every((e) => e.amount_gbp === 0)).toBe(true);
+    const sum = events.filter((e) => !e.dry_run).reduce((a, e) => a + e.amount_gbp, 0);
+    expect(await storage.costEvents.spendSince(ALL.from)).toBeCloseTo(sum, 12);
+  });
+
+  it("a dry-run paid tool call is recorded at £0 and never counts as spend", async () => {
+    const { task } = await newTask("opp:dry");
+    tools.register(
+      {
+        name: "paid_post",
+        description: "test-only paid external action",
+        allowed_lanes: ["open"],
+        external: true,
+        serves_customer: false,
+        allowed_roles: ["operator"],
+        rate_limit_per_min: 10,
+        cost_gbp_per_call: 1.5,
+      },
+      async () => ({ result: { ok: true } }),
+    );
+    await tools.call(
+      "paid_post",
+      {},
+      { task, role: "operator", step_tools: ["paid_post"], meter: { step_id: "send" } },
+    );
+    const [e] = (await storage.costEvents.range(ALL)).filter((x) => x.unit === "call:paid_post");
+    expect(e).toMatchObject({ dry_run: true, amount_gbp: 0, unit_price_gbp: 1.5, mode: "live" });
+    expect(await storage.costEvents.spendSince(ALL.from)).toBe(0);
+  });
+
+  it("sandbox and planner spend is recorded but never live; wrapping twice writes one event", async () => {
+    const fake = new FakeModel({ p: () => "{}" });
+    const req = {
+      prompt_id: "p",
+      prompt_version: 1,
+      role: "planner",
+      system: "",
+      user: "x",
+    } as never;
+    const sandbox = meteredModel(fake, { storage, models, mode: "sandbox" });
+    await sandbox.complete(req);
+    const live = meteredModel(meteredModel(fake, { storage, models }), { storage, models });
+    await withMeter(live, { mode: "planner" }).complete(req);
+    await live.complete(req);
+    const events = await storage.costEvents.range(ALL);
+    expect(events.map((e) => e.mode)).toEqual(["sandbox", "planner", "live"]);
+    expect(events.every((e) => e.amount_gbp > 0)).toBe(true);
+    expect(await storage.costEvents.spendSince(ALL.from)).toBeCloseTo(
+      events[2]?.amount_gbp ?? -1,
+      12,
+    );
   });
 });

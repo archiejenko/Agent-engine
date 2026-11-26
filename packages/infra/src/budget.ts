@@ -212,12 +212,15 @@ export async function scopesFor(
     {
       key: `playbook:${task.playbook}:${dayKey(now)}`,
       cap: playbookDailyCap(cfg, task.playbook, tier),
-      seed_spent: await storage.runLog.spendSince(day, task.playbook, ex),
+      seed_spent: await storage.costEvents.spendSince(day, {
+        playbook: task.playbook,
+        excludeSteps: ex,
+      }),
     },
     {
       key: `global:${dayKey(now)}`,
       cap: cfg.caps.global_per_day_gbp,
-      seed_spent: await storage.runLog.spendSince(day, undefined, ex),
+      seed_spent: await storage.costEvents.spendSince(day, { excludeSteps: ex }),
     },
   ];
   if (isExplore(task)) {

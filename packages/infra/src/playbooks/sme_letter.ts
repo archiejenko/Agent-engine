@@ -1,4 +1,4 @@
-import { type InfraConfig, tradingDisclosure } from "@ae/config";
+import { type InfraConfig, loadModelsConfig, tradingDisclosure } from "@ae/config";
 import type { VerifiedFact } from "@ae/contracts";
 import type { ModelRequest } from "@ae/ports";
 import type { LetterFlag, Storage } from "@ae/storage";
@@ -435,6 +435,33 @@ export async function decidePrintBatch(
       cost_gbp: perLetter,
       duration_ms: 0,
       timestamp: new Date().toISOString(),
+    });
+    // Third-party spend goes on the cost ledger too, at the moment it's committed (data layer plan,
+    // commit 0). Archie prints and posts by hand, so it's a real cost, not a dry run; the caps leave the
+    // step out (infra.json exclude_steps), as before.
+    const task = await storage.tasks.get(l.task_id);
+    await storage.costEvents.add({
+      event_id: crypto.randomUUID(),
+      at: new Date().toISOString(),
+      run_id: null,
+      graph_id: null,
+      graph_version: null,
+      node_id: null,
+      task_id: l.task_id,
+      opportunity_id: task?.source_ref.match(/^opportunity:([^:]+)/)?.[1] ?? null,
+      revenue_path: task?.revenue_path ?? null,
+      shape_fingerprint: null,
+      mode: "live",
+      category: "third_party",
+      unit: "letter:print_and_post",
+      quantity: 1,
+      unit_price_gbp: perLetter,
+      amount_gbp: perLetter,
+      price_table_version: loadModelsConfig().price_table_version,
+      synthetic: task?.synthetic === true,
+      dry_run: false,
+      playbook: "sme_letter",
+      step_id: "print_and_post",
     });
   }
   for (const l of ok) await decideTask(l.task_id, "approve");

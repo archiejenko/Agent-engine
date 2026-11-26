@@ -90,6 +90,8 @@ export interface CostEventRow {
   price_table_version: string;
   synthetic: boolean;
   dry_run: boolean;
+  playbook?: string | null;
+  step_id?: string | null;
 }
 export interface RevenueEventRow {
   event_id: string;
@@ -608,9 +610,37 @@ export function graphStorage(db: SqlDriver) {
       add: async (e: CostEventRow): Promise<void> =>
         insert("cost_events", {
           ...e,
+          playbook: e.playbook ?? null,
+          step_id: e.step_id ?? null,
           synthetic: e.synthetic ? 1 : 0,
           dry_run: e.dry_run ? 1 : 0,
         } as unknown as Record<string, SqlValue>),
+      /**
+       * Spend since `since` that counts against the caps: mode "live" and not dry-run (a simulated paid
+       * action costs nothing). Synthetic rows count, as they always have, so caps still bite in simulated
+       * worlds; real-money views exclude them themselves. Optionally one playbook, leaving out steps.
+       */
+      spendSince: async (
+        since: string,
+        o: { playbook?: string; excludeSteps?: string[] } = {},
+      ): Promise<number> => {
+        const where = ["at >= ?", "mode = 'live'", "dry_run = 0"];
+        const args: SqlValue[] = [since];
+        if (o.playbook) {
+          where.push("playbook = ?");
+          args.push(o.playbook);
+        }
+        const ex = o.excludeSteps ?? [];
+        if (ex.length) {
+          where.push(`(step_id IS NULL OR step_id NOT IN (${ex.map(() => "?").join(", ")}))`);
+          args.push(...ex);
+        }
+        const rows = await all(
+          `SELECT COALESCE(SUM(amount_gbp), 0) AS s FROM cost_events WHERE ${where.join(" AND ")}`,
+          args,
+        );
+        return Number(rows[0]?.s ?? 0);
+      },
       forRun: async (runId: string): Promise<CostEventRow[]> =>
         (
           await all("SELECT * FROM cost_events WHERE run_id = ? ORDER BY at, event_id", [runId])

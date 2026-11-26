@@ -1,8 +1,11 @@
 import type { InfraConfig } from "@ae/config";
+import { loadModelsConfig } from "@ae/config";
 import { type Role, ToolRegistration } from "@ae/contracts";
+import type { CostMeter } from "@ae/ports";
 import type { Storage, StoredTask } from "@ae/storage";
 import { externalActionsAllowed } from "./controls.ts";
 import { KeyError, KeyFailedError, type KeyRing, scrub } from "./keys.ts";
+import { taskMeter } from "./metered-model.ts";
 
 /**
  * Tool registry. Every tool call goes through `call`, which enforces (in code, not prompts):
@@ -19,6 +22,8 @@ export interface ToolContext {
   task: StoredTask;
   role: Role;
   step_tools: string[];
+  /** Cost labels (step, graph run…); the registry writes one cost event per completed call. */
+  meter?: CostMeter;
 }
 
 export interface ToolResult {
@@ -56,6 +61,8 @@ export class ToolRegistry {
   readonly calls: ToolCallRecord[] = [];
   /** Where keys come from. Production always sets it; without it, tools get no keys (local fakes). */
   keys: KeyRing | null = null;
+  /** Stamped on every tool cost event (models.json price_table_version). */
+  priceTableVersion = loadModelsConfig().price_table_version;
   /**
    * Sandbox (graph plan G3): every external tool runs dry whatever the kill switches say, and no key is
    * ever injected. Set once, at construction of a sandbox service.
@@ -167,6 +174,32 @@ export class ToolRegistry {
       if (effectKey) await this.storage.effects.finish(effectKey, "done", out.result);
       if (reg.cost_gbp_per_call > 0)
         await this.storage.tasks.addCost(ctx.task.task_id, reg.cost_gbp_per_call);
+      // One cost event per completed call, written now (data layer plan, commit 0). A dry-run call
+      // didn't incur its price: recorded as dry_run at £0, so it never counts as live spend.
+      const m = { ...taskMeter(ctx.task, null), ...(ctx.meter ?? {}) };
+      await this.storage.costEvents.add({
+        event_id: crypto.randomUUID(),
+        at: new Date(this.now()).toISOString(),
+        run_id: m.run_id ?? null,
+        graph_id: m.graph_id ?? null,
+        graph_version: m.graph_version ?? null,
+        node_id: m.node_id ?? null,
+        task_id: ctx.task.task_id,
+        opportunity_id: m.opportunity_id ?? null,
+        revenue_path: m.revenue_path ?? null,
+        shape_fingerprint: m.shape ?? null,
+        mode: m.mode ?? (this.sandbox ? "sandbox" : "live"),
+        category: "tool",
+        unit: `call:${name}`,
+        quantity: 1,
+        unit_price_gbp: reg.cost_gbp_per_call,
+        amount_gbp: dryRun ? 0 : reg.cost_gbp_per_call,
+        price_table_version: this.priceTableVersion,
+        synthetic: m.synthetic === true,
+        dry_run: dryRun,
+        playbook: m.playbook ?? null,
+        step_id: m.step_id ?? null,
+      });
       this.calls.push({ tool: name, args, result: out.result, blocked: false, error: null });
       return { result: out.result, untrusted: out.untrusted ?? false, dry_run: dryRun };
     } catch (e) {
