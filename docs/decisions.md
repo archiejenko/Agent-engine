@@ -823,3 +823,18 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   they were.
 - **Fixed on the way:** Needs you's "recent" list now reads newest first from `decided_at`. Before, it
   came back empty when 30 or more decisions were open.
+
+## 2026-11-26 — What's live (checked read-only)
+
+- **Live Worker: commit `e42272e`**, deploy run 6 (GitHub Actions, started by Archie, succeeded). Its
+  version `dec9e95c` was deployed at 22:15:57 UTC. `e42272e` is the data layer's step 6 (`071b6f6`)
+  plus a fix to the deploy workflow's Access check only.
+- **Earlier runs:** run 3 (`1d7fbca`, step 2) succeeded and created the facts and telemetry
+  databases. Run 4 failed (the KV namespace had no id). Run 5 (`2383bc4`) published the Worker, then
+  its Access check failed. Runs 1 and 2 failed before publishing.
+- **Remote migrations** (`d1_migrations`, read with SELECT only):
+  - `agent-engine`: 0001–0029;
+  - `agent-engine-facts`: 0001_baseline and 0002_indexes;
+  - `agent-engine-telemetry`: 0001_baseline, 0002_bodies and 0003_indexes.
+
+  That's every migration on the branch: the next deploy applies none unless a new one is added.
