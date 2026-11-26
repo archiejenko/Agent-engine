@@ -96,8 +96,8 @@
   // Not secret. Filled in after Access is enabled (see docs/runbooks/deploy.md).
   // While empty, the Worker refuses every /api request (fails closed).
   "vars": {
-    "ACCESS_TEAM_DOMAIN": "",
-    "ACCESS_POLICY_AUD": "",
+    "ACCESS_TEAM_DOMAIN": "https://mute-rice-0c6e.cloudflareaccess.com",
+    "ACCESS_POLICY_AUD": "a7b73b0fc7c36fabdcd7c50d22ea30f3a9b39738ad96b9723a091832493a23d6",
     // "1" (with the ANTHROPIC_API_KEY secret) switches the runtime from the fake model to Claude.
     "MODEL_LIVE": "",
     // "1" runs sme_outreach on the graph runtime (GraphRunWorkflow); empty keeps the old runner.
