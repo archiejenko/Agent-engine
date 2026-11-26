@@ -7,6 +7,8 @@ import { HttpX402Facilitator } from "@ae/products/x402-real";
 import { CompaniesHouseClient, defaultContext } from "@ae/verification";
 import { requireAccess } from "./access.ts";
 import { createApp } from "./app.ts";
+import { kvCache } from "./cache.ts";
+import { withBookmarkCookie, withD1Sessions } from "./d1-sessions.ts";
 import {
   cloudflareWorkflowPort,
   email,
@@ -87,6 +89,7 @@ function buildWith(
       runtime: "worker",
       keys,
       storage: (e) => storageOf(e as Env),
+      cache: (e) => ((e as Env).CACHE ? kvCache((e as Env).CACHE) : null),
       workflows: (e) => cloudflareWorkflowPort(e as Env),
       // Questions on idea cards are answered by the planner in the queue consumer.
       ask: (e) => async (card_id, text, by) => {
@@ -103,6 +106,7 @@ function buildWith(
     runtime: "worker",
     keys,
     storage: (e) => storageOf(e as Env),
+    cache: (e) => ((e as Env).CACHE ? kvCache((e as Env).CACHE) : null),
     workflows: (e) => cloudflareWorkflowPort(e as Env),
     // Questions on idea cards are answered by the planner in the queue consumer.
     ask: (e) => async (card_id, text, by) => {
@@ -140,7 +144,10 @@ export {
 
 export default {
   async fetch(request, env, ctx) {
-    return (await build(env)).fetch(request, env, ctx);
+    // Data layer step 4: reads go through D1 sessions (replicas) that start from the caller's bookmark.
+    const s = withD1Sessions(request, env as unknown as Record<string, unknown>);
+    const res = await (await build(env)).fetch(request, s.env as unknown as Env, ctx);
+    return withBookmarkCookie(request, res, s.bookmarks());
   },
   async scheduled(_controller, env) {
     await scheduled(env);

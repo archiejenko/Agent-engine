@@ -101,6 +101,7 @@ const CORE = [
   "pool_events",
   "payments_ledger",
   "x402_requests",
+  "daily_rollups",
   // runtime: one row per workflow instance (the index the dashboard lists)
   "workflow_instances",
   // the run store's own tables, when it sits beside the core database (tests, gates)

@@ -707,3 +707,27 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   inline. No table rebuilds were needed.
 - **Rule 20:** the leak audit now also searches stored bodies (where the store can list them: locally
   and in tests).
+
+## 2026-11-26 — Cheap dashboard reads (data layer plan, step 4)
+
+- **`daily_rollups`** (core `0028`, WITHOUT ROWID). Its key is `(day, revenue_path, playbook, mode,
+  synthetic, dry_run)`, with `dry_run` included at Archie's request. Each cost or revenue event writes
+  its rollup upsert in the **same batch**, so a rollup always equals the sum of its events. A
+  duplicate event fails the whole batch and isn't counted twice. A graph run's end adds one to `runs`.
+  Existing events are backfilled.
+- **Live spend is `mode = 'live' AND dry_run = 0`**: never sandbox, probe or planner money, and never a
+  dry run. Synthetic rows still count toward the caps (as before), so the budget gates bite in
+  simulated worlds; real-money views exclude them.
+- **Spend caps, the digest and Budgets read the rollups** whenever `since` is a day boundary, which
+  covers all three. Steps the caps leave out (printing and postage) are taken off from their own
+  events, a small indexed read, because step isn't part of the rollup key; that keeps
+  `exclude_steps` a config choice, not baked in at write time. Any other `since` sums the events.
+- **Revenue in the rollups:** Stripe test-mode money is stored as `dry_run = 1` (test money isn't
+  real money).
+- **KV cache, 60 seconds** (KV's minimum), for Home, unit economics, Board and the CRM list only. It
+  runs after Access, and its key is the path plus the sorted query. The cost tracker, caps and Budgets
+  never read it.
+- **D1 sessions.** A GET reads through a session that starts from Archie's bookmark (cookie: one per
+  database, HttpOnly, `/api` only), so Archie always reads their own writes. Any other request uses
+  `first-primary`. Turning replication on is a dashboard switch per database (runbook). For Archie,
+  near the primary, it helps little; it's there for the public x402 check.

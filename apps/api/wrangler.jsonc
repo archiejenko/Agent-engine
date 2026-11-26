@@ -79,6 +79,9 @@
   // Closed graph runs are archived here (one object per run). No id: wrangler creates the bucket at
   // the next deploy. Never the agent-house-files bucket.
   "r2_buckets": [{ "binding": "FILES", "bucket_name": "agent-engine-files" }],
+  // Data layer step 4: a 60-second cache for heavy dashboard aggregates (never spend caps or Budgets).
+  // No id: wrangler creates the namespace at the next deploy. Never the agent-house-cache namespace.
+  "kv_namespaces": [{ "binding": "CACHE" }],
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["ChangeFeed"] },
     { "tag": "v2", "new_sqlite_classes": ["BudgetObject"] },

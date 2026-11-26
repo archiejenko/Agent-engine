@@ -236,6 +236,7 @@ export class SqlStorage implements Storage {
   declare promotedPlaybooks: Storage["promotedPlaybooks"];
   declare costEvents: Storage["costEvents"];
   declare revenueEvents: Storage["revenueEvents"];
+  declare dailyRollups: Storage["dailyRollups"];
   declare poolEvents: Storage["poolEvents"];
   declare ledgerRange: Storage["ledgerRange"];
   declare ledgerForEntity: Storage["ledgerForEntity"];

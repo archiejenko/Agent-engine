@@ -97,7 +97,15 @@ Those tables are empty remotely, so nothing is lost; locally, rows are copied fi
 
 None of this touches `agent-house`, its KV namespace or its bucket.
 
-To check: `/api/health` (behind Access) reports `databases: { core: 26, facts: 1, telemetry: 1 }`.
+Also created at that deploy: the KV namespace for the 60-second dashboard cache (binding `CACHE`;
+its name starts with `agent-engine`). It's never the `agent-house-cache` namespace.
+
+To check: `/api/health` (behind Access) reports `databases: { core: 28, facts: 1, telemetry: 2 }`.
+
+**Turn on read replication (free, optional, once).** In the Cloudflare dashboard, go to Storage &
+databases → D1. For each of `agent-engine`, `agent-engine-facts` and `agent-engine-telemetry`, open
+Settings → **Read replication** → Enable. The Worker already reads through D1 sessions with a bookmark
+cookie, so you always see your own writes. Without replication, the same code just reads the primary.
 
 Both routes run the same command. It builds the dashboard, deploys the Worker, attaches `engine.ejtech.co.uk` (creating its DNS record
 and certificate), then applies any pending database migrations. On a brand-new account, create the

@@ -93,6 +93,18 @@ export interface CostEventRow {
   playbook?: string | null;
   step_id?: string | null;
 }
+export interface DailyRollupRow {
+  day: string;
+  revenue_path: string;
+  playbook: string;
+  mode: "live" | "sandbox" | "probe" | "planner";
+  synthetic: boolean;
+  dry_run: boolean;
+  cost_gbp: number;
+  revenue_gbp: number;
+  cost_events: number;
+  runs: number;
+}
 export interface RevenueEventRow {
   event_id: string;
   at: string;
@@ -212,6 +224,42 @@ export function graphStorage(db: SqlDriver) {
     );
   };
   const json = (v: unknown) => (v === undefined || v === null ? null : JSON.stringify(v));
+  const insertStmt = (table: string, row: Record<string, SqlValue>) => {
+    const cols = Object.keys(row);
+    return {
+      sql: `INSERT INTO ${table} (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`,
+      params: cols.map((c) => row[c] ?? null),
+    };
+  };
+  /** The daily_rollups upsert that goes in the same batch as its event (data layer plan, step 4). */
+  const rollup = (k: {
+    day: string;
+    revenue_path: string | null;
+    playbook: string | null;
+    mode: string;
+    synthetic: boolean;
+    dry_run: boolean;
+    cost_gbp?: number;
+    revenue_gbp?: number;
+    cost_events?: number;
+    runs?: number;
+  }) => ({
+    sql: "INSERT INTO daily_rollups (day, revenue_path, playbook, mode, synthetic, dry_run, cost_gbp, revenue_gbp, cost_events, runs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (day, revenue_path, playbook, mode, synthetic, dry_run) DO UPDATE SET cost_gbp = cost_gbp + excluded.cost_gbp, revenue_gbp = revenue_gbp + excluded.revenue_gbp, cost_events = cost_events + excluded.cost_events, runs = runs + excluded.runs",
+    params: [
+      k.day.slice(0, 10),
+      k.revenue_path ?? "",
+      k.playbook ?? "",
+      k.mode,
+      k.synthetic ? 1 : 0,
+      k.dry_run ? 1 : 0,
+      k.cost_gbp ?? 0,
+      k.revenue_gbp ?? 0,
+      k.cost_events ?? 0,
+      k.runs ?? 0,
+    ] as SqlValue[],
+  });
+  const isDayStart = (iso: string) =>
+    /T00:00:00(\.0+)?Z$/.test(iso) || /^\d{4}-\d{2}-\d{2}$/.test(iso);
 
   return {
     graphSpecs: {
@@ -361,10 +409,20 @@ export function graphStorage(db: SqlDriver) {
       ): Promise<void> => {
         const keys = Object.keys(p) as (keyof typeof p)[];
         if (!keys.length) return;
-        await db.run(
-          `UPDATE graph_runs SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE run_id = ?`,
-          [...keys.map((k) => (p[k] ?? null) as SqlValue), runId],
-        );
+        const update = {
+          sql: `UPDATE graph_runs SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE run_id = ?`,
+          params: [...keys.map((k) => (p[k] ?? null) as SqlValue), runId],
+        };
+        if (!p.ended_at) return db.batch([update]);
+        // A run's end also counts it in daily_rollups, once (only while ended_at is still unset), in
+        // the same batch as the update.
+        await db.batch([
+          {
+            sql: "INSERT INTO daily_rollups (day, revenue_path, playbook, mode, synthetic, dry_run, runs) SELECT substr(?, 1, 10), '', graph_id, mode, synthetic, 0, 1 FROM graph_runs WHERE run_id = ? AND ended_at IS NULL ON CONFLICT (day, revenue_path, playbook, mode, synthetic, dry_run) DO UPDATE SET runs = runs + 1",
+            params: [p.ended_at, runId],
+          },
+          update,
+        ]);
       },
       addCost: async (runId: string, gbp: number): Promise<void> => {
         await db.run(
@@ -486,39 +544,89 @@ export function graphStorage(db: SqlDriver) {
     },
 
     costEvents: {
+      /** The event and its daily rollup in ONE batch: they can never disagree. */
       add: async (e: CostEventRow): Promise<void> =>
-        insert("cost_events", {
-          ...e,
-          playbook: e.playbook ?? null,
-          step_id: e.step_id ?? null,
-          synthetic: e.synthetic ? 1 : 0,
-          dry_run: e.dry_run ? 1 : 0,
-        } as unknown as Record<string, SqlValue>),
+        db.batch([
+          insertStmt("cost_events", {
+            ...e,
+            playbook: e.playbook ?? null,
+            step_id: e.step_id ?? null,
+            synthetic: e.synthetic ? 1 : 0,
+            dry_run: e.dry_run ? 1 : 0,
+          } as unknown as Record<string, SqlValue>),
+          rollup({
+            day: e.at,
+            revenue_path: e.revenue_path,
+            playbook: e.playbook ?? null,
+            mode: e.mode,
+            synthetic: e.synthetic,
+            dry_run: e.dry_run,
+            cost_gbp: e.amount_gbp,
+            cost_events: 1,
+          }),
+        ]),
       /**
        * Spend since `since` that counts against the caps: mode "live" and not dry-run (a simulated paid
        * action costs nothing). Synthetic rows count, as they always have, so caps still bite in simulated
        * worlds; real-money views exclude them themselves. Optionally one playbook, leaving out steps.
+       *
+       * From a day boundary (the caps, the digest, Budgets) it reads daily_rollups: a few rows, never
+       * cached, so the tracker is exact the moment an event is written. Excluded steps (printing and
+       * postage) are taken off from their own events, a small indexed read. Any other `since` sums the
+       * events directly.
        */
       spendSince: async (
         since: string,
         o: { playbook?: string; excludeSteps?: string[] } = {},
       ): Promise<number> => {
+        const ex = o.excludeSteps ?? [];
+        const sum = async (sql: string, args: SqlValue[]) =>
+          Number((await all(sql, args))[0]?.s ?? 0);
+        if (isDayStart(since)) {
+          const where = ["day >= ?", "mode = 'live'", "dry_run = 0"];
+          const args: SqlValue[] = [since.slice(0, 10)];
+          if (o.playbook) {
+            where.push("playbook = ?");
+            args.push(o.playbook);
+          }
+          const total = await sum(
+            `SELECT COALESCE(SUM(cost_gbp), 0) AS s FROM daily_rollups WHERE ${where.join(" AND ")}`,
+            args,
+          );
+          if (!ex.length) return total;
+          const exWhere = [
+            "at >= ?",
+            "mode = 'live'",
+            "dry_run = 0",
+            `step_id IN (${ex.map(() => "?").join(", ")})`,
+          ];
+          const exArgs: SqlValue[] = [since.slice(0, 10), ...ex];
+          if (o.playbook) {
+            exWhere.push("playbook = ?");
+            exArgs.push(o.playbook);
+          }
+          return (
+            total -
+            (await sum(
+              `SELECT COALESCE(SUM(amount_gbp), 0) AS s FROM cost_events WHERE ${exWhere.join(" AND ")}`,
+              exArgs,
+            ))
+          );
+        }
         const where = ["at >= ?", "mode = 'live'", "dry_run = 0"];
         const args: SqlValue[] = [since];
         if (o.playbook) {
           where.push("playbook = ?");
           args.push(o.playbook);
         }
-        const ex = o.excludeSteps ?? [];
         if (ex.length) {
           where.push(`(step_id IS NULL OR step_id NOT IN (${ex.map(() => "?").join(", ")}))`);
           args.push(...ex);
         }
-        const rows = await all(
+        return sum(
           `SELECT COALESCE(SUM(amount_gbp), 0) AS s FROM cost_events WHERE ${where.join(" AND ")}`,
           args,
         );
-        return Number(rows[0]?.s ?? 0);
       },
       forRun: async (runId: string): Promise<CostEventRow[]> =>
         (
@@ -553,12 +661,46 @@ export function graphStorage(db: SqlDriver) {
         })),
     },
 
+    dailyRollups: {
+      /** Rollup rows for days in [from, to) (YYYY-MM-DD or ISO), for the cost tracker and Budgets. */
+      range: async (o: { from: string; to: string }): Promise<DailyRollupRow[]> =>
+        (
+          await all(
+            "SELECT * FROM daily_rollups WHERE day >= ? AND day < ? ORDER BY day, revenue_path, playbook, mode",
+            [o.from.slice(0, 10), o.to.slice(0, 10)],
+          )
+        ).map((r) => ({
+          day: r.day as string,
+          revenue_path: r.revenue_path as string,
+          playbook: r.playbook as string,
+          mode: r.mode as DailyRollupRow["mode"],
+          synthetic: Number(r.synthetic) === 1,
+          dry_run: Number(r.dry_run) === 1,
+          cost_gbp: Number(r.cost_gbp),
+          revenue_gbp: Number(r.revenue_gbp),
+          cost_events: Number(r.cost_events),
+          runs: Number(r.runs),
+        })),
+    },
+
     revenueEvents: {
+      /** The event and its daily rollup in ONE batch (Stripe test-mode money counts as dry run). */
       add: async (e: RevenueEventRow): Promise<void> =>
-        insert("revenue_events", { ...e, test_mode: e.test_mode ? 1 : 0 } as unknown as Record<
-          string,
-          SqlValue
-        >),
+        db.batch([
+          insertStmt("revenue_events", {
+            ...e,
+            test_mode: e.test_mode ? 1 : 0,
+          } as unknown as Record<string, SqlValue>),
+          rollup({
+            day: e.settled_at,
+            revenue_path: e.revenue_path,
+            playbook: null,
+            mode: "live",
+            synthetic: false,
+            dry_run: e.test_mode,
+            revenue_gbp: e.amount_gbp,
+          }),
+        ]),
       range: async (o: { from: string; to: string }): Promise<RevenueEventRow[]> =>
         (
           await all(

@@ -53,6 +53,7 @@ import {
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { BRAIN_NOTES } from "./brain.generated.ts";
+import { CACHED_ROUTES, type CacheStore, cacheMiddleware } from "./cache.ts";
 import { claimWebhook, mountClaims } from "./claim-route.ts";
 import { type AskQuestion, mountIdeas } from "./ideas-routes.ts";
 import { mountLetters } from "./letters-route.ts";
@@ -86,6 +87,8 @@ export interface AppDeps {
   workflows?: (env: unknown) => WorkflowPort;
   /** v3 Phase 6: the planner answers a question on an idea card (in-process locally; queued on Workers). */
   ask?: (env: unknown) => AskQuestion;
+  /** Data layer step 4: a 60-second cache for heavy aggregates (KV on Cloudflare). Absent = no cache. */
+  cache?: (env: unknown) => CacheStore | null;
 }
 
 const Decision = z.object({ decision: z.enum(["approve", "reject"]) });
@@ -189,6 +192,8 @@ export function createApp(deps: AppDeps) {
     }
   };
   if (deps.auth) app.use("/api/*", deps.auth);
+  // After auth: only logged-in requests can read a cached answer. Never money caps or Budgets.
+  if (deps.cache) for (const r of CACHED_ROUTES) app.use(r, cacheMiddleware(deps.cache));
 
   app.get("/api/health", async (c) => {
     const storage = deps.storage(c.env);
