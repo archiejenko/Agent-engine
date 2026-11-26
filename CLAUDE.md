@@ -179,7 +179,8 @@ pnpm install          # once
 pnpm dev              # migrate local DB, run API (Node, :8787) + dashboard (:5173)
 pnpm check            # typecheck + lint + tests (what CI runs)
 pnpm test             # tests only
-pnpm cf:deploy        # build dashboard + deploy Worker + apply D1 migrations (needs Cloudflare login)
+pnpm cf:deploy        # build dashboard + deploy Worker + apply D1 migrations. Normally run by the GitHub
+                      # "Deploy" workflow; laptop is the fallback; cloud sessions never deploy
 
 # Phase 1 ingestion (see docs/runbooks/phase1-ingestion.md)
 pnpm rehearse --count 20000   # full pipeline on synthetic data → data/rehearsal.sqlite (no key)

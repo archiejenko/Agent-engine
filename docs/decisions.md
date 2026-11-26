@@ -625,6 +625,19 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   (`packages/verification/src/sources/website/ingest.ts`) uses its own model in Node scripts run by
   hand. Its spend still isn't on the ledger.
 
+## 2026-11-26 — GitHub Actions is the primary deploy path
+
+- **New workflow `.github/workflows/deploy.yml`**, started by hand only (`workflow_dispatch`; nothing
+  deploys on push). It runs the same checks as CI, then `pnpm cf:deploy`, then fails if
+  `https://engine.ejtech.co.uk/api/health` answers 200 without a login (Access must stay in front).
+  One deploy at a time (concurrency group). The secrets `CLOUDFLARE_API_TOKEN` and
+  `CLOUDFLARE_ACCOUNT_ID` live on the GitHub environment `production`, never the repo.
+- **Why:** Archie can deploy from the GitHub app on a phone, and every deploy passes the full check
+  first. It uses the repo's pinned wrangler (`pnpm cf:deploy`) rather than `cloudflare/wrangler-action`,
+  so the laptop and CI run exactly the same command.
+- **The laptop is the fallback** (`wrangler login`). **A cloud session never deploys**: its
+  proxy-injected token breaks wrangler's asset upload (see 2026-11-24). Runbook: `docs/runbooks/deploy.md`.
+
 ## 2026-11-26 — Graph run state in Durable Objects (data layer plan, step 1)
 
 - **One `RunState` Durable Object per graph run** (named by the run id) holds that run's node runs
