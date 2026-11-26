@@ -50,13 +50,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      # Fail closed: without logging in, /api/health must be blocked (redirect or 403), never a 200.
+      # Fail closed: without logging in, the page must redirect to Access and /api must never answer.
       - name: Check the site is still behind Access
         run: |
           sleep 15
           # The Worker's own lock also blocks /api, so a non-200 alone doesn't prove Access is in front.
           # 1) The page, asked for like a browser, must redirect to the Cloudflare Access login.
-          read -r code location < <(curl -s -o /dev/null -H 'Accept: text/html' -w '%{http_code} %{redirect_url}' https://engine.ejtech.co.uk/)
+          read -r code location < <(curl -s -o /dev/null -H 'Accept: text/html' -w '%{http_code} %{redirect_url}\n' https://engine.ejtech.co.uk/)
           echo "Unauthenticated / returned HTTP $code -> ${location:-no redirect}"
           case "$code $location" in
             30[1237]\ https://*.cloudflareaccess.com/*) ;;
