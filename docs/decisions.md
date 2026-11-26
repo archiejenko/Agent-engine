@@ -856,3 +856,22 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   (`costMode: "sandbox"`), so G3's "sandbox spend never appears as live" still holds. Other synthetic
   worlds (gates, rehearsal) record theirs as live and synthetic.
 - **With this, every model call in the codebase writes to `cost_events`.**
+
+## 2026-11-26 — Outreach sends commit in one batch
+
+- **Tool handlers can queue their after-call writes** with `record(fn)`. The registry runs them in
+  one unit together with the effect's result and the call's cost event, which means one batch per
+  database, or nothing.
+- **`send_email` uses it for everything that records the send:**
+  - the outbox row (its id is fixed before the send, so the result can carry it);
+  - the "sent" outcome and the follow-up;
+  - on a blocked send, the blocked row and the contact-limit alert.
+
+  With the effect's result, the cost event and its rollup, that's one core batch. The rule 17 effect
+  pre-write stays on its own, before the provider is called.
+- **If the batch fails, nothing is written.** The effect stays unknown, so a re-delivered job is
+  refused instead of sending twice. A re-delivery after a successful send returns the first result
+  without calling the provider.
+- **Measured:** a send makes 2 core round trips (the pre-write and one batch); before, it made 5 or
+  more. `send_email` has no price, so there's no task cost write; the batch would carry one if it had
+  a price.

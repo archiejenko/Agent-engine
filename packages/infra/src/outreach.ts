@@ -81,7 +81,7 @@ export function registerOutreachTools(
       // The sending provider's key, injected by the registry on live sends only (v3 rule 20).
       keys: ["EMAIL_API_KEY"],
     },
-    async (args, { task, dryRun }) => {
+    async (args, { task, dryRun, record }) => {
       const a = args as SendArgs;
       const now = deps.now?.() ?? Date.now();
       const sender = deps.cfg.sender.from_email;
@@ -93,7 +93,10 @@ export function registerOutreachTools(
           taskId: task.task_id,
           threadId: a.thread_id,
         });
-        if (reason) await recordContactBlocked(deps.storage, a.entity_id, "sme_outreach", reason);
+        if (reason) {
+          const why = reason;
+          record((s) => recordContactBlocked(s, a.entity_id, "sme_outreach", why));
+        }
       }
       if (!reason && !dryRun && sender.endsWith(".invalid"))
         reason = "no real sending domain configured";
@@ -101,18 +104,21 @@ export function registerOutreachTools(
         reason = "company number / registered office are still placeholders";
       const recipient = a.recipients.join(",");
       if (reason) {
-        await deps.storage.outbox.add({
-          task_id: task.task_id,
-          thread_id: a.thread_id,
-          attempt: a.attempt,
-          entity_id: a.entity_id,
-          recipient,
-          sender,
-          subject: a.subject,
-          body,
-          status: "blocked",
-          reason,
-          synthetic: task.synthetic,
+        const blocked = reason;
+        record(async (s) => {
+          await s.outbox.add({
+            task_id: task.task_id,
+            thread_id: a.thread_id,
+            attempt: a.attempt,
+            entity_id: a.entity_id,
+            recipient,
+            sender,
+            subject: a.subject,
+            body,
+            status: "blocked",
+            reason: blocked,
+            synthetic: task.synthetic,
+          });
         });
         return { result: { sent: false, blocked: reason } };
       }
@@ -127,42 +133,48 @@ export function registerOutreachTools(
         },
         dryRun,
       );
-      const id = await deps.storage.outbox.add({
-        task_id: task.task_id,
-        thread_id: a.thread_id,
-        attempt: a.attempt,
-        entity_id: a.entity_id,
-        recipient,
-        sender,
-        subject: a.subject,
-        body,
-        status: dryRun ? "dry_run" : "sent",
-        reason: null,
-        synthetic: task.synthetic,
-      });
-      // Outcome ledger: one "sent" per email (a dry run is recorded as one and never learned from).
-      await recordOutcome(deps.storage, deps.cfg, {
-        event: "sent",
-        entity_id: a.entity_id,
-        task,
-        source: "outbox",
-        dedupe_key: `sent:outbox:${id}`,
-        dry_run: dryRun,
-      });
+      // Everything that records the send goes in ONE batch with the effect's result and the cost
+      // event (the registry runs it), or nothing is written: the effect then stays unknown and rule 17
+      // refuses to send again until someone checks.
+      const id = crypto.randomUUID();
       const policy = deps.cfg.outreach.contact_policy[a.contact_source];
-      if (policy && a.attempt < policy.max_attempts_without_reply) {
-        await deps.storage.followups.schedule({
+      record(async (s) => {
+        await s.outbox.add({
+          id,
+          task_id: task.task_id,
           thread_id: a.thread_id,
-          attempt: a.attempt + 1,
+          attempt: a.attempt,
           entity_id: a.entity_id,
-          opportunity_id: a.thread_id.startsWith("opportunity:")
-            ? a.thread_id.slice("opportunity:".length)
-            : null,
-          due_at: new Date(
-            now + Math.max(policy.min_days_between, deps.cfg.outreach.followup_days) * 86_400_000,
-          ).toISOString(),
+          recipient,
+          sender,
+          subject: a.subject,
+          body,
+          status: dryRun ? "dry_run" : "sent",
+          reason: null,
+          synthetic: task.synthetic,
         });
-      }
+        // Outcome ledger: one "sent" per email (a dry run is recorded as one and never learned from).
+        await recordOutcome(s, deps.cfg, {
+          event: "sent",
+          entity_id: a.entity_id,
+          task,
+          source: "outbox",
+          dedupe_key: `sent:outbox:${id}`,
+          dry_run: dryRun,
+        });
+        if (policy && a.attempt < policy.max_attempts_without_reply)
+          await s.followups.schedule({
+            thread_id: a.thread_id,
+            attempt: a.attempt + 1,
+            entity_id: a.entity_id,
+            opportunity_id: a.thread_id.startsWith("opportunity:")
+              ? a.thread_id.slice("opportunity:".length)
+              : null,
+            due_at: new Date(
+              now + Math.max(policy.min_days_between, deps.cfg.outreach.followup_days) * 86_400_000,
+            ).toISOString(),
+          });
+      });
       return { result: { sent: !dryRun, dry_run: dryRun, outbox_id: id, provider_id: r.id } };
     },
   );
