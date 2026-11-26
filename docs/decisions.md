@@ -732,6 +732,18 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   `first-primary`. Turning replication on is a dashboard switch per database (runbook). For Archie,
   near the primary, it helps little; it's there for the public x402 check.
 
+## 2026-11-26 — Access app for engine.ejtech.co.uk; Access vars filled in
+
+- **Access app "engine"** (self-hosted, destination `engine.ejtech.co.uk` only, policy "Archie only":
+  Allow, Include → Archie's email, login method Cloudflare). It does not cover `ejtech.co.uk` or `www`,
+  which serve the `agent-house` Worker. The earlier runbook assumed a domain-wide app that never existed.
+- **`wrangler.jsonc` vars:** `ACCESS_TEAM_DOMAIN = https://mute-rice-0c6e.cloudflareaccess.com` (full
+  origin: `access.ts` builds `${teamDomain}/cdn-cgi/access/certs` and uses it as the JWT issuer) and
+  `ACCESS_POLICY_AUD` = the app's AUD tag. Neither is secret.
+- **Deploy check tightened.** The first deploy's check passed on a 403 that came from the Worker's own
+  lock while no Access app existed. It now requires both `/` and `/api/health` to redirect to
+  `*.cloudflareaccess.com` without a login.
+
 ## 2026-11-26 — Batched writes (data layer plan, step 5)
 
 - **`storage.unit(fn)`.** Every write inside `fn` is queued, then sent as one batch per database
