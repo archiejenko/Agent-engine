@@ -1,0 +1,62 @@
+name: Deploy
+
+# Primary deploy path (runbook: docs/runbooks/deploy.md). Manual only: nothing deploys on push.
+# Runs the full check first, then the same `pnpm cf:deploy` the laptop runs, then confirms the site
+# is still behind Cloudflare Access.
+on:
+  workflow_dispatch:
+
+# Never two deploys at once; a second run waits for the first.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID live on this GitHub environment, not the repo.
+    environment:
+      name: production
+      url: https://engine.ejtech.co.uk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # The same checks CI runs. A red check never deploys.
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Lint
+        run: pnpm lint
+      - name: Build dashboard
+        run: pnpm build:dashboard
+      - name: Browser for the layout test
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Tests
+        run: pnpm test
+
+      # Bundles brain/, builds the dashboard, deploys the Worker, applies pending D1 migrations.
+      - name: Deploy to Cloudflare
+        run: pnpm cf:deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # Fail closed: without logging in, /api/health must be blocked (redirect or 403), never a 200.
+      - name: Check the site is still behind Access
+        run: |
+          sleep 15
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://engine.ejtech.co.uk/api/health)
+          echo "Unauthenticated /api/health returned HTTP $code"
+          if [ "$code" = "200" ]; then
+            echo "::error::engine.ejtech.co.uk/api/health is reachable without Access. Fix the Access app now."
+            exit 1
+          fi
