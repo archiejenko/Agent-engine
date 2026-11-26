@@ -823,3 +823,14 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   they were.
 - **Fixed on the way:** Needs you's "recent" list now reads newest first from `decided_at`. Before, it
   came back empty when 30 or more decisions were open.
+
+## 2026-11-26 — OpenUI not adopted; cockpit UI built in-house (plan awaiting approval)
+
+- **What:** OpenUI (Thesys generative UI) was installed and reviewed for the Home cockpit, then dropped
+  at Archie's call. The cockpit is planned in-house in `brain/build-reports/cockpit-ui-plan.md`.
+- **Why:** its dashboards run model-written scripts (breaks rule 4, all maths in code), send data-tool
+  results to Thesys's servers when scripts run, and add a third-party key and vendor storage, all for a
+  single-user dashboard over known data.
+- **Kept from it, as our own code:** layout as data (Zod-checked JSON), one registry of read-only panel
+  queries, panels that load and fail on their own, and its chart vocabulary (KPI with change vs the
+  previous period, funnel, leaderboard, segmented bar, heatmap, small multiples, filter bar).
