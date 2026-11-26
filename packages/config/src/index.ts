@@ -647,3 +647,5 @@ export type IdeasConfig = z.infer<typeof IdeasConfig>;
 export function loadIdeasConfig(raw: unknown = ideasJson): IdeasConfig {
   return IdeasConfig.parse(raw);
 }
+
+export { BUILT_IN_LAYOUTS, loadLayout } from "./layouts/index.ts";

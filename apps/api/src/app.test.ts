@@ -1,3 +1,4 @@
+import { PANEL_QUERIES } from "@ae/contracts";
 import type { Storage } from "@ae/storage";
 import { openSqliteStorage } from "@ae/storage/sqlite";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
@@ -210,5 +211,22 @@ describe("Cloudflare Access check", () => {
 
   it("allows a valid Access token", async () => {
     expect((await get(appWith(TEAM, AUD), await sign({}))).status).toBe(200);
+  });
+
+  it("every /api/panels/* route is refused without Access (cockpit U1), and served with it", async () => {
+    const panel = (app: ReturnType<typeof appWith>, name: string, token?: string) =>
+      app.request(
+        `/api/panels/${name}`,
+        token ? { headers: { "cf-access-jwt-assertion": token } } : {},
+      );
+    const good = await sign({});
+    for (const name of [...PANEL_QUERIES, "no_such_panel"]) {
+      const notConfigured = await panel(appWith("", ""), name, good);
+      expect(notConfigured.status, name).toBe(403);
+      expect(await notConfigured.json()).toEqual({ error: "access_not_configured" });
+      expect((await panel(appWith(TEAM, AUD), name)).status, name).toBe(403);
+      expect((await panel(appWith(TEAM, AUD), name, await forge())).status, name).toBe(403);
+    }
+    expect((await panel(appWith(TEAM, AUD), "kpis", good)).status).toBe(200);
   });
 });

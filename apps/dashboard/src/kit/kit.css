@@ -1,0 +1,492 @@
+/* Cockpit kit (cockpit UI plan §3.3). Colours come only from the tokens in styles.css. Numbers use
+   tabular figures so columns line up. Under 700px every panel takes the full width. */
+.num,
+.kpi-value,
+.leaderboard td,
+.segbar-legend .num {
+  font-variant-numeric: tabular-nums;
+}
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 1rem;
+}
+.span-1 {
+  grid-column: span 1;
+}
+.span-2 {
+  grid-column: span 2;
+}
+.span-3 {
+  grid-column: span 3;
+}
+.span-4 {
+  grid-column: span 4;
+}
+@media (max-width: 700px) {
+  .panel-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .panel-grid > * {
+    grid-column: 1 / -1;
+  }
+}
+.panel {
+  min-width: 0;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-bg);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.panel-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.panel-drill {
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+.panel-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--c-muted);
+  margin-top: auto;
+}
+.panel-empty {
+  color: var(--c-muted);
+  margin: 0.4rem 0;
+}
+.panel-error {
+  color: var(--c-danger);
+}
+.panel-error p {
+  margin: 0 0 0.4rem;
+}
+.panel-skeleton {
+  display: grid;
+  gap: 6px;
+}
+.panel-skeleton span {
+  display: block;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--c-grid);
+}
+.panel-skeleton span:nth-child(2) {
+  width: 70%;
+}
+.panel-skeleton span:nth-child(3) {
+  width: 45%;
+}
+
+/* Kind badges: every number says what it is. */
+.kind-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.kind-real {
+  color: var(--c-kind-real);
+}
+.kind-estimated {
+  color: var(--c-kind-estimated);
+}
+.kind-assumed {
+  color: var(--c-kind-assumed);
+}
+.kind-dry_run {
+  color: var(--c-kind-dry-run);
+}
+.kind-synthetic {
+  color: var(--c-kind-synthetic);
+}
+
+/* KPI */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.kpi {
+  min-width: 0;
+  border-left: 3px solid var(--c-border);
+  padding-left: 8px;
+}
+.kpi-label {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--c-muted);
+}
+.kpi-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.kpi-change {
+  font-size: 0.8rem;
+}
+.kpi-change.good {
+  color: var(--c-success);
+}
+.kpi-change.bad {
+  color: var(--c-danger);
+}
+.kpi-change.flat {
+  color: var(--c-muted);
+}
+.kpi-range,
+.kpi-note {
+  font-size: 0.75rem;
+}
+.kpi-spark {
+  width: 100%;
+  max-width: 180px;
+}
+
+/* Charts */
+.chart {
+  width: 100%;
+  min-width: 0;
+}
+.chart-legend {
+  font-size: 0.8rem;
+  color: var(--c-muted);
+  margin: 2px 0 0;
+}
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-right: 3px;
+}
+.swatch.revenue {
+  background: var(--c-revenue);
+}
+.swatch.spend {
+  background: var(--c-spend);
+}
+.multiples {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.multiple {
+  margin: 0;
+  min-width: 0;
+}
+.multiple figcaption {
+  font-size: 0.8rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  align-items: baseline;
+}
+
+/* Funnel */
+.funnel {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.funnel-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+.funnel-track,
+.lb-track,
+.cap-track {
+  height: 8px;
+  background: var(--c-grid);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.funnel-bar,
+.lb-bar,
+.cap-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--c-accent);
+  transform-origin: left center;
+}
+.lb-bar.neg {
+  background: var(--c-danger);
+}
+.funnel-meta {
+  font-size: 0.75rem;
+}
+
+/* Leaderboard */
+.leaderboard {
+  width: 100%;
+  font-size: 0.88rem;
+}
+.leaderboard th {
+  font-weight: 600;
+  color: var(--c-muted);
+  border-bottom: 1px solid var(--c-border);
+}
+.leaderboard tr.killed td {
+  color: var(--c-muted);
+}
+.lb-track {
+  height: 5px;
+  margin-top: 3px;
+}
+
+/* Segmented bar */
+.segbar-track {
+  display: flex;
+  height: 14px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--c-grid);
+}
+.seg {
+  flex-basis: 0;
+  min-width: 2px;
+}
+.seg-0 {
+  background: var(--c-seg-0);
+}
+.seg-1 {
+  background: var(--c-seg-1);
+}
+.seg-2 {
+  background: var(--c-seg-2);
+}
+.seg-3 {
+  background: var(--c-seg-3);
+}
+.seg-4 {
+  background: var(--c-seg-4);
+}
+.seg-5 {
+  background: var(--c-seg-5);
+}
+.segbar-legend {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+.segbar-legend li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: baseline;
+}
+.segbar-name {
+  flex: 1 1 auto;
+}
+.segbar p {
+  margin: 6px 0 0;
+}
+.cap {
+  margin-top: 6px;
+}
+.cap-fill {
+  background: var(--c-spend);
+}
+
+/* Heatmap */
+.heatmap-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.heatmap {
+  font-size: 0.85rem;
+}
+.heatmap td.heat {
+  text-align: center;
+  min-width: 56px;
+  background: color-mix(in srgb, var(--c-accent) calc(var(--i, 0) * 100%), var(--c-bg));
+}
+.heatmap th[scope="row"] {
+  text-align: left;
+  font-weight: 500;
+}
+
+/* Status list, health strip */
+.status-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.status-list li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.status-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.status-cost {
+  white-space: nowrap;
+}
+.dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--c-info);
+}
+.dot.ok,
+.dot.running {
+  background: var(--c-success);
+}
+.dot.warn,
+.dot.waiting,
+.dot.paused {
+  background: var(--c-warning);
+}
+.dot.bad {
+  background: var(--c-danger);
+}
+.health-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.health-strip .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+/* Decisions */
+.decision-list {
+  display: grid;
+  gap: 10px;
+}
+.decision-card {
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--c-surface);
+}
+.decision-card header {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+.decision-card .kind {
+  font-size: 0.75rem;
+  color: var(--c-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.decision-facts {
+  margin: 4px 0;
+  font-size: 0.85rem;
+}
+.decision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Filter bar */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--c-border);
+  margin-bottom: 10px;
+}
+.seg-control {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.seg-control button.on,
+.chips button.on {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: #fff;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.chips .chip {
+  border-radius: 999px;
+  padding: 1px 10px;
+}
+.filter-dates {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.toggle {
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+.sim-banner {
+  border-color: var(--c-kind-synthetic);
+  color: var(--c-kind-synthetic);
+}
+fieldset.seg-control,
+fieldset.chips {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+/* A wide table scrolls inside its own panel, never the page. */
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}

@@ -41,6 +41,9 @@ const PAGES = [
   "/inbox/letters",
   "/controls",
   "/controls/keys",
+  // Hidden (not in the nav): the cockpit component kit, every component on sample and empty data plus
+  // every panel query live (cockpit U1).
+  "/kit",
 ];
 const TYPES: Record<string, string> = {
   ".html": "text/html",
@@ -128,13 +131,30 @@ async function sidewaysScroll(base: string, hash: string, width: number) {
       null,
       { timeout: 20_000 },
     );
+    // Cockpit panels load on their own: wait until none is still loading (no-op on other pages).
+    await page.waitForFunction(
+      () => !document.querySelector('[data-panel-state="loading"]'),
+      null,
+      {
+        timeout: 20_000,
+      },
+    );
     // Open every collapsed section too (e.g. score breakdowns), so they're measured as well.
     await page.evaluate(() => {
       for (const d of document.querySelectorAll("details")) d.open = true;
     });
-    return await page.evaluate(
+    const x = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
+    // AE_SCREENS=docs/screens saves the kit screenshots for the cockpit gate report.
+    if (process.env.AE_SCREENS && hash === "/kit") {
+      const kind = base === emptyUrl ? "kit-empty" : "kit";
+      await page.screenshot({
+        path: join(ROOT, process.env.AE_SCREENS, `dashboard-${kind}-${width}-light.png`),
+        fullPage: true,
+      });
+    }
+    return x;
   } finally {
     await page.close();
   }

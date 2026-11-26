@@ -1,5 +1,33 @@
 /* Shared dashboard styles. Light only (no dark theme yet). Mobile: under 600px tables become stacked
    cards (labels come from each table's header row, see useTableLabels) and nothing scrolls sideways. */
+/* Colour tokens (cockpit UI plan §3.3). Light theme only for now; a dark theme later only has to
+   redefine these on :root. Kit components use only these variables, never raw colours. */
+:root {
+  --c-bg: #fff;
+  --c-surface: #fafbfc;
+  --c-text: #1b1f24;
+  --c-muted: #5b6470;
+  --c-border: #e1e4e8;
+  --c-grid: #eef0f2;
+  --c-accent: #2f5ed8;
+  --c-revenue: #2e8b57;
+  --c-spend: #d0632a;
+  --c-success: #1f8a4c;
+  --c-warning: #b7791f;
+  --c-danger: #c53030;
+  --c-info: #5b6470;
+  --c-kind-real: #1f8a4c;
+  --c-kind-estimated: #2f5ed8;
+  --c-kind-assumed: #8a5a00;
+  --c-kind-dry-run: #6b46c1;
+  --c-kind-synthetic: #c53030;
+  --c-seg-0: #2f5ed8;
+  --c-seg-1: #d0632a;
+  --c-seg-2: #2e8b57;
+  --c-seg-3: #8a5a00;
+  --c-seg-4: #6b46c1;
+  --c-seg-5: #0f7c8c;
+}
 * {
   box-sizing: border-box;
 }

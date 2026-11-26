@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Board } from "./Board.tsx";
 import { Controls } from "./Controls.tsx";
 import { Crm } from "./Crm.tsx";
@@ -9,6 +9,9 @@ import { Inbox } from "./Inbox.tsx";
 import { ControlsTabs, Keys } from "./Keys.tsx";
 import { Plan } from "./Plan.tsx";
 import { Vault } from "./Vault.tsx";
+
+// The cockpit kit (and its chart library) loads only when a page that uses it opens.
+const KitPage = lazy(() => import("./kit/KitPage.tsx").then((m) => ({ default: m.KitPage })));
 
 /** Tiny hash router. v3: seven pages; old links redirect to where their content moved. */
 function useRoute() {
@@ -66,7 +69,12 @@ export function App() {
           </a>
         ))}
       </nav>
-      {route.startsWith("/crm") ? (
+      {route.startsWith("/kit") ? (
+        // Hidden: the cockpit component kit (not in the navigation).
+        <Suspense fallback={<p className="muted">Loading the kit…</p>}>
+          <KitPage />
+        </Suspense>
+      ) : route.startsWith("/crm") ? (
         <Crm route={route} />
       ) : route.startsWith("/inbox") ? (
         <Inbox route={route} />

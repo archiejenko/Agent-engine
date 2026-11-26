@@ -834,3 +834,34 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **Kept from it, as our own code:** layout as data (Zod-checked JSON), one registry of read-only panel
   queries, panels that load and fail on their own, and its chart vocabulary (KPI with change vs the
   previous period, funnel, leaderboard, segmented bar, heatmap, small multiples, filter bar).
+
+## 2026-11-26 — Cockpit U1: choices made while building (plan `brain/build-reports/cockpit-ui-plan.md`)
+
+Approved by Archie before the build: Recharts; runway = pool balance ÷ 7-day average live spend; light
+theme only (CSS variables); default view last 30 days, live only, compare on. Made during the build
+(each one is in the U1 gate report for Archie to confirm or change):
+
+- **Runway, exactly.** Pool balance = every `pool_events` row (top-ups *and* adjustments, because an
+  adjustment corrects a top-up) − live spend since the day of the first pool event. The average is the
+  last 7 *complete* days (today is partial). Days left are rounded to 0.1; "top up by" = today + whole
+  days left. No top-up recorded → "–" and "record a top-up in Controls". Live = mode 'live', synthetic
+  0, dry_run 0, whatever the simulated switch says.
+- **Never cached** (always live): `runway`, `spend_split`, `playbook_board` (they read caps or the pool),
+  plus `health` (the kill switch you just flipped must show at once) and `needs_you` (a cached queue
+  would show an item again after you decide it). Cached for 60 s: `kpis`, `money_by_day`, `brief`,
+  `live_runs`, `pipeline`.
+- **Holdout:** panel rows that name a holdout company are dropped entirely, and arm/cohort fields are
+  stripped. The aggregate "Ranked vs holdout" lift stays (it names no company).
+- **The API does every sum the browser would have needed:** a `days` period parameter (the 7/30/90
+  presets), a `share` per funnel stage, `bar_share` and `rank` on the leaderboard, a shared `scale_max`
+  for small multiples, and a `value_kind` badge per chart or list.
+- **Pipeline:** the first three stages count idea cards, the last two count revenue paths (revenue isn't
+  recorded per idea), so there is no conversion rate between those two groups.
+- **Leaderboard revenue** is attributed to a playbook through `revenue_events.task_id`; revenue with no
+  task shows as "<revenue path> (no playbook)". Test-mode money is left out.
+- **Decision cards** for drafts, print batches, plans and site publishing link to the full item instead
+  of showing approve buttons: those need reading before deciding.
+- **Recharts 3.10.1**, loaded only with the kit (its own chunk), so pages without charts don't pay for it.
+- **Approvals static test:** kit code may post only to `/api/decisions/:id/decide`. Four older pages
+  post approvals to their own routes (owner approvals, promote, board action, print batch); the test
+  lists them, checks each records through the decisions path on the server, and fails on any new one.
