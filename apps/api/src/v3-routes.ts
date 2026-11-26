@@ -250,9 +250,9 @@ export function mountV3(
     const open = await needsYou(d, { ...(type ? { type } : {}) });
     return c.json({
       open,
-      recent: (await d.storage.decisions.list({ limit: 30 }))
-        .filter((x) => x.status !== "open")
-        .slice(0, 15),
+      // Newest first. (It used to take 30 rows sorted open-first and drop the open ones, so with 30+
+      // open decisions the recent list came back empty.)
+      recent: await d.storage.decisions.recentClosed(15),
     });
   });
 

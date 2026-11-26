@@ -351,12 +351,15 @@ export function phase2(db: SqlDriver, bodies: Bodies) {
         const r = (await db.all<Row>("SELECT * FROM tasks WHERE task_id = ?", [id]))[0];
         return r ? rowToTask(r) : null;
       },
-      /** Tasks about one company (source_ref ends ":entity:<number>"), newest first. */
+      /**
+       * Tasks about one company (source_ref ends ":entity:<number>"), newest first. `entity_ref` is a
+       * virtual column computed from source_ref, with an index (core 0029), instead of a LIKE scan.
+       */
       forEntity: async (entityId: string) =>
         (
           await db.all<Row>(
-            "SELECT * FROM tasks WHERE source_ref LIKE ? ORDER BY created_at DESC LIMIT 200",
-            [`%:entity:${entityId}`],
+            "SELECT * FROM tasks WHERE entity_ref = ? ORDER BY created_at DESC LIMIT 200",
+            [entityId],
           )
         ).map(rowToTask),
       update: async (

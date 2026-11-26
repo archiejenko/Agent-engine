@@ -164,6 +164,10 @@ describe("data layer migrations run up, down and up again", () => {
   it.each([
     ["core", "0027_bodies.sql"],
     ["telemetry", "0002_bodies.sql"],
+    ["core", "0028_daily_rollups.sql"],
+    ["core", "0029_indexes.sql"],
+    ["facts", "0002_indexes.sql"],
+    ["telemetry", "0003_indexes.sql"],
   ] as const)("%s %s", async (store, n) => {
     const all = loadMigrations(migrationsDirFor(store)).filter((m) => m.name <= n);
     const before = sqliteDriver(":memory:");
@@ -186,6 +190,54 @@ describe("data layer migrations run up, down and up again", () => {
     expect(await snap(db)).toEqual(await snap(before));
     expect(await migrate(db, all)).toEqual([n]);
     expect(await snap(db)).toEqual(up);
+  });
+});
+
+describe("the index audit (step 6) keeps every row", () => {
+  it("WITHOUT ROWID rebuilds copy the rows across, and entity_ref matches the old LIKE", async () => {
+    const facts = sqliteDriver(":memory:");
+    const fm = loadMigrations(migrationsDirFor("facts"));
+    await migrate(
+      facts,
+      fm.filter((m) => m.name < "0002"),
+    );
+    await facts.run(
+      "INSERT INTO drift_metrics (day, source, field, volume, null_rate, match_rate) VALUES ('2026-11-26', 'ch', 'f', 3, 0, 1)",
+    );
+    await migrate(facts, fm);
+    expect(await facts.all("SELECT day, volume FROM drift_metrics")).toEqual([
+      { day: "2026-11-26", volume: 3 },
+    ]);
+    const tel = sqliteDriver(":memory:");
+    const tm = loadMigrations(migrationsDirFor("telemetry"));
+    await migrate(
+      tel,
+      tm.filter((m) => m.name < "0003"),
+    );
+    await tel.run("INSERT INTO trigger_stats (day, rule_id, seen) VALUES ('2026-11-26', 'r', 7)");
+    await migrate(tel, tm);
+    expect(await tel.all("SELECT seen FROM trigger_stats")).toEqual([{ seen: 7 }]);
+    const core = sqliteDriver(":memory:");
+    await migrate(core, loadMigrations(migrationsDirFor("core")));
+    const refs = [
+      "opportunity:o1:entity:01234567",
+      "entity:01234567",
+      "card:c:entity:7",
+      "batch:b",
+    ];
+    for (const [i, ref] of refs.entries())
+      await core.run(
+        "INSERT INTO tasks (task_id, idempotency_key, playbook, playbook_version, revenue_path, source_ref, lane, autonomy, status, budget_gbp, priority, created_at, updated_at) VALUES (?, ?, 'p', 1, 'r', ?, 'open', 'L0', 'queued', 1, 'normal', '2026-11-26', '2026-11-26')",
+        [`t${i}`, `k${i}`, ref],
+      );
+    for (const id of ["01234567", "7"])
+      expect(
+        await core.all("SELECT task_id FROM tasks WHERE entity_ref = ? ORDER BY task_id", [id]),
+      ).toEqual(
+        await core.all("SELECT task_id FROM tasks WHERE source_ref LIKE ? ORDER BY task_id", [
+          `%:entity:${id}`,
+        ]),
+      );
   });
 });
 

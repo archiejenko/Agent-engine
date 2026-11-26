@@ -792,10 +792,11 @@ describe("cost ledger at call time (data layer plan, commit 0)", () => {
     await withMeter(live, { mode: "planner" }).complete(req);
     await live.complete(req);
     const events = await storage.costEvents.range(ALL);
-    expect(events.map((e) => e.mode)).toEqual(["sandbox", "planner", "live"]);
+    // Same millisecond: compare as a set, not by order.
+    expect(events.map((e) => e.mode).sort()).toEqual(["live", "planner", "sandbox"]);
     expect(events.every((e) => e.amount_gbp > 0)).toBe(true);
     expect(await storage.costEvents.spendSince(ALL.from)).toBeCloseTo(
-      events[2]?.amount_gbp ?? -1,
+      events.find((e) => e.mode === "live")?.amount_gbp ?? -1,
       12,
     );
   });

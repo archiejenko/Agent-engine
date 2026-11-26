@@ -767,3 +767,45 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **Not converted yet** (each makes a few single writes; flagged in the report): outreach send
   internals, `decide()`, `storeSignals` with its Board tile, the idea-card store, an experiment's
   end, and letters with their print batch.
+
+## 2026-11-26 — Index audit (data layer plan, step 6)
+
+- **Method.** Every query was explained against its own database with `EXPLAIN QUERY PLAN`: the 121
+  that a synthetic run and the dashboard pages actually executed, plus every fixed SQL string in
+  `packages/storage`, 282 in all. Queries with a full scan went from 72 to 22; the 22 left are on
+  small, bounded tables. The report is `docs/gates/data-layer-explain.md`, and
+  `apps/api/src/explain.test.ts` fails if a main dashboard page fully scans a growing table.
+- **Added indexes** (migrations core `0029`, facts `0002`, telemetry `0003`, each with a down file):
+  - core:
+    - `tasks(created_at)` and `tasks(entity_ref, created_at)`, where `entity_ref` is a new virtual
+      column computed from `source_ref`; `tasks.forEntity` now does an exact lookup instead of a
+      `LIKE '%:entity:N'` scan;
+    - `outcomes(observed_at)`, `outcomes(opportunity_id, observed_at)`, and a partial covering
+      `outcomes_arms` for the holdout counts;
+    - `outbox(created_at)` and `outbox(entity_id, created_at)`;
+    - `decisions(decided_at)`, `review_sessions(decided_at)`, `site_claims(updated_at)`,
+      `alerts(acknowledged_at, id)`;
+    - `decision_log(graph_id, at)` and `decision_log(at)`;
+    - `experiments(market_key, started_at)` and `experiments(status)`;
+    - `playbook_examples(playbook, step_id, id)`, `owner_approvals(created_at)`,
+      `idea_cards(hypothesis_id, created_at)`, `letters(entity_id, created_at)`,
+      `scout_signals(observed_at)`, `payments_ledger(rail, created_at)`;
+  - facts: `runs(status)` (every claims query checks for rolled-back runs),
+    `module_runs(module, created_at)`, `claim_rejections(rejected_at)`,
+    `quarantined_matches(resolved_at, created_at)`;
+  - telemetry: `dead_letters(resolved_at, received_at)`.
+- **Dropped only indexes that are provably redundant:** `cost_events_at`, because
+  `cost_events_spend` starts with the same column, and `claim_observations_claim`, because the table's
+  key starts with `claim_id`. 23 other indexes weren't used in the sample. They're kept, because a
+  sample can't prove a path never runs; for example, `verified_fact_versions_pit` serves point-in-time
+  queries.
+- **WITHOUT ROWID** (rebuilt by copy, drop, create, copy back, so rows are kept):
+  - facts: claim_observations, signal_values, universe_members, drift_metrics, ingest_progress,
+    dropped_fields, source_pauses;
+  - telemetry: trigger_stats;
+  - core: cohort_members, followups.
+
+  `daily_rollups` and the run store's tables were created that way. Wide-row tables were left as
+  they were.
+- **Fixed on the way:** Needs you's "recent" list now reads newest first from `decided_at`. Before, it
+  came back empty when 30 or more decisions were open.

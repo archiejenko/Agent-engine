@@ -100,7 +100,7 @@ None of this touches `agent-house`, its KV namespace or its bucket.
 Also created at that deploy: the KV namespace for the 60-second dashboard cache (binding `CACHE`;
 its name starts with `agent-engine`). It's never the `agent-house-cache` namespace.
 
-To check: `/api/health` (behind Access) reports `databases: { core: 28, facts: 1, telemetry: 2 }`.
+To check: `/api/health` (behind Access) reports `databases: { core: 29, facts: 2, telemetry: 3 }`.
 
 **Turn on read replication (free, optional, once).** In the Cloudflare dashboard, go to Storage &
 databases → D1. For each of `agent-engine`, `agent-engine-facts` and `agent-engine-telemetry`, open

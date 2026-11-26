@@ -298,6 +298,14 @@ export function v3Storage(db: SqlDriver, bodies: Bodies, blobs: BlobStore) {
       setError: async (id: string, error: string) => {
         await db.run("UPDATE decisions SET error = ? WHERE id = ?", [error, id]);
       },
+      /** The latest closed decisions (decided or defaulted), newest first, from the decided_at index. */
+      recentClosed: async (limit: number) =>
+        (
+          await all(
+            "SELECT * FROM decisions WHERE decided_at IS NOT NULL ORDER BY decided_at DESC LIMIT ?",
+            [limit],
+          )
+        ).map(toDecision),
       expired: async (now: string) =>
         (
           await all(
