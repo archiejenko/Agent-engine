@@ -394,16 +394,24 @@ export function v3Storage(db: SqlDriver) {
        * so it's for tests and gates, not request paths.
        */
       tablesContaining: async (needle: string): Promise<string[]> => {
-        const tables = (
-          await all(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name",
-          )
-        ).map((r) => r.name as string);
+        // Every store, not just core (data layer plan, step 2): a leak in facts or telemetry counts too.
+        const stores = (db as { stores?: Record<string, SqlDriver | undefined> }).stores;
+        const drivers = [...new Set(stores ? Object.values(stores) : [db])].filter(
+          (d): d is SqlDriver => !!d,
+        );
         const hits: string[] = [];
-        for (const t of tables) {
-          const rows = await all(`SELECT * FROM "${t.replace(/"/g, "")}"`);
-          if (rows.some((r) => JSON.stringify(r).includes(needle))) hits.push(t);
+        for (const d of drivers) {
+          const tables = (
+            await d.all<{ name: string }>(
+              "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name <> 'd1_migrations' ORDER BY name",
+            )
+          ).map((r) => r.name);
+          for (const t of tables) {
+            const rows = await d.all(`SELECT * FROM "${t.replace(/"/g, "")}"`);
+            if (rows.some((r) => JSON.stringify(r).includes(needle))) hits.push(t);
+          }
         }
+        hits.sort();
         return hits;
       },
     },

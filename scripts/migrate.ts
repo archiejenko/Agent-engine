@@ -1,12 +1,11 @@
 import { resolve } from "node:path";
-import { migrate } from "@ae/storage";
-import { loadMigrations } from "@ae/storage/migrations-fs";
-import { sqliteDriver } from "@ae/storage/sqlite";
+import { openSqliteStorage, storePaths } from "@ae/storage/sqlite";
 
-// Applies pending migrations to the local database file (data/dev.sqlite).
+// Applies pending migrations to the local databases (data layer plan, step 2): data/dev.sqlite (core),
+// data/dev-facts.sqlite, data/dev-telemetry.sqlite, plus the local-only data/dev-runtime.sqlite. An
+// older single-file dev.sqlite is split on first open, with its rows copied into the new files.
 const path = resolve(import.meta.dirname, "../data/dev.sqlite");
-const driver = sqliteDriver(path);
-const applied = await migrate(driver, loadMigrations());
-await driver.close();
-console.log(applied.length ? `Applied: ${applied.join(", ")}` : "Database up to date.");
-console.log(`Database: ${path}`);
+const storage = await openSqliteStorage(path);
+console.log(`Migrations applied: ${JSON.stringify((await storage.health()).databases)}`);
+await storage.close();
+console.log(`Databases: ${Object.values(storePaths(path)).join(", ")}`);

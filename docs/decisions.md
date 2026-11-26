@@ -661,3 +661,31 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   creates them at Archie's next deploy. Nothing was created remotely.
 - **Flag:** a run that never reaches `finish` (an instance terminated by hand) keeps its object until
   someone closes it. It's tiny, but it's billed for storage.
+
+## 2026-11-26 — Three databases (data layer plan, step 2)
+
+- **Core stays `agent-engine`**, with its 0001–0025 history unchanged; it moves to
+  `migrations/core/`. Two new D1 databases are added:
+  - `agent-engine-facts` (binding FACTS): verification, universe, measurement and the opportunity
+    engine; 21 tables, with claims' append-only triggers kept word for word;
+  - `agent-engine-telemetry` (binding TELEMETRY): `run_log`, `trigger_stats`, `runtime_status` and
+    `dead_letters`.
+
+  Each new database starts from a baseline copied exactly from today's schema. The other append-only
+  triggers (cost_events, revenue_events, pool_events, idea_thread) stay in core, unchanged.
+- **One routing driver.** Each SQL statement goes to the database of the tables it names, using the
+  placement map (`placement.ts`). A statement or a batch that names two databases is refused.
+  This kept all 335 queries as they were. A test scans every SQL string in the storage package; only
+  one crossed (the local engine's `steps_done` count), and it's now two statements.
+- **Cross-database foreign keys removed:** `opportunities.run_id → runs` (core is rebuilt without it;
+  the values are kept) and `run_log.task_id → tasks` (the telemetry baseline has no foreign key).
+- **Core migration `0026_split` drops the moved tables.** Remotely they're empty. Locally, opening an
+  older single-file `dev.sqlite` first copies every moved table's rows into its new file, so
+  ingested Companies House data and the run log survive. It also drops the unused `graph_node_runs`
+  and `graph_state_values` (superseded in step 1) and the workflow step and event tables, which are
+  now local-only in `dev-runtime.sqlite`.
+- **Local file names:** `dev.sqlite` stays the core file (rather than being renamed `core.sqlite`),
+  with `dev-facts.sqlite`, `dev-telemetry.sqlite` and `dev-runtime.sqlite` beside it. Every script that
+  reads `AE_DB` keeps working.
+- **`pnpm cf:deploy`** applies migrations to all three databases. The deploy token needs R2 edit too
+  (`docs/runbooks/deploy.md`).

@@ -69,6 +69,11 @@ import { CompaniesHouseClient, defaultContext, HttpChangeStream } from "@ae/veri
  */
 type Vars = Record<string, string | undefined>;
 
+/** Storage over the three D1 databases (data layer plan, step 2): core, facts and telemetry. */
+export function storageOf(env: Env): Storage {
+  return createD1Storage({ core: env.DB, facts: env.FACTS, telemetry: env.TELEMETRY });
+}
+
 /**
  * v3 rule 20: keys come from Cloudflare Secrets Store bindings (or a Worker secret of the same name during
  * cutover). Writes from the Keys page use CF_SECRETS_TOKEN ("Account Secrets Store Edit" only).
@@ -93,7 +98,7 @@ export async function keyFor(ring: KeyRing, name: string) {
 
 async function runtimeFor(env: Env): Promise<JobRuntime> {
   const vars = env as unknown as Vars;
-  const storage = createD1Storage(env.DB);
+  const storage = storageOf(env);
   const models = loadModelsConfig();
   const ring = new KeyRing(workerKeyStore(env), storage);
   // The real model only when explicitly switched on (cutover); otherwise the deterministic fake.
@@ -136,7 +141,7 @@ async function runtimeFor(env: Env): Promise<JobRuntime> {
 
 export async function scheduled(env: Env) {
   await env.JOBS.sendBatch(scheduledJobs().map((body) => ({ body })));
-  await createD1Storage(env.DB).runtimeStatus.beat("cron", {
+  await storageOf(env).runtimeStatus.beat("cron", {
     jobs: scheduledJobs().map((j) => j.kind),
   });
   // Make sure the change feed's alarm is running (idempotent).
@@ -149,11 +154,11 @@ export async function scheduled(env: Env) {
 /** Cloudflare Email Routing → the outreach mailbox (decision D1). Stored as untrusted; never forwarded. */
 export async function email(message: ForwardableEmailMessage, env: Env) {
   const raw = await new Response(message.raw).text();
-  await receiveRawEmail(createD1Storage(env.DB), { from: message.from, to: message.to, raw });
+  await receiveRawEmail(storageOf(env), { from: message.from, to: message.to, raw });
 }
 
 export async function queue(batch: MessageBatch<Job>, env: Env) {
-  const storage = createD1Storage(env.DB);
+  const storage = storageOf(env);
   if (batch.queue === "ae-jobs-dlq") {
     for (const m of batch.messages) {
       await recordDeadLetter(storage, {
@@ -187,7 +192,7 @@ export async function queue(batch: MessageBatch<Job>, env: Env) {
 export class ChangeFeed extends DurableObject<Env> {
   private async source(): Promise<ChangeFeedSource | null> {
     const key = await keyFor(
-      new KeyRing(workerKeyStore(this.env), createD1Storage(this.env.DB)),
+      new KeyRing(workerKeyStore(this.env), storageOf(this.env)),
       "CH_STREAM_KEY",
     );
     return key
@@ -201,7 +206,7 @@ export class ChangeFeed extends DurableObject<Env> {
   }
 
   override async alarm() {
-    const storage = createD1Storage(this.env.DB);
+    const storage = storageOf(this.env);
     const source = await this.source();
     if (!source) {
       await storage.runtimeStatus.beat("change_feed", { configured: false, last_event_at: null });
@@ -251,7 +256,7 @@ export class EngineWorkflow extends WorkflowEntrypoint<Env, EngineParams> {
       playbooks: rt.service.playbooks,
     }).find((w) => w.name === workflow) as WorkflowDef<unknown, unknown> | undefined;
     if (!def) throw new Error(`unknown workflow ${workflow}`);
-    const storage: Storage = createD1Storage(this.env.DB);
+    const storage: Storage = storageOf(this.env);
     const cfg = loadInfraConfig();
     const inst = await step.do("load instance", async () => {
       const i = await storage.workflows.get(instance_id);
@@ -325,7 +330,7 @@ export class GraphRunWorkflow extends WorkflowEntrypoint<Env, EngineParams> {
   override async run(event: WorkflowEvent<EngineParams>, step: WorkflowStep) {
     const { params, instance_id } = event.payload;
     const rt = await runtimeFor(this.env);
-    const storage: Storage = createD1Storage(this.env.DB);
+    const storage: Storage = storageOf(this.env);
     const out = await graphRunWorkflow(rt.service.graphDeps).run(
       params as never,
       engineStep(step),
@@ -435,7 +440,7 @@ export function budgetPort(env: Env): BudgetPort {
 
 /** Workflows on Cloudflare: a row for the dashboard, then the Workflow instance (idempotent on id). */
 export function cloudflareWorkflowPort(env: Env): WorkflowPort {
-  const storage = createD1Storage(env.DB);
+  const storage = storageOf(env);
   return {
     start: async (workflow, params, o) => {
       if (await storage.workflows.get(o.id)) return; // already started (webhook replay)

@@ -2,13 +2,22 @@ import type { Claim, VerifiedFact } from "@ae/contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SqlDriver } from "../driver.ts";
 import { migrate } from "../migrate.ts";
-import { loadMigrations } from "../migrations-fs.ts";
+import { loadMigrations, migrationsDirFor } from "../migrations-fs.ts";
+import { D1_STORES, type D1Store, routedDriver } from "../placement.ts";
 import { SqlStorage } from "../sql-storage.ts";
 
+/** One driver per database (data layer plan, step 2): core, facts and telemetry. */
 export interface Harness {
-  driver: SqlDriver;
+  drivers: Record<D1Store, SqlDriver>;
   dispose(): Promise<void>;
 }
+
+const migrateAll = async (h: Harness) => {
+  const applied: string[] = [];
+  for (const st of D1_STORES)
+    applied.push(...(await migrate(h.drivers[st], loadMigrations(migrationsDirFor(st)))));
+  return applied;
+};
 
 /** The same behaviour is required of every adapter. Run this suite once per adapter. */
 export function storageSuite(adapter: string, makeHarness: () => Promise<Harness>) {
@@ -56,9 +65,10 @@ export function storageSuite(adapter: string, makeHarness: () => Promise<Harness
 
     beforeEach(async () => {
       h = await makeHarness();
-      const applied = await migrate(h.driver, loadMigrations());
+      const applied = await migrateAll(h);
       expect(applied).toContain("0001_core.sql");
-      s = new SqlStorage(h.driver);
+      expect(applied).toContain("0001_baseline.sql");
+      s = new SqlStorage(routedDriver(h.drivers));
       runId = (await s.runs.start({ kind: "test", config_versions: { universe: "v1" } })).run_id;
     });
 
@@ -67,8 +77,13 @@ export function storageSuite(adapter: string, makeHarness: () => Promise<Harness
     });
 
     it("migrations apply from empty and re-running is a no-op", async () => {
-      expect(await migrate(h.driver, loadMigrations())).toEqual([]);
-      expect(await s.health()).toEqual({ ok: true, migrations: loadMigrations().length });
+      expect(await migrateAll(h)).toEqual([]);
+      const n = (st: D1Store) => loadMigrations(migrationsDirFor(st)).length;
+      expect(await s.health()).toEqual({
+        ok: true,
+        migrations: n("core"),
+        databases: { core: n("core"), facts: n("facts"), telemetry: n("telemetry") },
+      });
     });
 
     it("records runs with config versions", async () => {
@@ -103,10 +118,13 @@ export function storageSuite(adapter: string, makeHarness: () => Promise<Harness
       const c = claim();
       await s.claims.insertMany([c]);
       await expect(
-        h.driver.run("UPDATE claims SET value = ? WHERE claim_id = ?", ['"dissolved"', c.claim_id]),
+        h.drivers.facts.run("UPDATE claims SET value = ? WHERE claim_id = ?", [
+          '"dissolved"',
+          c.claim_id,
+        ]),
       ).rejects.toThrow(/append-only/);
       await expect(
-        h.driver.run("DELETE FROM claims WHERE claim_id = ?", [c.claim_id]),
+        h.drivers.facts.run("DELETE FROM claims WHERE claim_id = ?", [c.claim_id]),
       ).rejects.toThrow(/append-only/);
       expect((await s.claims.get(c.claim_id))?.value).toBe("active");
     });

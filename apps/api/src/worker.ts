@@ -4,7 +4,6 @@ import { externalActionsAllowed, KeyRing } from "@ae/infra";
 import { assertStripeTestMode, guardedPayments, StripeCheckout } from "@ae/ports";
 import { guardedFacilitator, liveRefresh } from "@ae/products";
 import { HttpX402Facilitator } from "@ae/products/x402-real";
-import { createD1Storage } from "@ae/storage";
 import { CompaniesHouseClient, defaultContext } from "@ae/verification";
 import { requireAccess } from "./access.ts";
 import { createApp } from "./app.ts";
@@ -14,6 +13,7 @@ import {
   keyFor,
   queue,
   scheduled,
+  storageOf,
   workerKeyStore,
 } from "./runtime-worker.ts";
 
@@ -28,7 +28,7 @@ const REBUILD_MS = 60_000;
 
 async function build(env: Env) {
   if (cached && Date.now() - cached.at < REBUILD_MS) return cached.app;
-  const ring = new KeyRing(workerKeyStore(env), createD1Storage(env.DB));
+  const ring = new KeyRing(workerKeyStore(env), storageOf(env));
   const [stripeKey, webhookSecret, chKey] = [
     await keyFor(ring, "STRIPE_SECRET_KEY"),
     await keyFor(ring, "STRIPE_WEBHOOK_SECRET"),
@@ -44,7 +44,7 @@ function buildWith(
   k: { stripeKey: string | null; webhookSecret: string | null; chKey: string | null },
 ) {
   const vars = env as unknown as Record<string, string | undefined>;
-  const storage = createD1Storage(env.DB);
+  const storage = storageOf(env);
   const keys = (e: unknown) => workerKeyStore(e as Env);
   const auth = requireAccess({
     teamDomain: env.ACCESS_TEAM_DOMAIN,
@@ -86,7 +86,7 @@ function buildWith(
     return createApp({
       runtime: "worker",
       keys,
-      storage: (e) => createD1Storage((e as Env).DB),
+      storage: (e) => storageOf(e as Env),
       workflows: (e) => cloudflareWorkflowPort(e as Env),
       // Questions on idea cards are answered by the planner in the queue consumer.
       ask: (e) => async (card_id, text, by) => {
@@ -102,7 +102,7 @@ function buildWith(
   return createApp({
     runtime: "worker",
     keys,
-    storage: (e) => createD1Storage((e as Env).DB),
+    storage: (e) => storageOf(e as Env),
     workflows: (e) => cloudflareWorkflowPort(e as Env),
     // Questions on idea cards are answered by the planner in the queue consumer.
     ask: (e) => async (card_id, text, by) => {

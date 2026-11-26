@@ -208,6 +208,10 @@ export interface Storage
     /** Universe members (included) with no current facts at all: should be zero (100% anchored). */
     unanchoredMembers(universe: string): Promise<string[]>;
   };
-  health(): Promise<{ ok: boolean; migrations: number }>;
+  health(): Promise<{
+    ok: boolean;
+    migrations: number;
+    databases: { core: number; facts: number; telemetry: number };
+  }>;
   close(): Promise<void>;
 }

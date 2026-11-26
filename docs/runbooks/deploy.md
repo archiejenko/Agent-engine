@@ -84,6 +84,21 @@ If the deploy step fails on Queues, Workflows or Durable Objects, check the acco
 
 ## What `pnpm cf:deploy` does
 
+**Since the data layer change (2026-11-26), the next deploy also creates these.** They're declared in
+`wrangler.jsonc` without IDs, so wrangler makes them the first time:
+- the D1 databases `agent-engine-facts` and `agent-engine-telemetry`;
+- the R2 bucket `agent-engine-files`;
+- the `RunState` Durable Object class (migration tag v3).
+
+It then applies each database's migrations (DB, FACTS, TELEMETRY, in that order).
+
+On `agent-engine` (core), migration `0026_split` drops the tables that moved to facts and telemetry.
+Those tables are empty remotely, so nothing is lost; locally, rows are copied first.
+
+None of this touches `agent-house`, its KV namespace or its bucket.
+
+To check: `/api/health` (behind Access) reports `databases: { core: 26, facts: 1, telemetry: 1 }`.
+
 Both routes run the same command. It builds the dashboard, deploys the Worker, attaches `engine.ejtech.co.uk` (creating its DNS record
 and certificate), then applies any pending database migrations. On a brand-new account, create the
 queues first (`wrangler queues create ae-jobs` and `ae-jobs-dlq`) and the database
@@ -126,7 +141,8 @@ hostname with the action **Bypass**. The more specific app wins over the wildcar
 ## API token (GitHub Actions)
 
 Cloudflare dashboard → **Account API tokens** → **Create Token** → "Edit Cloudflare Workers"
-template, then add **Account → D1 → Edit**. Scope it to your one account and the `ejtech.co.uk` zone.
+template, then add **Account → D1 → Edit** and **Account → Workers R2 Storage → Edit** (the
+data layer's file bucket). Scope it to your one account and the `ejtech.co.uk` zone.
 Save it as the secret `CLOUDFLARE_API_TOKEN` on the GitHub environment **production** (repo →
 Settings → Environments → production), next to `CLOUDFLARE_ACCOUNT_ID`. Never commit it. To replace
 it, create a new token, update the secret, then delete the old token in Cloudflare.

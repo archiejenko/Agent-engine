@@ -338,10 +338,20 @@ export function runtimeStorage(db: SqlDriver) {
           "INSERT OR IGNORE INTO workflow_steps (instance_id, name, output, completed_at) VALUES (?, ?, ?, ?)",
           [instanceId, name, j(output) ?? "null", nowIso()],
         );
-        await db.run(
-          "UPDATE workflow_instances SET steps_done = (SELECT COUNT(*) FROM workflow_steps WHERE instance_id = ?), updated_at = ? WHERE id = ?",
-          [instanceId, nowIso(), instanceId],
+        // Two statements: the steps live in the local-only store, the instance row in core.
+        const n = Number(
+          (
+            await db.all<{ n: number }>(
+              "SELECT COUNT(*) AS n FROM workflow_steps WHERE instance_id = ?",
+              [instanceId],
+            )
+          )[0]?.n ?? 0,
         );
+        await db.run("UPDATE workflow_instances SET steps_done = ?, updated_at = ? WHERE id = ?", [
+          n,
+          nowIso(),
+          instanceId,
+        ]);
       },
     },
 

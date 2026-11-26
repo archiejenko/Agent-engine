@@ -43,7 +43,8 @@ export async function runGraphG0Gate(storage: Storage, root: string) {
   });
 
   // 2. Migrations up, down, up on a fresh database.
-  const all = loadMigrations();
+  // Up to 0022: later core migrations (0025 alters cost_events, 0026 splits the database) build on these.
+  const all = loadMigrations().filter((m) => m.name < "0023");
   const down = loadDownMigrations();
   // The graph layer's own migrations (0020–0022); later ones with down files have their own tests.
   const graphMigrations = all

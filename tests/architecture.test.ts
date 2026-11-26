@@ -133,6 +133,7 @@ describe("v3 rule 23: assumed numbers stay assumed", () => {
       (f) =>
         f !== "packages/storage/src/v3.ts" &&
         f !== "packages/storage/src/sql-storage.ts" &&
+        f !== "packages/storage/src/placement.ts" &&
         /\bhypotheses\b|hypothesis_score_history|hypothesis_imports/.test(
           readFileSync(join(ROOT, f), "utf8"),
         ),
@@ -176,7 +177,10 @@ describe("v3 rule 20: keys are write-only and read in one place", () => {
     expect(offenders).toEqual([]);
   });
   it("the key registry table has no value column", () => {
-    const sql = readFileSync(join(ROOT, "packages/storage/migrations/0017_v3_keys.sql"), "utf8");
+    const sql = readFileSync(
+      join(ROOT, "packages/storage/migrations/core/0017_v3_keys.sql"),
+      "utf8",
+    );
     expect(/\bvalue\b|ciphertext/i.test(sql.replace(/--.*$/gm, ""))).toBe(false);
   });
 });

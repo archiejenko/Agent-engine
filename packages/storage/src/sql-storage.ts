@@ -808,12 +808,25 @@ export class SqlStorage implements Storage {
     },
   };
 
+  /** Migrations applied per database (core, facts, telemetry). `migrations` is core's, as before. */
   async health() {
+    const stores = (this.db as { stores?: Partial<Record<string, SqlDriver>> }).stores ?? {
+      core: this.db,
+    };
+    const count = async (d: SqlDriver | undefined) => {
+      if (!d) return 0;
+      const rows = await d.all<{ n: number }>("SELECT COUNT(*) AS n FROM d1_migrations");
+      return Number(rows[0]?.n ?? 0);
+    };
     try {
-      const rows = await this.db.all<{ n: number }>("SELECT COUNT(*) AS n FROM d1_migrations");
-      return { ok: true, migrations: Number(rows[0]?.n ?? 0) };
+      const databases = {
+        core: await count(stores.core),
+        facts: await count(stores.facts),
+        telemetry: await count(stores.telemetry),
+      };
+      return { ok: true, migrations: databases.core, databases };
     } catch {
-      return { ok: false, migrations: 0 };
+      return { ok: false, migrations: 0, databases: { core: 0, facts: 0, telemetry: 0 } };
     }
   }
 

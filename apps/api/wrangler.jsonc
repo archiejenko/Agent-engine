@@ -34,7 +34,19 @@
       "database_name": "agent-engine",
       // Created 2026-11-24 (region WEUR). Not secret: it names the database, it grants nothing.
       "database_id": "2714afcd-59c7-4ee1-a6ea-5251a0b08fb4",
-      "migrations_dir": "../../packages/storage/migrations"
+      "migrations_dir": "../../packages/storage/migrations/core"
+    },
+    // Data layer step 2: verification facts and telemetry in their own databases. No ids: wrangler
+    // creates them at the next deploy (then apply each one's migrations; see docs/runbooks/deploy.md).
+    {
+      "binding": "FACTS",
+      "database_name": "agent-engine-facts",
+      "migrations_dir": "../../packages/storage/migrations/facts"
+    },
+    {
+      "binding": "TELEMETRY",
+      "database_name": "agent-engine-telemetry",
+      "migrations_dir": "../../packages/storage/migrations/telemetry"
     }
   ],
   // v2 runtime (decision D3). The cron enqueues jobs; the queue consumer runs them; failures retry 3

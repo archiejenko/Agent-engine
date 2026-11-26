@@ -38,7 +38,7 @@ beforeAll(async () => {
     ],
     compatibilityDate: "2026-08-01",
     compatibilityFlags: ["nodejs_compat"],
-    d1Databases: ["DB"],
+    d1Databases: ["DB", "FACTS", "TELEMETRY"],
     bindings: {
       ACCESS_TEAM_DOMAIN: "",
       ACCESS_POLICY_AUD: "",
@@ -61,9 +61,18 @@ beforeAll(async () => {
   const { migrate } = await import("@ae/storage");
   const { loadMigrations } = await import("@ae/storage/migrations-fs");
   const { d1Driver } = await import("@ae/storage");
-  await migrate(d1Driver(await mf.getD1Database("DB")), loadMigrations(MIGRATIONS));
+  for (const [binding, dir] of [
+    ["DB", "core"],
+    ["FACTS", "facts"],
+    ["TELEMETRY", "telemetry"],
+  ] as const)
+    await migrate(d1Driver(await mf.getD1Database(binding)), loadMigrations(join(MIGRATIONS, dir)));
   const { createD1Storage } = await import("@ae/storage");
-  const s = createD1Storage(await mf.getD1Database("DB"));
+  const s = createD1Storage({
+    core: await mf.getD1Database("DB"),
+    facts: await mf.getD1Database("FACTS"),
+    telemetry: await mf.getD1Database("TELEMETRY"),
+  });
   const run = (await s.runs.start({ kind: "seed" })).run_id;
   await s.entities.upsertMany(
     [
