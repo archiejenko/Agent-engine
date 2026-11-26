@@ -70,7 +70,8 @@ export function failureScenarios(happy: { askedApproval: boolean; toolsCalled: s
 
 /** A fresh synthetic world: companies with facts (emails first), one monitoring customer and watch. */
 export async function sandboxWorld(storage: Storage, model: FakeModel = fakeModel()) {
-  await buildSyntheticWorld(storage, model, { count: 40, seed: 11 });
+  // The sandbox's own world: its setup cost is sandbox spend, never live.
+  await buildSyntheticWorld(storage, model, { count: 40, seed: 11, costMode: "sandbox" });
   const facts = (await storage.facts.listCurrent({ status: "verified", limit: 2000, offset: 0 }))
     .rows;
   const withEmail = new Set(

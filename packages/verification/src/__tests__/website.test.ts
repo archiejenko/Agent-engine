@@ -1,8 +1,10 @@
-import { FakeModel, FakeWebFetcher, FakeWebsiteFinder } from "@ae/ports";
+import { loadModelsConfig } from "@ae/config";
+import { costGbp, FakeModel, FakeWebFetcher, FakeWebsiteFinder, type ModelClient } from "@ae/ports";
 import type { Storage } from "@ae/storage";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { VerificationContext } from "../context.ts";
 import { collectWebsiteClaims } from "../sources/website/ingest.ts";
+import { ingestWebsites, WEBSITE_PLAYBOOK, WEBSITE_STEP } from "../sources/website/pipeline.ts";
 import { fakeWebsiteExtractor, generateSites } from "../sources/website/synthetic.ts";
 import { setup } from "./helpers.ts";
 
@@ -177,5 +179,77 @@ describe("website ingestion", () => {
         expect(v.job_postings ?? []).toEqual(t.jobs);
       }
     }
+  });
+});
+
+describe("website extractor on the cost ledger", () => {
+  it("each model call writes exactly one live cost event and its daily rollup, priced by costGbp", async () => {
+    const models = loadModelsConfig();
+    const price = models.prices["claude-haiku-5-5"];
+    if (!price) throw new Error("no price for claude-haiku-5-5");
+    const usage = { input_tokens: 12_000, output_tokens: 800 };
+    let calls = 0;
+    // A real-model stand-in: it reports a real model name, so its cost is real money.
+    const real: ModelClient = {
+      name: "claude-haiku-5-5",
+      complete: async (req) => {
+        calls++;
+        return {
+          text: fakeWebsiteExtractor(req),
+          model: "claude-haiku-5-5",
+          usage,
+          stop_reason: "end_turn",
+        };
+      },
+    };
+    const second = { ...entity, entity_id: "07654321", name: "BETA WORKS LIMITED" };
+    await storage.entities.upsertMany([entity, second], runId);
+    await storage.universe.setMany(
+      [entity, second].map((e) => ({
+        universe: "test",
+        entity_id: e.entity_id,
+        included: true,
+        reason: "test",
+        staff_flag: "known" as const,
+      })),
+      runId,
+    );
+    const p = ports(goodSite(), real as never);
+    p.finder = new FakeWebsiteFinder(
+      new Map([
+        ["01234567", URL],
+        ["07654321", URL],
+      ]),
+    );
+    await ingestWebsites(storage, ctx, { name: "test" } as never, p, { models });
+    expect(calls).toBe(2);
+    const all = { from: "2000-01-01T00:00:00Z", to: "2100-01-01T00:00:00Z" };
+    const events = (await storage.costEvents.range(all)).filter(
+      (e) => e.playbook === WEBSITE_PLAYBOOK,
+    );
+    expect(events).toHaveLength(calls);
+    const each = costGbp(usage, price, models.usd_to_gbp);
+    for (const e of events)
+      expect(e).toMatchObject({
+        category: "model",
+        mode: "live",
+        dry_run: false,
+        synthetic: false,
+        step_id: WEBSITE_STEP,
+        amount_gbp: each,
+      });
+    const rollups = (await storage.dailyRollups.range(all)).filter(
+      (r) => r.playbook === WEBSITE_PLAYBOOK,
+    );
+    expect(rollups).toHaveLength(1);
+    expect(rollups[0]).toMatchObject({
+      mode: "live",
+      dry_run: false,
+      synthetic: false,
+      cost_events: 2,
+    });
+    expect(rollups[0]?.cost_gbp).toBeCloseTo(2 * each, 12);
+    // Real money: it counts against the caps.
+    expect(await storage.costEvents.spendSince(all.from)).toBeCloseTo(2 * each, 12);
   });
 });

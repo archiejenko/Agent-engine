@@ -23,7 +23,7 @@ import {
 export async function buildSyntheticWorld(
   storage: Storage,
   model: FakeModel,
-  o: { count: number; seed?: number; log?: (m: string) => void },
+  o: { count: number; seed?: number; log?: (m: string) => void; costMode?: "live" | "sandbox" },
 ) {
   const log = o.log ?? (() => {});
   const ctx = defaultContext();
@@ -62,6 +62,7 @@ export async function buildSyntheticWorld(
     universe,
     { finder: new FakeWebsiteFinder(sites.sites), fetcher: new FakeWebFetcher(sites.pages), model },
     {
+      ...(o.costMode ? { costMode: o.costMode } : {}),
       onModelUsage: async (_id, usage) => {
         const price = models.prices[usage.model] ?? models.prices["fake-model"];
         if (price) extractionCost += costGbp(usage, price, models.usd_to_gbp);

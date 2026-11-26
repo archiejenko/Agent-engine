@@ -841,3 +841,18 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **R2 bucket `agent-engine-files` exists.** It was created 2026-11-26 21:06 UTC by deploy run 3, so
   nothing was created now. `wrangler.jsonc` binds `FILES` to it, and `wrangler-config.test.ts` pins
   that binding exactly.
+
+## 2026-11-26 — The website extractor is on the cost ledger
+
+- **`ingestWebsites` meters its own model.** Every extraction call goes through the same
+  `meteredModel` (priced with `costGbp`) and writes one cost event, plus its daily rollup in the same
+  batch, as it returns. Labels: playbook `website_ingest`, step `website_extract`, and the ingestion
+  run's id. A real model call is live and never `dry_run`, so it counts against the caps. The fake
+  model's calls are marked synthetic.
+- **The meter moved from `@ae/infra` to `@ae/verification`**, which infra re-exports unchanged, so
+  the extractor and the agent runtime share one implementation without verification depending on
+  infra.
+- **A sandbox building its own synthetic world labels that setup as sandbox spend**
+  (`costMode: "sandbox"`), so G3's "sandbox spend never appears as live" still holds. Other synthetic
+  worlds (gates, rehearsal) record theirs as live and synthetic.
+- **With this, every model call in the codebase writes to `cost_events`.**

@@ -8,6 +8,7 @@ export * from "./drift.ts";
 export * from "./ids.ts";
 export * from "./ingest.ts";
 export * from "./measurement.ts";
+export * from "./metered-model.ts";
 export * from "./persist.ts";
 export * from "./query.ts";
 export * from "./resolve.ts";
