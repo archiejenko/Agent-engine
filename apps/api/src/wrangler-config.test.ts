@@ -70,6 +70,10 @@ describe("wrangler.jsonc deploy guard", () => {
     }
   });
 
+  it("binds FILES to the existing agent-engine-files bucket (created 2026-11-26)", () => {
+    expect(config.r2_buckets).toEqual([{ binding: "FILES", bucket_name: "agent-engine-files" }]);
+  });
+
   it("never binds an agent-house resource", () => {
     const names = [
       ...(config.d1_databases ?? []).map((d) => d.database_name),

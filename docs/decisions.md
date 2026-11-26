@@ -838,3 +838,6 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   - `agent-engine-telemetry`: 0001_baseline, 0002_bodies and 0003_indexes.
 
   That's every migration on the branch: the next deploy applies none unless a new one is added.
+- **R2 bucket `agent-engine-files` exists.** It was created 2026-11-26 21:06 UTC by deploy run 3, so
+  nothing was created now. `wrangler.jsonc` binds `FILES` to it, and `wrangler-config.test.ts` pins
+  that binding exactly.

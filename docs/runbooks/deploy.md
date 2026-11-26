@@ -106,9 +106,8 @@ nothing:
 - the KV namespace `agent-engine-cache`;
 - the `RunState` Durable Object class (migration tag v3), which a deploy sets up itself.
 
-Check that the R2 bucket `agent-engine-files` exists before the next deploy (Storage & databases →
-R2). It's named but has no id to pin; if it's missing, create it there. Never use
-`agent-house-files`.
+The R2 bucket `agent-engine-files` exists (created 2026-11-26 21:06 UTC by deploy run 3) and the
+`FILES` binding names it; a test pins that. Never use `agent-house-files`.
 
 `pnpm cf:deploy` applies each database's migrations (DB, FACTS, TELEMETRY) and then publishes. On
 `agent-engine` (core), `0026_split` drops the tables that moved to facts and telemetry (empty
