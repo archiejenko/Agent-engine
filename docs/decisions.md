@@ -689,3 +689,21 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   reads `AE_DB` keeps working.
 - **`pnpm cf:deploy`** applies migrations to all three databases. The deploy token needs R2 edit too
   (`docs/runbooks/deploy.md`).
+
+## 2026-11-26 — Large bodies to R2 through one helper (data layer plan, step 3)
+
+- **One helper, `packages/storage/src/bodies.ts`** (Archie's request), is the only code that decides
+  inline or R2. A body of 8 KiB or less stays in its row; anything larger goes to `agent-engine-files`
+  (`data/blobs` locally, memory in tests), and the row keeps its key, size and SHA-256. Reads check
+  size and hash and fail loudly. Only storage methods call the helper, so callers still get the plain
+  body. A test fails if any code outside `packages/storage` names a `*_key` body column.
+- **Always in R2:** letter PDFs (now stored as bytes, not base64; the API still hands back base64)
+  and demo pages.
+- **Inline or R2:** outbox and mailbox bodies, note versions, run log steps (tool calls and output
+  together) and graph nodes' recorded model outputs. The run archive is self-contained.
+- **Schema, plain `ADD COLUMN` only:** each body column keeps its name and `NOT NULL` and holds `''`
+  when the body is in R2, beside new `_key`, `_size` and `_sha256` columns. Migrations: core
+  `0027_bodies`, telemetry `0002_bodies`, each with a down file. Rows written before keep working
+  inline. No table rebuilds were needed.
+- **Rule 20:** the leak audit now also searches stored bodies (where the store can list them: locally
+  and in tests).

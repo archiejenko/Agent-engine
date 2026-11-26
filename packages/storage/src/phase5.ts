@@ -1,3 +1,4 @@
+import { type Bodies, bodyOf } from "./bodies.ts";
 import type { SqlDriver } from "./driver.ts";
 
 type Row = Record<string, unknown>;
@@ -52,7 +53,13 @@ const toOutbox = (r: Row): OutboxRow => ({
 });
 
 /** Phase 5 storage namespaces. */
-export function phase5(db: SqlDriver) {
+export function phase5(db: SqlDriver, bodies: Bodies) {
+  /** Outbox rows with their bodies (inline or from the blob store). */
+  const outboxRows = async (rows: Row[]) => {
+    const out: OutboxRow[] = [];
+    for (const r of rows) out.push({ ...toOutbox(r), body: await bodies.text(bodyOf(r, "body")) });
+    return out;
+  };
   return {
     customers: {
       add: async (c: Omit<CustomerRow, "id" | "active"> & { id?: string }) => {
@@ -168,8 +175,9 @@ export function phase5(db: SqlDriver) {
     outbox: {
       add: async (m: Omit<OutboxRow, "id" | "created_at"> & { synthetic?: boolean }) => {
         const id = crypto.randomUUID();
+        const body = await bodies.put("outbox", id, m.body);
         await db.run(
-          "INSERT INTO outbox (id, task_id, thread_id, attempt, entity_id, recipient, sender, subject, body, status, reason, created_at, synthetic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO outbox (id, task_id, thread_id, attempt, entity_id, recipient, sender, subject, body, body_key, body_size, body_sha256, status, reason, created_at, synthetic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
           [
             id,
             m.task_id,
@@ -179,7 +187,10 @@ export function phase5(db: SqlDriver) {
             m.recipient.toLowerCase(),
             m.sender,
             m.subject,
-            m.body,
+            body.inline,
+            body.key,
+            body.size,
+            body.sha256,
             m.status,
             m.reason,
             nowIso(),
@@ -190,27 +201,27 @@ export function phase5(db: SqlDriver) {
       },
       get: async (id: string) => {
         const r = (await db.all<Row>("SELECT * FROM outbox WHERE id = ?", [id]))[0];
-        return r ? toOutbox(r) : null;
+        return r ? ((await outboxRows([r]))[0] as OutboxRow) : null;
       },
       forRecipient: async (recipient: string) =>
-        (
+        outboxRows(
           await db.all<Row>(
             "SELECT * FROM outbox WHERE recipient = ? AND status != 'blocked' ORDER BY created_at",
             [recipient.toLowerCase()],
-          )
-        ).map(toOutbox),
+          ),
+        ),
       list: async (limit: number) =>
-        (await db.all<Row>("SELECT * FROM outbox ORDER BY created_at DESC LIMIT ?", [limit])).map(
-          toOutbox,
+        outboxRows(
+          await db.all<Row>("SELECT * FROM outbox ORDER BY created_at DESC LIMIT ?", [limit]),
         ),
       /** Emails to one company that weren't blocked (sent or dry run), newest first. */
       forEntity: async (entityId: string) =>
-        (
+        outboxRows(
           await db.all<Row>(
             "SELECT * FROM outbox WHERE entity_id = ? AND status != 'blocked' ORDER BY created_at DESC",
             [entityId],
-          )
-        ).map(toOutbox),
+          ),
+        ),
     },
 
     followups: {

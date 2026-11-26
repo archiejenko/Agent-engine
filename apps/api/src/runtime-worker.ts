@@ -71,7 +71,12 @@ type Vars = Record<string, string | undefined>;
 
 /** Storage over the three D1 databases (data layer plan, step 2): core, facts and telemetry. */
 export function storageOf(env: Env): Storage {
-  return createD1Storage({ core: env.DB, facts: env.FACTS, telemetry: env.TELEMETRY });
+  return createD1Storage({
+    core: env.DB,
+    facts: env.FACTS,
+    telemetry: env.TELEMETRY,
+    files: env.FILES,
+  });
 }
 
 /**

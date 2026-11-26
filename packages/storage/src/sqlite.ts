@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import Database from "better-sqlite3";
+import { type BlobStore, memoryBlobStore } from "./blobs.ts";
+import { fsBlobStore } from "./blobs-fs.ts";
 import type { SqlDriver, SqlStatement, SqlValue } from "./driver.ts";
 import { LOCAL_RUNTIME_SCHEMA } from "./local-runtime.ts";
 import { migrate } from "./migrate.ts";
@@ -81,8 +83,12 @@ async function copyMovedTables(paths: ReturnType<typeof storePaths>) {
       for (const t of MOVED_OUT_OF_CORE) {
         if (!has(t)) continue;
         const to = PLACEMENT[t] as "facts" | "telemetry" | "local";
+        // By column name: the new file may already have later columns (they keep their defaults).
+        const cols = (db.prepare(`PRAGMA main.table_info(${t})`).all() as { name: string }[])
+          .map((c) => `"${c.name}"`)
+          .join(", ");
         db.prepare(`DELETE FROM ${to}.${t}`).run();
-        db.prepare(`INSERT INTO ${to}.${t} SELECT * FROM main.${t}`).run();
+        db.prepare(`INSERT INTO ${to}.${t} (${cols}) SELECT ${cols} FROM main.${t}`).run();
       }
     })();
   } finally {
@@ -90,8 +96,14 @@ async function copyMovedTables(paths: ReturnType<typeof storePaths>) {
   }
 }
 
-/** Open (and migrate) a SQLite-backed Storage: the three databases plus the local runtime file. */
-export async function openSqliteStorage(path: string): Promise<SqlStorage> {
+/**
+ * Open (and migrate) a SQLite-backed Storage: the three databases plus the local runtime file. Large
+ * bodies go to `blobs/` beside the file (in memory for ":memory:"), as they go to R2 on Cloudflare.
+ */
+export async function openSqliteStorage(
+  path: string,
+  o: { blobs?: BlobStore } = {},
+): Promise<SqlStorage> {
   const paths = storePaths(path);
   await copyMovedTables(paths);
   const core = sqliteDriver(paths.core);
@@ -102,5 +114,8 @@ export async function openSqliteStorage(path: string): Promise<SqlStorage> {
   await migrate(telemetry, loadMigrations(migrationsDirFor("telemetry")));
   await migrate(core, loadMigrations(migrationsDirFor("core")));
   await local.batch(LOCAL_RUNTIME_SCHEMA.map((sql) => ({ sql })));
-  return new SqlStorage(routedDriver({ core, facts, telemetry, local }));
+  const blobs =
+    o.blobs ??
+    (path === ":memory:" ? memoryBlobStore() : fsBlobStore(join(dirname(path), "blobs")));
+  return new SqlStorage(routedDriver({ core, facts, telemetry, local }), blobs);
 }

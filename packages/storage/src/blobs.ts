@@ -10,9 +10,11 @@ export interface BlobStore {
   /** null when there's no such object. */
   get(key: string): Promise<Uint8Array | null>;
   delete(key: string): Promise<void>;
+  /** Every key (tests and leak audits only; not on R2, where listing is paged and not needed). */
+  list?(): Promise<string[]>;
 }
 
-export function memoryBlobStore(): BlobStore & { keys(): string[] } {
+export function memoryBlobStore(): BlobStore & { keys(): string[]; list(): Promise<string[]> } {
   const m = new Map<string, Uint8Array>();
   return {
     async put(key, body) {
@@ -25,6 +27,7 @@ export function memoryBlobStore(): BlobStore & { keys(): string[] } {
       m.delete(key);
     },
     keys: () => [...m.keys()],
+    list: async () => [...m.keys()],
   };
 }
 

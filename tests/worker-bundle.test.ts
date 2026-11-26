@@ -39,6 +39,7 @@ beforeAll(async () => {
     compatibilityDate: "2026-08-01",
     compatibilityFlags: ["nodejs_compat"],
     d1Databases: ["DB", "FACTS", "TELEMETRY"],
+    r2Buckets: ["FILES"],
     bindings: {
       ACCESS_TEAM_DOMAIN: "",
       ACCESS_POLICY_AUD: "",
@@ -72,6 +73,7 @@ beforeAll(async () => {
     core: await mf.getD1Database("DB"),
     facts: await mf.getD1Database("FACTS"),
     telemetry: await mf.getD1Database("TELEMETRY"),
+    files: (await mf.getR2Bucket("FILES")) as never,
   });
   const run = (await s.runs.start({ kind: "seed" })).run_id;
   await s.entities.upsertMany(

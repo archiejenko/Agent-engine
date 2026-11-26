@@ -1,3 +1,5 @@
+import type { BlobStore } from "./blobs.ts";
+import { type Bodies, bodyOf } from "./bodies.ts";
 import type { SqlDriver, SqlValue } from "./driver.ts";
 import { type LedgerRow, toLedger } from "./v2.ts";
 
@@ -187,9 +189,20 @@ export interface ScoreHistoryRow {
   changed_at: string;
 }
 
-export function v3Storage(db: SqlDriver) {
+export function v3Storage(db: SqlDriver, bodies: Bodies, blobs: BlobStore) {
   const all = (sql: string, args: SqlValue[] = []) => db.all<Row>(sql, args);
   const nowIso = () => new Date().toISOString();
+  const mailRows = async (rows: Row[]) => {
+    const out: MailRow[] = [];
+    for (const r of rows) out.push({ ...toMail(r), body: await bodies.text(bodyOf(r, "body")) });
+    return out;
+  };
+  const noteRows = async (rows: Row[]) => {
+    const out: NoteVersionRow[] = [];
+    for (const r of rows)
+      out.push({ ...toNoteVersion(r), body: await bodies.text(bodyOf(r, "body")) });
+    return out;
+  };
   return {
     decisions: {
       /** Opens a decision unless one is already open for (type, source_ref). Returns the open one. */
@@ -316,16 +329,20 @@ export function v3Storage(db: SqlDriver) {
         received_at: string;
         synthetic?: boolean;
       }) => {
+        const body = await bodies.put("mail", m.id, m.body);
         await db.run(
-          `INSERT OR IGNORE INTO mail_messages (id, folder, from_addr, to_addr, subject, body, in_reply_to, entity_id, task_id, untrusted, author, received_at, synthetic)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT OR IGNORE INTO mail_messages (id, folder, from_addr, to_addr, subject, body, body_key, body_size, body_sha256, in_reply_to, entity_id, task_id, untrusted, author, received_at, synthetic)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             m.id,
             m.folder,
             m.from,
             m.to,
             m.subject,
-            m.body,
+            body.inline,
+            body.key,
+            body.size,
+            body.sha256,
             m.in_reply_to ?? null,
             m.entity_id ?? null,
             m.task_id ?? null,
@@ -342,15 +359,15 @@ export function v3Storage(db: SqlDriver) {
         since?: string;
         includeSynthetic?: boolean;
       }) =>
-        (
+        mailRows(
           await all(
             `SELECT * FROM mail_messages WHERE folder = ? AND received_at >= ?${o.includeSynthetic === false ? " AND synthetic = 0" : ""} ORDER BY received_at DESC LIMIT ?`,
             [o.folder, o.since ?? "", o.limit],
-          )
-        ).map(toMail),
+          ),
+        ),
       get: async (id: string) => {
         const r = (await all("SELECT * FROM mail_messages WHERE id = ?", [id]))[0];
-        return r ? toMail(r) : null;
+        return r ? ((await mailRows([r]))[0] as MailRow) : null;
       },
     },
 
@@ -361,13 +378,17 @@ export function v3Storage(db: SqlDriver) {
           (await all("SELECT MAX(version) AS v FROM note_versions WHERE path = ?", [v.path]))[0]
             ?.v ?? 0,
         );
+        const body = await bodies.put("note", `${v.path}/${last + 1}`, v.body);
         await db.run(
-          "INSERT INTO note_versions (id, path, version, body, author, provenance, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO note_versions (id, path, version, body, body_key, body_size, body_sha256, author, provenance, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
           [
             crypto.randomUUID(),
             v.path,
             last + 1,
-            v.body,
+            body.inline,
+            body.key,
+            body.size,
+            body.sha256,
             v.author,
             v.provenance === undefined ? null : JSON.stringify(v.provenance),
             nowIso(),
@@ -376,16 +397,14 @@ export function v3Storage(db: SqlDriver) {
         return last + 1;
       },
       history: async (path: string) =>
-        (await all("SELECT * FROM note_versions WHERE path = ? ORDER BY version", [path])).map(
-          toNoteVersion,
-        ),
+        noteRows(await all("SELECT * FROM note_versions WHERE path = ? ORDER BY version", [path])),
       latestAll: async () =>
-        (
+        noteRows(
           await all(
             `SELECT n.* FROM note_versions n JOIN (SELECT path, MAX(version) AS v FROM note_versions GROUP BY path) m
              ON m.path = n.path AND m.v = n.version`,
-          )
-        ).map(toNoteVersion),
+          ),
+        ),
     },
 
     audit: {
@@ -410,6 +429,11 @@ export function v3Storage(db: SqlDriver) {
             const rows = await d.all(`SELECT * FROM "${t.replace(/"/g, "")}"`);
             if (rows.some((r) => JSON.stringify(r).includes(needle))) hits.push(t);
           }
+        }
+        // …and every stored body object (data layer plan, step 3), where the store can list them.
+        for (const key of (await blobs.list?.()) ?? []) {
+          const b = await blobs.get(key);
+          if (b && new TextDecoder().decode(b).includes(needle)) hits.push(`blob:${key}`);
         }
         hits.sort();
         return hits;

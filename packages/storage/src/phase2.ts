@@ -1,4 +1,5 @@
 import { Opportunity, RunLogEntry, Task } from "@ae/contracts";
+import { type Bodies, bodyOf } from "./bodies.ts";
 import type { SqlDriver, SqlValue } from "./driver.ts";
 
 type Row = Record<string, unknown>;
@@ -123,7 +124,19 @@ function rowToRunLog(r: Row): StoredRunLog {
 }
 
 /** Phase 2 storage namespaces (opportunity engine + agent infrastructure). */
-export function phase2(db: SqlDriver) {
+export function phase2(db: SqlDriver, bodies: Bodies) {
+  /** Run log rows; a large step (tool calls + output over 8 KiB) has both in one stored body. */
+  const runLogRows = async (rows: Row[]) => {
+    const out: StoredRunLog[] = [];
+    for (const r of rows) {
+      const b = bodyOf(r, "body");
+      if (b.key) {
+        const both = JSON.parse(await bodies.text(b)) as { tool_calls: string; output: string };
+        out.push(rowToRunLog({ ...r, tool_calls: both.tool_calls, output: both.output }));
+      } else out.push(rowToRunLog(r));
+    }
+    return out;
+  };
   return {
     signals: {
       putMany: async (
@@ -416,16 +429,23 @@ export function phase2(db: SqlDriver) {
     runLog: {
       append: async (e: RunLogEntry) => {
         const v = RunLogEntry.parse(e);
+        const tc = j(v.tool_calls);
+        const out = j(v.output);
+        const both = JSON.stringify({ tool_calls: tc, output: out });
+        const b = await bodies.put("runlog", `${v.task_id}/${v.step_id}-${v.timestamp}`, both);
         await db.run(
-          `INSERT INTO run_log (task_id, step_id, role, model, tool_calls, output, check_result, tokens_in, tokens_out, cost_gbp, duration_ms, timestamp, graph_id, graph_version, node_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO run_log (task_id, step_id, role, model, tool_calls, output, body_key, body_size, body_sha256, check_result, tokens_in, tokens_out, cost_gbp, duration_ms, timestamp, graph_id, graph_version, node_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             v.task_id,
             v.step_id,
             v.role,
             v.model,
-            j(v.tool_calls),
-            j(v.output),
+            b.key ? "" : tc,
+            b.key ? "" : out,
+            b.key,
+            b.size,
+            b.sha256,
             v.check_result === null ? null : j(v.check_result),
             v.tokens.input,
             v.tokens.output,
@@ -439,8 +459,8 @@ export function phase2(db: SqlDriver) {
         );
       },
       forTask: async (taskId: string) =>
-        (await db.all<Row>("SELECT * FROM run_log WHERE task_id = ? ORDER BY id", [taskId])).map(
-          rowToRunLog,
+        runLogRows(
+          await db.all<Row>("SELECT * FROM run_log WHERE task_id = ? ORDER BY id", [taskId]),
         ),
       /** Cost per task since `since`, split into sending (print and post) and everything else (model, tools). */
       costByTask: async (

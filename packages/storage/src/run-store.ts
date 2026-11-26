@@ -1,4 +1,5 @@
 import type { BlobStore } from "./blobs.ts";
+import { bodyOf, makeBodies } from "./bodies.ts";
 import type { SqlDriver, SqlValue } from "./driver.ts";
 import type { GraphNodeRunRow } from "./graph.ts";
 
@@ -74,6 +75,9 @@ export const RUN_STORE_SCHEMA = [
   cost_gbp REAL NOT NULL DEFAULT 0,
   output_ref TEXT,
   recorded_model_output TEXT,
+  recorded_model_output_key TEXT,
+  recorded_model_output_size INTEGER,
+  recorded_model_output_sha256 TEXT,
   check_results TEXT,
   error TEXT,
   PRIMARY KEY (run_id, node_id, iteration)
@@ -132,6 +136,12 @@ export function sqlRunStore(
   o: { now?: () => Date } = {},
 ): RunStore {
   const nowIso = () => (o.now?.() ?? new Date()).toISOString();
+  // A recorded model output over 8 KiB goes to the blob store, through the one body helper.
+  const bodies = makeBodies(blobs);
+  const resolve = async (r: Row): Promise<GraphNodeRunRow> => {
+    const b = bodyOf(r, "recorded_model_output");
+    return toNodeRun(b.key ? { ...r, recorded_model_output: await bodies.text(b) } : r);
+  };
   let ready: Promise<void> | null = null;
   const ensure = () => {
     ready ??= db.batch(RUN_STORE_SCHEMA.map((sql) => ({ sql })));
@@ -145,16 +155,17 @@ export function sqlRunStore(
         [runId, nodeId, iteration],
       )
     )[0];
-    return r ? toNodeRun(r) : null;
+    return r ? resolve(r) : null;
   };
   const live = async (runId: string) => {
     await ensure();
-    return (
-      await db.all(
-        "SELECT * FROM run_node_runs WHERE run_id = ? ORDER BY started_at, node_id, iteration",
-        [runId],
-      )
-    ).map(toNodeRun);
+    const out: GraphNodeRunRow[] = [];
+    for (const r of await db.all(
+      "SELECT * FROM run_node_runs WHERE run_id = ? ORDER BY started_at, node_id, iteration",
+      [runId],
+    ))
+      out.push(await resolve(r));
+    return out;
   };
   return {
     async start(runId, nodeId, iteration) {
@@ -168,20 +179,23 @@ export function sqlRunStore(
     get: one,
     async finish(runId, nodeId, iteration, p) {
       await ensure();
+      const common = [nowIso(), p.cost_gbp ?? 0, p.output_ref ?? null];
+      const tail = [json(p.check_results), p.error ?? null, runId, nodeId, iteration];
+      if (p.recorded_model_output === undefined) {
+        await db.run(
+          "UPDATE run_node_runs SET status = ?, ended_at = ?, cost_gbp = cost_gbp + ?, output_ref = COALESCE(?, output_ref), check_results = COALESCE(?, check_results), error = ? WHERE run_id = ? AND node_id = ? AND iteration = ?",
+          [p.status, ...common, ...tail],
+        );
+        return;
+      }
+      const out = await bodies.put(
+        "run_output",
+        `${runId}/${nodeId}-${iteration}`,
+        JSON.stringify(p.recorded_model_output),
+      );
       await db.run(
-        "UPDATE run_node_runs SET status = ?, ended_at = ?, cost_gbp = cost_gbp + ?, output_ref = COALESCE(?, output_ref), recorded_model_output = COALESCE(?, recorded_model_output), check_results = COALESCE(?, check_results), error = ? WHERE run_id = ? AND node_id = ? AND iteration = ?",
-        [
-          p.status,
-          nowIso(),
-          p.cost_gbp ?? 0,
-          p.output_ref ?? null,
-          json(p.recorded_model_output),
-          json(p.check_results),
-          p.error ?? null,
-          runId,
-          nodeId,
-          iteration,
-        ],
+        "UPDATE run_node_runs SET status = ?, ended_at = ?, cost_gbp = cost_gbp + ?, output_ref = COALESCE(?, output_ref), recorded_model_output = ?, recorded_model_output_key = ?, recorded_model_output_size = ?, recorded_model_output_sha256 = ?, check_results = COALESCE(?, check_results), error = ? WHERE run_id = ? AND node_id = ? AND iteration = ?",
+        [p.status, ...common, out.inline, out.key, out.size, out.sha256, ...tail],
       );
     },
     async nodeRuns(runId) {

@@ -1,3 +1,4 @@
+import { type Bodies, bodyOf } from "./bodies.ts";
 import type { SqlDriver, SqlValue } from "./driver.ts";
 
 type Row = Record<string, unknown>;
@@ -43,6 +44,13 @@ export interface DemoPageRow {
   created_at: string;
 }
 
+const b64 = (b: Uint8Array) => {
+  let s = "";
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+const unb64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
 const letter = (r: Row, withPdf = true): LetterRow => ({
   task_id: r.task_id as string,
   entity_id: r.entity_id as string,
@@ -66,13 +74,20 @@ const batch = (r: Row): PrintBatchRow => ({
   decided_at: (r.decided_at as string | null) ?? null,
 });
 
-export function lettersStorage(db: SqlDriver) {
+export function lettersStorage(db: SqlDriver, bodies: Bodies) {
+  /** A letter's PDF as base64: from the blob store, or (rows written before step 3) inline. */
+  const pdfOf = async (r: Row) => {
+    const b = bodyOf(r, "pdf_b64");
+    return b.key ? b64(await bodies.bytes(b)) : b.inline;
+  };
   return {
     demoPages: {
+      /** The page itself always goes to the blob store (data layer plan, step 3). */
       put: async (p: Omit<DemoPageRow, "published" | "published_at" | "created_at">) => {
+        const b = await bodies.put("demo_html", p.slug, p.html);
         await db.run(
-          "INSERT INTO demo_pages (slug, entity_id, task_id, html, published, created_at) VALUES (?, ?, ?, ?, 0, ?) ON CONFLICT (slug) DO UPDATE SET html = excluded.html",
-          [p.slug, p.entity_id, p.task_id, p.html, nowIso()],
+          "INSERT INTO demo_pages (slug, entity_id, task_id, html, html_key, html_size, html_sha256, published, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?) ON CONFLICT (slug) DO UPDATE SET html = excluded.html, html_key = excluded.html_key, html_size = excluded.html_size, html_sha256 = excluded.html_sha256",
+          [p.slug, p.entity_id, p.task_id, b.inline, b.key, b.size, b.sha256, nowIso()],
         );
       },
       get: async (slug: string): Promise<DemoPageRow | null> => {
@@ -82,7 +97,7 @@ export function lettersStorage(db: SqlDriver) {
               slug: r.slug as string,
               entity_id: r.entity_id as string,
               task_id: r.task_id as string,
-              html: r.html as string,
+              html: await bodies.text(bodyOf(r, "html")),
               published: Number(r.published) === 1,
               published_at: (r.published_at as string | null) ?? null,
               created_at: r.created_at as string,
@@ -102,8 +117,10 @@ export function lettersStorage(db: SqlDriver) {
       put: async (
         l: Omit<LetterRow, "status" | "batch_id" | "created_at"> & { synthetic?: boolean },
       ) => {
+        // The PDF is stored as bytes in the blob store (no base64 in the database).
+        const pdf = await bodies.put("letter_pdf", l.task_id, unb64(l.pdf_b64));
         await db.run(
-          "INSERT INTO letters (task_id, entity_id, company_name, address, demo_slug, opt_out_code, pdf_b64, flags, status, batch_id, created_at, synthetic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'waiting', NULL, ?, ?) ON CONFLICT (task_id) DO UPDATE SET pdf_b64 = excluded.pdf_b64, flags = excluded.flags",
+          "INSERT INTO letters (task_id, entity_id, company_name, address, demo_slug, opt_out_code, pdf_b64, pdf_b64_key, pdf_b64_size, pdf_b64_sha256, flags, status, batch_id, created_at, synthetic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'waiting', NULL, ?, ?) ON CONFLICT (task_id) DO UPDATE SET pdf_b64 = excluded.pdf_b64, pdf_b64_key = excluded.pdf_b64_key, pdf_b64_size = excluded.pdf_b64_size, pdf_b64_sha256 = excluded.pdf_b64_sha256, flags = excluded.flags",
           [
             l.task_id,
             l.entity_id,
@@ -111,7 +128,10 @@ export function lettersStorage(db: SqlDriver) {
             JSON.stringify(l.address),
             l.demo_slug,
             l.opt_out_code,
-            l.pdf_b64,
+            pdf.inline,
+            pdf.key,
+            pdf.size,
+            pdf.sha256,
             JSON.stringify(l.flags),
             nowIso(),
             l.synthetic ? 1 : 0,
@@ -120,7 +140,7 @@ export function lettersStorage(db: SqlDriver) {
       },
       get: async (taskId: string): Promise<LetterRow | null> => {
         const r = await first(db, "SELECT * FROM letters WHERE task_id = ?", [taskId]);
-        return r ? letter(r) : null;
+        return r ? { ...letter(r, false), pdf_b64: await pdfOf(r) } : null;
       },
       /** Letters without their PDF bytes (for lists). */
       list: async (o: { status?: LetterRow["status"]; batchId?: string; limit?: number } = {}) => {
@@ -154,13 +174,15 @@ export function lettersStorage(db: SqlDriver) {
         ]);
         return r ? letter(r, false) : null;
       },
-      pdfsForBatch: async (batchId: string): Promise<{ task_id: string; pdf_b64: string }[]> =>
-        (
-          await db.all<Row>(
-            "SELECT task_id, pdf_b64 FROM letters WHERE batch_id = ? AND status != 'rejected' ORDER BY created_at, task_id",
-            [batchId],
-          )
-        ).map((r) => ({ task_id: r.task_id as string, pdf_b64: r.pdf_b64 as string })),
+      pdfsForBatch: async (batchId: string): Promise<{ task_id: string; pdf_b64: string }[]> => {
+        const rows = await db.all<Row>(
+          "SELECT task_id, pdf_b64, pdf_b64_key, pdf_b64_size, pdf_b64_sha256 FROM letters WHERE batch_id = ? AND status != 'rejected' ORDER BY created_at, task_id",
+          [batchId],
+        );
+        const out: { task_id: string; pdf_b64: string }[] = [];
+        for (const r of rows) out.push({ task_id: r.task_id as string, pdf_b64: await pdfOf(r) });
+        return out;
+      },
       setStatus: async (taskIds: string[], status: LetterRow["status"], batchId?: string) => {
         for (const id of taskIds)
           await db.run(

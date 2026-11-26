@@ -70,6 +70,17 @@ describe.each(stores)("run store on %s", (_name, make) => {
     expect(await store.get(RUN, "nope", 0)).toBeNull();
   });
 
+  it("a recorded output over 8 KiB goes to the blob store and the archive still holds it", async () => {
+    const { store, blobs } = make();
+    const text = "y".repeat(9000);
+    await store.start(RUN, "big", 0);
+    await store.finish(RUN, "big", 0, { status: "done", recorded_model_output: { text } });
+    expect(blobs.keys().some((k) => k.startsWith(`runs/${RUN}`))).toBe(true);
+    expect((await store.get(RUN, "big", 0))?.recorded_model_output).toEqual({ text });
+    await store.close(RUN);
+    expect((await runArchive(blobs, RUN))?.node_runs[0]?.recorded_model_output).toEqual({ text });
+  });
+
   it("state keeps every iteration and reads back the latest of each key", async () => {
     const { store } = make();
     const put = (key: string, iteration: number, value: unknown) =>

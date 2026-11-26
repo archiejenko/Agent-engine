@@ -1,4 +1,6 @@
 import { Claim, VerifiedFact, VerifiedFactVersion } from "@ae/contracts";
+import { type BlobStore, memoryBlobStore } from "./blobs.ts";
+import { makeBodies } from "./bodies.ts";
 import { claimsStorage } from "./claims.ts";
 import type { SqlDriver, SqlStatement, SqlValue } from "./driver.ts";
 import { graphStorage } from "./graph.ts";
@@ -146,18 +148,26 @@ export class SqlStorage implements Storage {
     return this.db;
   }
 
-  constructor(private readonly db: SqlDriver) {
+  /** Where large bodies go (data layer plan, step 3): R2 on Cloudflare, data/blobs locally. */
+  readonly blobs: BlobStore;
+
+  constructor(
+    private readonly db: SqlDriver,
+    blobs: BlobStore = memoryBlobStore(),
+  ) {
+    this.blobs = blobs;
+    const bodies = makeBodies(blobs);
     Object.assign(
       this,
-      phase2(db),
+      phase2(db, bodies),
       phase3(db),
       phase4(db),
-      phase5(db),
-      lettersStorage(db),
+      phase5(db, bodies),
+      lettersStorage(db, bodies),
       v2Storage(db),
       runtimeStorage(db),
       claimsStorage(db),
-      v3Storage(db),
+      v3Storage(db, bodies, blobs),
       graphStorage(db),
       ideasStorage(db),
       ideaMatrixStorage(db),

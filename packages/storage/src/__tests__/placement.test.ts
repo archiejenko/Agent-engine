@@ -6,7 +6,12 @@ import { describe, expect, it } from "vitest";
 import type { SqlDriver } from "../driver.ts";
 import { LOCAL_RUNTIME_SCHEMA } from "../local-runtime.ts";
 import { migrate, rollback } from "../migrate.ts";
-import { loadDownMigrations, loadMigrations, migrationsDirFor } from "../migrations-fs.ts";
+import {
+  loadDownMigrations,
+  loadMigrations,
+  migrationsDirFor,
+  migrationsDownDirFor,
+} from "../migrations-fs.ts";
 import {
   CrossStoreError,
   D1_STORES,
@@ -131,7 +136,7 @@ describe("placement (data layer plan, step 2)", () => {
 
   it("the split migration runs up, down and up again, back to exactly the same schema", async () => {
     const n = "0026_split.sql";
-    const all = loadMigrations(migrationsDirFor("core"));
+    const all = loadMigrations(migrationsDirFor("core")).filter((m) => m.name <= n);
     const before = sqliteDriver(":memory:");
     await migrate(
       before,
@@ -148,6 +153,35 @@ describe("placement (data layer plan, step 2)", () => {
       db,
       all.find((m) => m.name === n) as never,
       loadDownMigrations().get(n) as string,
+    );
+    expect(await snap(db)).toEqual(await snap(before));
+    expect(await migrate(db, all)).toEqual([n]);
+    expect(await snap(db)).toEqual(up);
+  });
+});
+
+describe("data layer migrations run up, down and up again", () => {
+  it.each([
+    ["core", "0027_bodies.sql"],
+    ["telemetry", "0002_bodies.sql"],
+  ] as const)("%s %s", async (store, n) => {
+    const all = loadMigrations(migrationsDirFor(store)).filter((m) => m.name <= n);
+    const before = sqliteDriver(":memory:");
+    await migrate(
+      before,
+      all.filter((m) => m.name !== n),
+    );
+    const db = sqliteDriver(":memory:");
+    await migrate(db, all);
+    const snap = (d: SqlDriver) =>
+      d.all(
+        "SELECT type, name, sql FROM sqlite_master WHERE name <> 'sqlite_sequence' ORDER BY type, name",
+      );
+    const up = await snap(db);
+    await rollback(
+      db,
+      all.find((m) => m.name === n) as never,
+      loadDownMigrations(migrationsDownDirFor(store)).get(n) as string,
     );
     expect(await snap(db)).toEqual(await snap(before));
     expect(await migrate(db, all)).toEqual([n]);
@@ -188,8 +222,8 @@ describe("splitting an existing local database", () => {
     expect(await s.workflows.step("w1", "step one")).toBeTruthy();
     expect((await s.health()).databases).toEqual({
       core: loadMigrations(migrationsDirFor("core")).length,
-      facts: 1,
-      telemetry: 1,
+      facts: loadMigrations(migrationsDirFor("facts")).length,
+      telemetry: loadMigrations(migrationsDirFor("telemetry")).length,
     });
     await s.close();
     const core = new Database(storePaths(path).core);
