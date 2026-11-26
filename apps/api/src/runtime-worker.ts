@@ -46,7 +46,21 @@ import {
 import { SecretsStoreKeyStore } from "@ae/ports";
 import { AnthropicModelClient } from "@ae/ports/anthropic";
 import { liveRefresh } from "@ae/products";
-import { createD1Storage, type Storage } from "@ae/storage";
+import {
+  createD1Storage,
+  type DurableSqlLike,
+  durableSqlDriver,
+  type GraphNodeRunRow,
+  type NodeFinish,
+  RUN_STORE_SCHEMA,
+  type RunCloseResult,
+  type RunStore,
+  r2BlobStore,
+  runArchive,
+  type StateValueRow,
+  type Storage,
+  sqlRunStore,
+} from "@ae/storage";
 import { CompaniesHouseClient, defaultContext, HttpChangeStream } from "@ae/verification";
 
 /**
@@ -89,6 +103,9 @@ async function runtimeFor(env: Env): Promise<JobRuntime> {
     : fakeModel();
   const service = new AgentService({
     storage,
+    // Data layer step 1: graph run state in one RunState Durable Object per run; archives in R2.
+    runs: durableRunStore(env),
+    blobs: r2BlobStore(env.FILES),
     // Replies arrive by Email Routing into the mailbox; the reply loop reads them from there.
     inbox: mailboxInbox(storage),
     playbooks: await loadBundledPlaybooks(),
@@ -242,7 +259,7 @@ export class EngineWorkflow extends WorkflowEntrypoint<Env, EngineParams> {
     });
     const out = await def.run(
       params,
-      engineStep(step, storage, instance_id, async (name, i) => {
+      engineStep(step, async (name, i) => {
         const ok = await step.do(`kill check: ${name} #${i}`, () =>
           workflowMayProceed(storage, cfg, inst),
         );
@@ -268,13 +285,13 @@ export class EngineWorkflow extends WorkflowEntrypoint<Env, EngineParams> {
 }
 
 /**
- * The engine's step contract on a Cloudflare WorkflowStep. Each `do` result is also written to D1 for
- * the dashboard. `guard` (optional) runs before every step and returns false to wait and re-check.
+ * The engine's step contract on a Cloudflare WorkflowStep. Step results live only in Workflows' own
+ * durable state (data layer plan, step 1): nothing on Cloudflare read the old D1 copy, and it cost one
+ * write per step. D1 keeps one `workflow_instances` row per instance (start, pause, end) as the index
+ * the dashboard lists. `guard` (optional) runs before every step and returns false to wait and re-check.
  */
 function engineStep(
   step: WorkflowStep,
-  storage: Storage,
-  instanceId: string,
   guard?: (name: string, attempt: number) => Promise<boolean>,
 ) {
   return {
@@ -282,11 +299,7 @@ function engineStep(
       for (let i = 0; guard && !(await guard(name, i)); i++) {
         // waiting while the guard says no
       }
-      return (await step.do(name, async () => {
-        const r = await fn();
-        await storage.workflows.putStep(instanceId, name, r ?? null);
-        return (r ?? null) as never;
-      })) as T;
+      return (await step.do(name, async () => ((await fn()) ?? null) as never)) as T;
     },
     sleep: (name: string, ms: number) => step.sleep(name, ms),
     waitForEvent: async <T>(name: string, type: string, timeoutMs: number) => {
@@ -315,7 +328,7 @@ export class GraphRunWorkflow extends WorkflowEntrypoint<Env, EngineParams> {
     const storage: Storage = createD1Storage(this.env.DB);
     const out = await graphRunWorkflow(rt.service.graphDeps).run(
       params as never,
-      engineStep(step, storage, instance_id),
+      engineStep(step),
       { instanceId: instance_id, dryRun: true },
     );
     await step.do("complete", async () => {
@@ -324,6 +337,68 @@ export class GraphRunWorkflow extends WorkflowEntrypoint<Env, EngineParams> {
     });
     return out;
   }
+}
+
+/**
+ * Per-run graph state (data layer plan, step 1): one object per run, named by the run id. It runs the
+ * same run-store SQL as the local SQLite file, on its own SQLite storage. `close` archives the run to
+ * R2 and then `deleteAll()`, so a finished run costs nothing to keep.
+ */
+export class RunState extends DurableObject<Env> {
+  private readonly store: RunStore;
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    const storage = ctx.storage as unknown as DurableSqlLike;
+    ctx.blockConcurrencyWhile(async () => {
+      for (const sql of RUN_STORE_SCHEMA) storage.sql.exec(sql);
+    });
+    this.store = sqlRunStore(durableSqlDriver(storage), r2BlobStore(env.FILES));
+  }
+  start(runId: string, nodeId: string, iteration: number) {
+    return this.store.start(runId, nodeId, iteration);
+  }
+  get(runId: string, nodeId: string, iteration: number) {
+    return this.store.get(runId, nodeId, iteration);
+  }
+  finish(runId: string, nodeId: string, iteration: number, p: NodeFinish) {
+    return this.store.finish(runId, nodeId, iteration, p);
+  }
+  nodeRuns(runId: string) {
+    return this.store.nodeRuns(runId);
+  }
+  put(v: StateValueRow) {
+    return this.store.put(v);
+  }
+  latest(runId: string) {
+    return this.store.latest(runId);
+  }
+  async close(runId: string): Promise<RunCloseResult> {
+    const r = await this.store.close(runId);
+    await this.ctx.storage.deleteAll();
+    return r;
+  }
+}
+
+/** The run store on Cloudflare: each call goes to that run's RunState object. */
+export function durableRunStore(env: Env): RunStore {
+  const blobs = r2BlobStore(env.FILES);
+  const stub = (runId: string) =>
+    env.RUN_STATE.getByName(runId) as unknown as DurableObjectStub<RunState>;
+  return {
+    start: async (r, n, i) => (await stub(r).start(r, n, i)) as GraphNodeRunRow,
+    get: async (r, n, i) => (await stub(r).get(r, n, i)) as GraphNodeRunRow | null,
+    finish: async (r, n, i, p) => {
+      await stub(r).finish(r, n, i, p);
+    },
+    // A closed run reads from its archive, without waking (and re-creating) its emptied object.
+    nodeRuns: async (r) =>
+      (await runArchive(blobs, r))?.node_runs ?? ((await stub(r).nodeRuns(r)) as GraphNodeRunRow[]),
+    put: async (v) => {
+      await stub(v.run_id).put(v);
+    },
+    latest: async (r) => (await stub(r).latest(r)) as Awaited<ReturnType<RunStore["latest"]>>,
+    close: async (r) => (await stub(r).close(r)) as RunCloseResult,
+  };
 }
 
 /**
@@ -382,8 +457,8 @@ export function cloudflareWorkflowPort(env: Env): WorkflowPort {
         params: { workflow, params, instance_id: o.id },
       });
     },
+    // Events are buffered by Workflows itself; the D1 copy was never read on Cloudflare.
     sendEvent: async (id, type, payload) => {
-      await storage.workflowEvents.add(id, type, payload);
       try {
         const graph = (await storage.workflows.get(id))?.workflow === GRAPH_WORKFLOW;
         await (await (graph ? env.GRAPH : env.ENGINE).get(id)).sendEvent({ type, payload });

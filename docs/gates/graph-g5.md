@@ -1,6 +1,6 @@
 # Phase graph-g5 gate report
 
-Generated 2026-11-26T20:25:23.072Z on SYNTHETIC data with fake external systems.
+Generated 2026-11-26T20:43:49.515Z on SYNTHETIC data with fake external systems.
 
 | Criterion | Status | Evidence |
 |---|---|---|

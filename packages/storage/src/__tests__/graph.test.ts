@@ -142,36 +142,7 @@ describe("graph storage", () => {
       started_at: "2026-11-18T10:00:00.000Z",
       synthetic: false,
     });
-    const a = await s.graphNodeRuns.start("r".repeat(32), "draft", 0);
-    const b = await s.graphNodeRuns.start("r".repeat(32), "draft", 0);
-    expect(a.started_at).toBe(b.started_at);
-    await s.graphNodeRuns.finish("r".repeat(32), "draft", 0, {
-      status: "done",
-      cost_gbp: 0.02,
-      recorded_model_output: { text: "hi" },
-    });
-    expect((await s.graphNodeRuns.get("r".repeat(32), "draft", 0))?.recorded_model_output).toEqual({
-      text: "hi",
-    });
-    await s.graphState.put({
-      run_id: "r".repeat(32),
-      key: "draft",
-      iteration: 0,
-      value: "v0",
-      untrusted: false,
-      lane: "open",
-      written_by: "draft",
-    });
-    await s.graphState.put({
-      run_id: "r".repeat(32),
-      key: "draft",
-      iteration: 1,
-      value: "v1",
-      untrusted: false,
-      lane: "open",
-      written_by: "draft",
-    });
-    expect((await s.graphState.latest("r".repeat(32)))[0]?.value).toBe("v1");
+    // Per-node runs and state values live in the run store now (run-store.test.ts).
     await s.graphShapes.ensure("f".repeat(64));
     await s.graphShapes.record("f".repeat(64), { met_metric: true, breach: false, cost_gbp: 0.1 });
     expect(await s.graphShapes.get("f".repeat(64))).toMatchObject({

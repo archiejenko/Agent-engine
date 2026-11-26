@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./sqlite": "./src/sqlite.ts",
+    "./fs": "./src/fs.ts",
     "./migrations-fs": "./src/migrations-fs.ts"
   },
   "scripts": {

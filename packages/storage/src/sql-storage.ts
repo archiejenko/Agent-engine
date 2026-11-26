@@ -141,6 +141,11 @@ const CLAIM_INSERT_COLS =
 
 /** Storage implemented over plain SQL. Works on any SqlDriver (SQLite file or D1). */
 export class SqlStorage implements Storage {
+  /** The SQL driver underneath. Only for stores that live beside it locally (the run store in tests). */
+  get driver(): SqlDriver {
+    return this.db;
+  }
+
   constructor(private readonly db: SqlDriver) {
     Object.assign(
       this,
@@ -216,8 +221,6 @@ export class SqlStorage implements Storage {
   declare graphSpecs: Storage["graphSpecs"];
   declare sandboxReports: Storage["sandboxReports"];
   declare graphRuns: Storage["graphRuns"];
-  declare graphNodeRuns: Storage["graphNodeRuns"];
-  declare graphState: Storage["graphState"];
   declare decisionLog: Storage["decisionLog"];
   declare graphShapes: Storage["graphShapes"];
   declare promotedPlaybooks: Storage["promotedPlaybooks"];

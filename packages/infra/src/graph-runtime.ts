@@ -15,7 +15,7 @@ import {
   type RunState,
   runGraph,
 } from "@ae/graph";
-import type { Storage, StoredRunLog, StoredTask } from "@ae/storage";
+import type { RunStore, Storage, StoredRunLog, StoredTask } from "@ae/storage";
 import { K, queuePaused } from "./controls.ts";
 import { legacyBindings } from "./graph-legacy.ts";
 import type { PlaybookRunner } from "./runner.ts";
@@ -59,6 +59,8 @@ export interface GraphRuntimeDeps {
   cfg: InfraConfig;
   policy: GraphPolicy;
   models: ModelsConfig;
+  /** Per-run node runs and state (a RunState Durable Object per run on Cloudflare; SQLite locally). */
+  runs: RunStore;
   runner: PlaybookRunner;
   /** Sends a graph_node job (the queue on Cloudflare; an in-process list locally). */
   dispatch(job: GraphNodeJob): Promise<void>;
@@ -255,7 +257,9 @@ export async function runGraphNodeJob(
   hooks: { crashAfterStep?: (job: GraphNodeJob) => boolean } = {},
 ): Promise<void> {
   const type = graphEventType("gd", job.run_id, job.node_id, job.iteration);
-  const row = await d.storage.graphNodeRuns.start(job.run_id, job.node_id, job.iteration);
+  // A job re-delivered after its run ended (and was archived) must never run the node again.
+  if ((await d.storage.graphRuns.get(job.run_id))?.ended_at) return;
+  const row = await d.runs.start(job.run_id, job.node_id, job.iteration);
   if (row.status === "done" || row.status === "failed") {
     await port.sendEvent(job.instance_id, type, row.recorded_model_output);
     return;
@@ -263,9 +267,7 @@ export async function runGraphNodeJob(
   const compiled = await loadCompiled(d.storage, job.graph_id, job.version);
   const node = compiled.spec.nodes.find((n) => n.id === job.node_id) as GraphNode;
   const task = (await d.storage.tasks.get(job.task_id)) as StoredTask;
-  const latest = new Map(
-    (await d.storage.graphState.latest(job.run_id)).map((v) => [v.key, v.value]),
-  );
+  const latest = new Map((await d.runs.latest(job.run_id)).map((v) => [v.key, v.value]));
   const inputs = Object.fromEntries(node.reads.map((k) => [k, latest.get(k)]));
   const before = (await d.storage.runLog.forTask(task.task_id)).length;
   // A node that throws (a tool down, a model error) is a recorded failure, not a lost job: its costs so
@@ -293,7 +295,7 @@ export async function runGraphNodeJob(
   for (const entry of log) cost += stepCost(d, { entry, dry_run: true });
   if (failure || out?.status !== "done") {
     const failed = { error: failure ?? "no result", cost_gbp: cost };
-    await d.storage.graphNodeRuns.finish(job.run_id, job.node_id, job.iteration, {
+    await d.runs.finish(job.run_id, job.node_id, job.iteration, {
       status: "failed",
       cost_gbp: cost,
       recorded_model_output: failed,
@@ -304,7 +306,7 @@ export async function runGraphNodeJob(
   }
   assertStateSize(out.writes, d.policy.runtime.state_value_max_bytes);
   const payload = { writes: out.writes, cost_gbp: cost };
-  await d.storage.graphNodeRuns.finish(job.run_id, job.node_id, job.iteration, {
+  await d.runs.finish(job.run_id, job.node_id, job.iteration, {
     status: "done",
     cost_gbp: cost,
     recorded_model_output: payload,
@@ -333,7 +335,7 @@ export function graphRunWorkflow(d: GraphRuntimeDeps): WorkflowDef<GraphRunParam
       const rs0: RunState = newRunState(p.run_id, compiled, { entity_ref: entity });
       await step.do("init", async () => {
         for (const [k, v] of Object.entries(rs0.values))
-          await d.storage.graphState.put({
+          await d.runs.put({
             run_id: p.run_id,
             key: k,
             iteration: 0,
@@ -359,7 +361,7 @@ export function graphRunWorkflow(d: GraphRuntimeDeps): WorkflowDef<GraphRunParam
         extraCost: number,
       ) => {
         for (const [k, v] of Object.entries(writes))
-          await d.storage.graphState.put({
+          await d.runs.put({
             run_id: p.run_id,
             key: k,
             iteration: ctx.iteration,
@@ -531,6 +533,7 @@ export function graphRunWorkflow(d: GraphRuntimeDeps): WorkflowDef<GraphRunParam
             status: "failed",
             ended_at: new Date().toISOString(),
           });
+          await d.runs.close(p.run_id);
           await d.storage.tasks.update(task.task_id, { status: "failed", error: why });
           await d.storage.alerts.raise(
             "graph_failed",
@@ -550,6 +553,8 @@ export function graphRunWorkflow(d: GraphRuntimeDeps): WorkflowDef<GraphRunParam
           status: rs.status === "done" ? "done" : "failed",
           ended_at: ended,
         });
+        // The run's hot state is archived (one object per run) and its store emptied.
+        await d.runs.close(p.run_id);
         const reason =
           rs.status === "stopped" ? `stopped at ${rs.stoppedAt}: outreach not allowed` : null;
         await d.storage.tasks.update(task.task_id, {

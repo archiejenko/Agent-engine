@@ -237,7 +237,7 @@ export async function runSandbox(o: {
     final.state as { graph_run?: { run_id: string; graph_id: string; version: number } }
   ).graph_run;
   if (!graphRun) throw new Error(`${o.playbook} didn't run as a graph in the sandbox`);
-  const nodeRuns = await o.storage.graphNodeRuns.forRun(graphRun.run_id);
+  const nodeRuns = await service.graphDeps.runs.nodeRuns(graphRun.run_id);
   const costs = await o.storage.costEvents.forRun(graphRun.run_id);
   const byNode = rollUp(costs, (e) => e.node_id ?? "-");
   const nodeIds = [...new Set([...nodeRuns.map((n) => n.node_id), ...byNode.keys()])].filter(

@@ -624,3 +624,27 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **Not covered:** the website extractor in the bulk ingestion scripts
   (`packages/verification/src/sources/website/ingest.ts`) uses its own model in Node scripts run by
   hand. Its spend still isn't on the ledger.
+
+## 2026-11-26 — Graph run state in Durable Objects (data layer plan, step 1)
+
+- **One `RunState` Durable Object per graph run** (named by the run id) holds that run's node runs
+  (with the recorded model output) and its state values. It's a plain `DurableObject` on its own
+  SQLite, not the Agents SDK. It runs the same run-store SQL (`packages/storage/src/run-store.ts`) as
+  the local store, through a small adapter over `ctx.storage.sql` (`do-sql.ts`).
+- **At the end of a run** (the workflow's `finish` step), the run is archived as one object,
+  `runs/<run_id>/archive.json`, in the new R2 bucket `agent-engine-files`. Then the object is emptied
+  with `deleteAll()`. Reading a closed run's node runs comes from the archive. A queue job delivered
+  again after the run has ended is skipped, so no node runs twice and no cost is recorded twice.
+- **Locally:** `data/runs.sqlite` and `data/blobs/` (`localRunState`). In tests and gates the run
+  tables sit beside the test database. The run tables are named `run_node_runs` and
+  `run_state_values`, so they never collide with the old `graph_*` tables. Those old tables stay in
+  D1, unused, until step 2's split migration drops them.
+- **Workflows keep their own state.** On Cloudflare, step results and events are no longer mirrored
+  into D1 (one write per step that nothing on Cloudflare read). **`workflow_instances` stays as the
+  thin index** (one row per instance; written at start, pause and end), instead of a new
+  `workflow_index` table. It has the same effect without a rename. The full step and event tables
+  remain for the local engine only.
+- **New bindings, no IDs:** `RUN_STATE` (Durable Object migration tag v3) and `FILES` (R2). Wrangler
+  creates them at Archie's next deploy. Nothing was created remotely.
+- **Flag:** a run that never reaches `finish` (an instance terminated by hand) keeps its object until
+  someone closes it. It's tiny, but it's billed for storage.

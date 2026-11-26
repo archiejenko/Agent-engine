@@ -1,8 +1,9 @@
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { AgentService, loadPlaybooks } from "@ae/agent-runner";
 import { askQuestion, KeyRing, localWorkflowPort } from "@ae/infra";
 import { envKeyStore, FakeStripe } from "@ae/ports";
 import { FakeFacilitator } from "@ae/products";
+import { localRunState } from "@ae/storage/fs";
 import { openSqliteStorage } from "@ae/storage/sqlite";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.ts";
@@ -20,6 +21,8 @@ const keyStore = envKeyStore(process.env);
 // Locally the agent runner lives in the same process, so dashboard decisions apply immediately.
 const service = new AgentService({
   storage,
+  // Graph run state in data/runs.sqlite, closed runs archived in data/blobs (as the Worker's R2).
+  ...localRunState(dirname(dbPath)),
   keys: new KeyRing(keyStore, storage),
   playbooks: await loadPlaybooks(resolve(import.meta.dirname, "../../../playbooks")),
 });

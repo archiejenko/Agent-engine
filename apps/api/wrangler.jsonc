@@ -59,12 +59,18 @@
     "bindings": [
       { "name": "CHANGE_FEED", "class_name": "ChangeFeed" },
       // Hard budgets: one object holds every reservation, so parallel work can't overspend a cap.
-      { "name": "BUDGET", "class_name": "BudgetObject" }
+      { "name": "BUDGET", "class_name": "BudgetObject" },
+      // Data layer step 1: one object per graph run holds its node runs and state; emptied at the end.
+      { "name": "RUN_STATE", "class_name": "RunState" }
     ]
   },
+  // Closed graph runs are archived here (one object per run). No id: wrangler creates the bucket at
+  // the next deploy. Never the agent-house-files bucket.
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "agent-engine-files" }],
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["ChangeFeed"] },
-    { "tag": "v2", "new_sqlite_classes": ["BudgetObject"] }
+    { "tag": "v2", "new_sqlite_classes": ["BudgetObject"] },
+    { "tag": "v3", "new_sqlite_classes": ["RunState"] }
   ],
   // Multi-step work over time (fulfilment, experiments, weekly loops) runs as Cloudflare Workflows.
   "workflows": [

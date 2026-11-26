@@ -84,7 +84,15 @@ import {
   registerProductTools,
   WATCH_ALERT,
 } from "@ae/products";
-import type { Storage, StoredTask } from "@ae/storage";
+import {
+  type BlobStore,
+  memoryBlobStore,
+  type RunStore,
+  type SqlDriver,
+  type Storage,
+  type StoredTask,
+  sqlRunStore,
+} from "@ae/storage";
 import { defaultContext, fakeWebsiteExtractor, type VerificationContext } from "@ae/verification";
 import { fakePlanner } from "./fake-planner.ts";
 
@@ -111,8 +119,22 @@ export function fakeModel(): FakeModel {
   });
 }
 
+function sqlDriverOf(storage: Storage): SqlDriver {
+  const driver = (storage as { driver?: SqlDriver }).driver;
+  if (!driver)
+    throw new Error("no run store given and the storage has no SQL driver to put one on");
+  return driver;
+}
+
 export interface ServiceDeps {
   storage: Storage;
+  /**
+   * Per-run graph state (data layer plan, step 1): the RunState Durable Objects on Cloudflare, a
+   * SQLite file locally. Absent: the run tables sit beside the storage's own database (tests, gates).
+   */
+  runs?: RunStore;
+  /** Where closed runs are archived (R2 on Cloudflare, data/blobs locally). Absent: in memory. */
+  blobs?: BlobStore;
   playbooks: Map<string, LoadedPlaybook>;
   model?: ModelClient;
   fetcher?: WebFetcher;
@@ -280,6 +302,7 @@ export class AgentService {
         (async (job) => {
           this.graphJobs.push(job);
         }),
+      runs: d.runs ?? sqlRunStore(sqlDriverOf(d.storage), d.blobs ?? memoryBlobStore()),
       toolPrice: (t) => this.tools.get(t)?.cost_gbp_per_call ?? 0,
       realSpend: this.model.name !== "fake-model",
       mode: this.sandbox ? "sandbox" : "live",

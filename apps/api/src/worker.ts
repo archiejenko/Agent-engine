@@ -130,7 +130,13 @@ function buildWith(
   });
 }
 
-export { BudgetObject, ChangeFeed, EngineWorkflow, GraphRunWorkflow } from "./runtime-worker.ts";
+export {
+  BudgetObject,
+  ChangeFeed,
+  EngineWorkflow,
+  GraphRunWorkflow,
+  RunState,
+} from "./runtime-worker.ts";
 
 export default {
   async fetch(request, env, ctx) {

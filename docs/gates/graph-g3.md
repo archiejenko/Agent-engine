@@ -1,6 +1,6 @@
 # Phase graph-g3 gate report
 
-Generated 2026-11-26T20:24:19.986Z on SYNTHETIC data with fake external systems.
+Generated 2026-11-26T20:43:28.035Z on SYNTHETIC data with fake external systems.
 
 | Criterion | Status | Evidence |
 |---|---|---|

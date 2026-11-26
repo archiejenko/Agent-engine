@@ -175,19 +175,6 @@ const toRun = (r: Row): GraphRunRow => ({
   outcome_id: (r.outcome_id as string | null) ?? null,
   synthetic: bool(r.synthetic),
 });
-const toNodeRun = (r: Row): GraphNodeRunRow => ({
-  run_id: r.run_id as string,
-  node_id: r.node_id as string,
-  iteration: Number(r.iteration),
-  status: r.status as GraphNodeRunRow["status"],
-  started_at: (r.started_at as string | null) ?? null,
-  ended_at: (r.ended_at as string | null) ?? null,
-  cost_gbp: Number(r.cost_gbp),
-  output_ref: (r.output_ref as string | null) ?? null,
-  recorded_model_output: pj(r.recorded_model_output),
-  check_results: pj(r.check_results),
-  error: (r.error as string | null) ?? null,
-});
 const toCost = (r: Row): CostEventRow => ({
   ...(r as unknown as CostEventRow),
   graph_version: r.graph_version === null ? null : Number(r.graph_version),
@@ -394,114 +381,6 @@ export function graphStorage(db: SqlDriver) {
             o.mode ? [o.mode, o.limit ?? 200] : [o.limit ?? 200],
           )
         ).map(toRun),
-    },
-
-    graphNodeRuns: {
-      /** Idempotent on (run, node, iteration): a duplicated dispatch finds the existing row. */
-      start: async (runId: string, nodeId: string, iteration: number): Promise<GraphNodeRunRow> => {
-        await db.run(
-          "INSERT INTO graph_node_runs (run_id, node_id, iteration, status, started_at) VALUES (?, ?, ?, 'running', ?) ON CONFLICT (run_id, node_id, iteration) DO NOTHING",
-          [runId, nodeId, iteration, nowIso()],
-        );
-        return toNodeRun(
-          (
-            await all(
-              "SELECT * FROM graph_node_runs WHERE run_id = ? AND node_id = ? AND iteration = ?",
-              [runId, nodeId, iteration],
-            )
-          )[0] as Row,
-        );
-      },
-      get: async (
-        runId: string,
-        nodeId: string,
-        iteration: number,
-      ): Promise<GraphNodeRunRow | null> => {
-        const r = (
-          await all(
-            "SELECT * FROM graph_node_runs WHERE run_id = ? AND node_id = ? AND iteration = ?",
-            [runId, nodeId, iteration],
-          )
-        )[0];
-        return r ? toNodeRun(r) : null;
-      },
-      finish: async (
-        runId: string,
-        nodeId: string,
-        iteration: number,
-        p: {
-          status: GraphNodeRunRow["status"];
-          cost_gbp?: number;
-          output_ref?: string | null;
-          recorded_model_output?: unknown;
-          check_results?: unknown;
-          error?: string | null;
-        },
-      ): Promise<void> => {
-        await db.run(
-          "UPDATE graph_node_runs SET status = ?, ended_at = ?, cost_gbp = cost_gbp + ?, output_ref = COALESCE(?, output_ref), recorded_model_output = COALESCE(?, recorded_model_output), check_results = COALESCE(?, check_results), error = ? WHERE run_id = ? AND node_id = ? AND iteration = ?",
-          [
-            p.status,
-            nowIso(),
-            p.cost_gbp ?? 0,
-            p.output_ref ?? null,
-            json(p.recorded_model_output),
-            json(p.check_results),
-            p.error ?? null,
-            runId,
-            nodeId,
-            iteration,
-          ],
-        );
-      },
-      forRun: async (runId: string): Promise<GraphNodeRunRow[]> =>
-        (
-          await all(
-            "SELECT * FROM graph_node_runs WHERE run_id = ? ORDER BY started_at, node_id, iteration",
-            [runId],
-          )
-        ).map(toNodeRun),
-    },
-
-    graphState: {
-      put: async (v: {
-        run_id: string;
-        key: string;
-        iteration: number;
-        value: unknown;
-        untrusted: boolean;
-        lane: "open" | "licensed";
-        written_by: string;
-      }): Promise<void> => {
-        await db.run(
-          "INSERT INTO graph_state_values (run_id, key, iteration, value, untrusted, lane, written_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (run_id, key, iteration) DO UPDATE SET value = excluded.value, untrusted = excluded.untrusted, lane = excluded.lane, written_by = excluded.written_by",
-          [
-            v.run_id,
-            v.key,
-            v.iteration,
-            JSON.stringify(v.value),
-            v.untrusted ? 1 : 0,
-            v.lane,
-            v.written_by,
-            nowIso(),
-          ],
-        );
-      },
-      /** Latest iteration of each key for a run. */
-      latest: async (runId: string) =>
-        (
-          await all(
-            "SELECT s.* FROM graph_state_values s JOIN (SELECT key, MAX(iteration) AS it FROM graph_state_values WHERE run_id = ? GROUP BY key) m ON s.key = m.key AND s.iteration = m.it WHERE s.run_id = ?",
-            [runId, runId],
-          )
-        ).map((r) => ({
-          key: r.key as string,
-          iteration: Number(r.iteration),
-          value: pj(r.value),
-          untrusted: bool(r.untrusted),
-          lane: r.lane as "open" | "licensed",
-          written_by: r.written_by as string,
-        })),
     },
 
     decisionLog: {

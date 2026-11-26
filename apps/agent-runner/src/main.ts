@@ -1,5 +1,6 @@
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { localWorkflowPort } from "@ae/infra";
+import { localRunState } from "@ae/storage/fs";
 import { openSqliteStorage } from "@ae/storage/sqlite";
 import {
   handleJob,
@@ -15,9 +16,12 @@ import { AgentService } from "./service.ts";
 // One scheduled run against the local database, through the same jobs the Worker's cron enqueues
 // (fakes; nothing external happens). Failing jobs retry 3 times, then become dead letters.
 const root = resolve(import.meta.dirname, "../../..");
-const storage = await openSqliteStorage(process.env.AE_DB ?? resolve(root, "data/dev.sqlite"));
+const dbPath = process.env.AE_DB ?? resolve(root, "data/dev.sqlite");
+const storage = await openSqliteStorage(dbPath);
 const service = new AgentService({
   storage,
+  // Graph run state in data/runs.sqlite, closed runs archived in data/blobs (as the Worker's R2).
+  ...localRunState(dirname(dbPath)),
   playbooks: await loadPlaybooks(resolve(root, "playbooks")),
   // Same switch as the Worker's var: "1" turns the task graph layer on (off by default).
   graphEngine: { enabled: process.env.GRAPH_ENGINE_ENABLED === "1" },
