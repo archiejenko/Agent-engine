@@ -995,3 +995,13 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   - latency 3.1 s on average, 5.1 s at p90.
 
   Opus wasn't run (no Claude key), so the default stays Opus until both run on the same pages.
+
+## 2026-11-27 — Key aliases (Claude key as EXTRACTOR_ANTHROPIC_API_KEY)
+
+- **Aliases live in the catalogue.** A key may now list `aliases` in `keys.json` (config, not code).
+  `ANTHROPIC_API_KEY` lists `EXTRACTOR_ANTHROPIC_API_KEY`.
+- **`keys.ts` is the only place aliases are applied.** The model key, tool keys and the Keys page's
+  "saved" status all try the main name first, then each alias. Hand-run scripts use `keyFromEnv`
+  (environment or `.dev.vars`).
+- **`pnpm compare:extractors` reads both its keys that way.**
+- **An alias belongs to its own key only,** and no value is ever shown.

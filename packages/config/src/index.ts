@@ -536,6 +536,8 @@ export const KeyEntry = z.object({
   model: z.boolean(),
   playbooks: z.array(z.string()),
   tools: z.array(z.string()),
+  /** Other names the same key may be saved under; tried in order when `name` isn't set. */
+  aliases: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{2,63}$/)).default([]),
 });
 export type KeyEntry = z.infer<typeof KeyEntry>;
 export const KeysConfig = z
