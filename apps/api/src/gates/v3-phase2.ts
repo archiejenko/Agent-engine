@@ -97,6 +97,9 @@ export async function runV3Phase2Gate(storage: Storage, root: string) {
     task_id: "gate-task",
     tool: "send_email",
     dry_run: false,
+    // Stuck since an hour ago: past the grace period, so it's on Needs you.
+    started_at: new Date(Date.now() - 3_600_000).toISOString(),
+    args: { recipients: ["info@gate.example"], entity_id: "01234567" },
   });
 
   // 1. One ranked list.

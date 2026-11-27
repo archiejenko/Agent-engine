@@ -147,6 +147,12 @@ function Card({ d, onDone }: { d: Decision; onDone: (msg: string) => void }) {
           <a href="#/inbox/letters">Open the batch (PDF, flagged letters)</a>
         </p>
       )}
+      {d.type === "uncertain_effect" && d.context?.entity_id ? (
+        <p>
+          <a href={`#/crm/${d.context.entity_id as string}`}>Company</a>
+          {d.context.error ? <> · what failed: {String(d.context.error)}</> : null}
+        </p>
+      ) : null}
       {d.type === "lead" && d.context?.entity_id ? (
         <p>
           <a href={`#/crm/${d.context.entity_id as string}`}>Company</a>

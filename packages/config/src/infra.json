@@ -4,8 +4,10 @@
     "global_per_day_gbp": 20,
     "per_playbook_per_day_gbp": {
       "default": 5,
-      "sme_outreach": 5
+      "sme_outreach": 5,
+      "website_ingest": 5
     },
+    "_website_ingest_note": "Website extractor (real model spend only; synthetic rehearsals don't count). One call is about 8,500 input + 400 output tokens on claude-opus-5-5 = about £0.033; a normal pilot run of ~100 companies is about £3.30, so £5 leaves about 50% headroom. The full Greater Manchester universe (~10,000 companies, ~£330) needs a recorded spend-tier raise.",
     "exclude_steps": ["print_and_post"],
     "_tiers_note": "S0 = the per-playbook cap above. Raising a playbook to S1-S3 needs Archie's recorded approval. explore_share = most of the weekly budget (global daily cap x 7) that exploratory work (experiments, explore-flagged leads) may use. step_reservation_gbp = what's held back before each model step and settled at the real cost (assumption).",
     "spend_tiers": { "S1": 10, "S2": 25, "S3": 60 },

@@ -106,16 +106,15 @@ nothing:
 - the KV namespace `agent-engine-cache`;
 - the `RunState` Durable Object class (migration tag v3), which a deploy sets up itself.
 
-Check that the R2 bucket `agent-engine-files` exists before the next deploy (Storage & databases →
-R2). It's named but has no id to pin; if it's missing, create it there. Never use
-`agent-house-files`.
+The R2 bucket `agent-engine-files` exists (created 2026-11-26 21:06 UTC by deploy run 3) and the
+`FILES` binding names it; a test pins that. Never use `agent-house-files`.
 
 `pnpm cf:deploy` applies each database's migrations (DB, FACTS, TELEMETRY) and then publishes. On
 `agent-engine` (core), `0026_split` drops the tables that moved to facts and telemetry (empty
 remotely); `0029_indexes` rebuilds two small tables WITHOUT ROWID, keeping their rows. Both still work
 with the previous Worker code, since migrations run first.
 
-To check: `/api/health` (behind Access) reports `databases: { core: 29, facts: 2, telemetry: 3 }`.
+To check: `/api/health` (behind Access) reports `databases: { core: 30, facts: 3, telemetry: 3 }`.
 
 **Turn on read replication (free, optional, once).** In the Cloudflare dashboard, go to Storage &
 databases → D1. For each of `agent-engine`, `agent-engine-facts` and `agent-engine-telemetry`, open

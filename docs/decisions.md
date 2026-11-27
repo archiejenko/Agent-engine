@@ -866,6 +866,163 @@ theme only (CSS variables); default view last 30 days, live only, compare on. Ma
   post approvals to their own routes (owner approvals, promote, board action, print batch); the test
   lists them, checks each records through the decisions path on the server, and fails on any new one.
 
+## 2026-11-26 — What's live (checked read-only)
+
+- **Live Worker: commit `e42272e`**, deploy run 6 (GitHub Actions, started by Archie, succeeded). Its
+  version `dec9e95c` was deployed at 22:15:57 UTC. `e42272e` is the data layer's step 6 (`071b6f6`)
+  plus a fix to the deploy workflow's Access check only.
+- **Earlier runs:** run 3 (`1d7fbca`, step 2) succeeded and created the facts and telemetry
+  databases. Run 4 failed (the KV namespace had no id). Run 5 (`2383bc4`) published the Worker, then
+  its Access check failed. Runs 1 and 2 failed before publishing.
+- **Remote migrations** (`d1_migrations`, read with SELECT only):
+  - `agent-engine`: 0001–0029;
+  - `agent-engine-facts`: 0001_baseline and 0002_indexes;
+  - `agent-engine-telemetry`: 0001_baseline, 0002_bodies and 0003_indexes.
+
+  That's every migration on the branch: the next deploy applies none unless a new one is added.
+- **R2 bucket `agent-engine-files` exists.** It was created 2026-11-26 21:06 UTC by deploy run 3, so
+  nothing was created now. `wrangler.jsonc` binds `FILES` to it, and `wrangler-config.test.ts` pins
+  that binding exactly.
+
+## 2026-11-26 — The website extractor is on the cost ledger
+
+- **`ingestWebsites` meters its own model.** Every extraction call goes through the same
+  `meteredModel` (priced with `costGbp`) and writes one cost event, plus its daily rollup in the same
+  batch, as it returns. Labels: playbook `website_ingest`, step `website_extract`, and the ingestion
+  run's id. A real model call is live and never `dry_run`, so it counts against the caps. The fake
+  model's calls are marked synthetic.
+- **The meter moved from `@ae/infra` to `@ae/verification`**, which infra re-exports unchanged, so
+  the extractor and the agent runtime share one implementation without verification depending on
+  infra.
+- **A sandbox building its own synthetic world labels that setup as sandbox spend**
+  (`costMode: "sandbox"`), so G3's "sandbox spend never appears as live" still holds. Other synthetic
+  worlds (gates, rehearsal) record theirs as live and synthetic.
+- **With this, every model call in the codebase writes to `cost_events`.**
+
+## 2026-11-26 — Outreach sends commit in one batch
+
+- **Tool handlers can queue their after-call writes** with `record(fn)`. The registry runs them in
+  one unit together with the effect's result and the call's cost event, which means one batch per
+  database, or nothing.
+- **`send_email` uses it for everything that records the send:**
+  - the outbox row (its id is fixed before the send, so the result can carry it);
+  - the "sent" outcome and the follow-up;
+  - on a blocked send, the blocked row and the contact-limit alert.
+
+  With the effect's result, the cost event and its rollup, that's one core batch. The rule 17 effect
+  pre-write stays on its own, before the provider is called.
+- **If the batch fails, nothing is written.** The effect stays unknown, so a re-delivered job is
+  refused instead of sending twice. A re-delivery after a successful send returns the first result
+  without calling the provider.
+- **Measured:** a send makes 2 core round trips (the pre-write and one batch); before, it made 5 or
+  more. `send_email` has no price, so there's no task cost write; the batch would carry one if it had
+  a price.
+
+## 2026-11-27 — Daily cap for the website extractor
+
+- **`website_ingest` gets a £5/day cap** in `infra.json`. The pricing behind it:
+  - one extraction call is about 8,500 input + 400 output tokens on `claude-opus-5-5`, about £0.033;
+  - a normal pilot run is about 100 companies (the pilot needs 50 leads a week), so about £3.30;
+  - £5 leaves about 50% headroom.
+
+  The full Greater Manchester universe (~10,000 companies, ~£330) would need a recorded spend-tier
+  raise.
+- **One check for everyone.** The daily-cap test (`dailyCapProblems`) now lives beside the model
+  meter in `@ae/verification`, and the agent playbooks' `checkSpend` calls it.
+- **How the pipeline uses it:** it checks before every extraction call. The call that crosses the cap
+  is already recorded at call time, and the next call never runs. The run then stops cleanly (its
+  claims so far stand) and raises a `spend_cap` alert. It doesn't pause the agent queue, which is for
+  agent tasks.
+- **What counts:** sandbox, probe and planner spend never count (live, non-dry-run spend only). The
+  website cap also counts **real money only** (`realOnly`, which leaves out synthetic fake-model
+  spend), so a 20,000-company rehearsal can't trip it. Agent caps still count synthetic spend, as
+  before, so their budget gates bite in simulated worlds.
+- **Flag:** the extractor sends whole pages with no size limit, so one huge site could cost more than
+  the estimate. The cap bounds the day, not a single call.
+
+## 2026-11-27 — Unknown sends on Needs you
+
+- **Before this change**, a send whose after-call batch failed left:
+  - the email sent once, no outbox row, and its effect `unknown` with an empty result, so the
+    provider message id was lost;
+  - nothing in `dead_letters` and no alert.
+
+  An `uncertain_effect` decision did appear on Needs you at the next sync ("Check an action": it
+  happened / it didn't / leave it), and the Health page listed it. The gaps:
+  - no grace period, so a call in flight showed straight away;
+  - no recipient, company or provider id in the decision;
+  - "It happened" only marked the effect done, never writing the missing outbox row or outcome;
+  - "It didn't happen" never queued the failed task again.
+- **Now:**
+  - The registry keeps the call's arguments with the effect (core `0030`, which also adds an index
+    on `(status, started_at)`). It also keeps the tool's reported result, including the provider
+    message id, when recording fails.
+  - Effects still unknown after `uncertain_effect_grace_minutes` (15, in `decisions.json`) open one
+    decision. It shows the tool, recipient, company, provider id and time, and is deduplicated by
+    source.
+  - For a send, **"Mark as sent"** writes the missing outbox row, outcome and follow-up, and settles
+    the effect, in one batch, with no provider call. It uses the same `recordSend` as a normal send.
+    **"Mark as not sent"** settles it as not happened and queues a failed task again, so it may try
+    once.
+  - **The safe default is "Leave it"**, so nothing is ever re-sent automatically. The recommendation
+    is "Mark as sent" only when the provider gave a message id.
+
+## 2026-11-27 — Per-page text limit for the website extractor
+
+- **What the model sees:** each page's useful text, with scripts, styles, menus, sidebars, forms,
+  inline SVG, iframes and cookie/consent banners dropped. Lines already seen on an earlier page of
+  the same site (the same footer three times) are sent once. Then each page is cut to
+  **6,000 tokens** (`verification.json` → `website_extraction.page_token_budget`). Tokens are
+  estimated as characters ÷ 4.
+- **Why 6,000:** calls average ~8,500 input tokens over up to 3 pages, which is about 2,600 tokens
+  a page after ~600 tokens of prompt. 6,000 is about 2.3× the average, so normal pages pass
+  untouched and only huge ones are cut. The worst case becomes ~18,600 input tokens a call, about
+  £0.07 on `claude-opus-5-5`.
+- **Headers and footers are kept** on purpose: they carry the company number, address and
+  copyright year.
+- **Only the model's input is cut.** The full page text still feeds every deterministic check and
+  the evidence check.
+- **Every cut is recorded** in the new `page_cuts` table (facts database, migration `0003`): run,
+  company, page, original and kept tokens, and when. The run's stats also count `pages_cut`.
+
+## 2026-11-27 — Gemini 4 Hydrogen for website extraction (built, not switched on)
+
+- **Prices**, from Google's official Gemini Developer API pricing page
+  (https://ai.google.dev/gemini-api/docs/pricing, which now redirects to
+  aistudio.google.com/docs/pricing; no last-updated date shown), read on 2026-11-27. Paid tier,
+  Standard, per 1M tokens:
+  - input **$1.50**;
+  - output **$7.50**, including thinking tokens;
+  - context caching $0.075 (implicit only).
+
+  They're in `models.json` beside the Anthropic prices, with their source recorded in
+  `other_price_sources`. The config refuses a non-Claude price without a source, and refuses a
+  non-Claude model for any agent role. The price table version is now `2026-11-27`.
+- **The adapter** (`@ae/ports/gemini`) calls `generateContent`:
+  - the key is in the `x-goog-api-key` header only;
+  - structured output via `responseMimeType: application/json` + `responseJsonSchema`, with the
+    extractor's existing schema (Hydrogen's model page lists structured outputs as supported);
+  - thinking level LOW.
+
+  Billed output is `candidatesTokenCount + thoughtsTokenCount`. Results are priced under the
+  configured id `gemini-4-hydrogen`, so the meter, `cost_events` and `daily_rollups` use Hydrogen's
+  price and the same USD→GBP rate (0.79). Only named fields are sent, so `meter` and other internal
+  fields never reach Google.
+- **The switch:** `models.json → website_extractor.model`. It's `claude-opus-5-5` today; set it to
+  `gemini-4-hydrogen` to use Hydrogen, with `fallback_model` Claude. A Hydrogen call that errors or
+  returns invalid JSON is retried once, then that page goes to Claude. Every attempt that returned a
+  response is metered, failed Hydrogen ones included. Agents never use it.
+- **Default stays Opus.** The quality comparison (`pnpm compare:extractors`) couldn't run: no keys in
+  this session, and the key form can't store either provider's header. There's no evidence yet that
+  Hydrogen is close to Opus.
+- **Cost per call** (8,500 input + 400 output tokens):
+  - Opus £0.033;
+  - Hydrogen £0.012 with no thinking, about £0.015–£0.018 with 500–1,000 thinking tokens at LOW.
+
+  A 100-company run would cost about £1.20–£1.80 on Hydrogen, against about £3.30 on Opus.
+- **The £5/day `website_ingest` cap is unchanged.** It still fits Opus. If Hydrogen becomes the
+  default, about £2.50 would keep the same ~50% headroom over a normal run. That's Archie's call.
+
 ## 2026-11-27 — Cockpit U2: Home cockpit (U1 approved with changes)
 
 Archie's answers at the U1 gate, now built:

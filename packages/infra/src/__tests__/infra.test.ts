@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadInfraConfig, loadModelsConfig, tradingDisclosure } from "@ae/config";
+import {
+  loadDecisionsConfig,
+  loadInfraConfig,
+  loadModelsConfig,
+  tradingDisclosure,
+} from "@ae/config";
 import type { Claim } from "@ae/contracts";
 import { FakeEmailSender, FakeInbox, FakeModel, FakeWebFetcher, InMemoryQueue } from "@ae/ports";
 import type { Storage } from "@ae/storage";
@@ -9,6 +14,7 @@ import { defaultContext, ingestClaims, stableUuid } from "@ae/verification";
 import { beforeEach, describe, expect, it } from "vitest";
 import { playbookStats, promotePlaybook, recordBreach } from "../autonomy.ts";
 import { externalActionsAllowed, K, SpendCapError, setKillSwitch } from "../controls.ts";
+import { decide, syncDecisions } from "../decisions.ts";
 import { meteredModel, withMeter } from "../metered-model.ts";
 import { checkSend, composeEmail, processInbox, registerOutreachTools } from "../outreach.ts";
 import { type LoadedPlaybook, parsePlaybook } from "../playbook.ts";
@@ -799,5 +805,226 @@ describe("cost ledger at call time (data layer plan, commit 0)", () => {
       events.find((e) => e.mode === "live")?.amount_gbp ?? -1,
       12,
     );
+  });
+});
+
+describe("outreach send: one batch per database (data layer plan follow-up)", () => {
+  const ALL = { from: "2000-01-01T00:00:00Z", to: "2100-01-01T00:00:00Z" };
+  const args = {
+    thread_id: "opportunity:o-batch",
+    attempt: 1,
+    entity_id: ENTITY,
+    recipients: ["info@acme.example"],
+    contact_source: "company_website",
+    company_type: "ltd",
+    company_domain: "acme.example",
+    subject: "Your website",
+    body: "Hello",
+  };
+  const setupSend = async () => {
+    const reg = new ToolRegistry(storage, infra);
+    const email = new FakeEmailSender();
+    registerOutreachTools(reg, { storage, cfg: infra, email });
+    const { task } = await newTask("opp:send");
+    const stores = (
+      storage as unknown as { driver: { stores: Record<string, Record<string, unknown>> } }
+    ).driver.stores;
+    const writes: { store: string; kind: string; sql: string }[] = [];
+    for (const [name, d] of Object.entries(stores))
+      for (const m of ["run", "batch"]) {
+        const orig = d[m] as (...a: unknown[]) => Promise<unknown>;
+        d[m] = (...a: unknown[]) => {
+          const sql =
+            m === "run"
+              ? String(a[0])
+              : (a[0] as { sql: string }[]).map((s) => s.sql.split("(")[0]).join(" | ");
+          writes.push({ store: name, kind: m, sql });
+          return orig.apply(d, a);
+        };
+      }
+    const call = () =>
+      reg.call("send_email", args, { task, role: "operator", step_tools: ["send_email"] });
+    return { reg, email, task, writes, stores, call };
+  };
+  const counts = async (taskId: string) => ({
+    outbox: (await storage.outbox.list(100)).filter((m) => m.task_id === taskId).length,
+    sent: (await storage.outcomeLedger.list({ limit: 100 })).filter(
+      (o) => o.task_id === taskId && o.event === "sent",
+    ).length,
+    costs: (await storage.costEvents.range(ALL)).filter(
+      (e) => e.task_id === taskId && e.unit === "call:send_email",
+    ).length,
+  });
+
+  it("the send record, outbox row, outcome, follow-up, cost event and rollup commit in ONE core batch", async () => {
+    const { email, task, writes, call } = await setupSend();
+    await call();
+    expect(email.sent).toHaveLength(1);
+    // After the provider call: exactly one core write, a batch holding all of it.
+    // Before it: the rule 17 pre-write of the effect, on its own.
+    const start = writes.findIndex((w) => /INTO external_effects/.test(w.sql));
+    expect(start).toBe(0);
+    const after = writes.slice(start + 1);
+    expect(after.map((w) => `${w.store}.${w.kind}`)).toEqual(["core.batch"]);
+    const batch = after[0]?.sql ?? "";
+    for (const t of [
+      "INSERT INTO outbox",
+      "INSERT OR IGNORE INTO outcomes",
+      "INTO followups",
+      "UPDATE external_effects",
+      "INSERT INTO cost_events",
+      "INSERT INTO daily_rollups",
+    ])
+      expect(batch, t).toContain(t);
+    expect(await counts(task.task_id)).toEqual({ outbox: 1, sent: 1, costs: 1 });
+    expect((await storage.effects.unresolved()).length).toBe(0);
+  });
+
+  it("if the batch fails nothing is written, and the send is never repeated", async () => {
+    const { email, task, stores, call } = await setupSend();
+    const core = stores.core as Record<string, (...a: unknown[]) => Promise<unknown>>;
+    const orig = core.batch as (...a: unknown[]) => Promise<unknown>;
+    core.batch = async (...a: unknown[]) => {
+      if ((a[0] as { sql: string }[]).some((s) => s.sql.startsWith("INSERT INTO outbox")))
+        throw new Error("D1 unavailable");
+      return orig.apply(core, a);
+    };
+    await expect(call()).rejects.toThrow();
+    core.batch = orig;
+    expect(email.sent).toHaveLength(1);
+    expect(await counts(task.task_id)).toEqual({ outbox: 0, sent: 0, costs: 0 });
+    expect(await storage.dailyRollups.range(ALL)).toEqual(
+      (await storage.dailyRollups.range(ALL)).filter(
+        (r) => r.playbook !== "sme_outreach" || r.cost_events > 0,
+      ),
+    );
+    // Rule 17: the outcome is unknown, so a re-delivered job refuses instead of sending again.
+    await expect(call()).rejects.toThrow(/outcome is unknown/);
+    expect(email.sent).toHaveLength(1);
+  });
+
+  it("a re-delivered job is a no-op: one email, one outbox row, one cost event", async () => {
+    const { email, task, call } = await setupSend();
+    const first = await call();
+    const again = await call();
+    expect(again.result).toEqual(first.result);
+    expect(email.sent).toHaveLength(1);
+    expect(await counts(task.task_id)).toEqual({ outbox: 1, sent: 1, costs: 1 });
+  });
+});
+
+describe("unknown sends on Needs you", () => {
+  const args = {
+    thread_id: "opportunity:o-unknown",
+    attempt: 1,
+    entity_id: ENTITY,
+    recipients: ["info@acme.example"],
+    contact_source: "company_website",
+    company_type: "ltd",
+    company_domain: "acme.example",
+    subject: "Your website",
+    body: "Hello",
+  };
+  const later = (min: number) => () => new Date(Date.now() + min * 60_000);
+  const deps = (now: () => Date) => ({
+    storage,
+    cfg: infra,
+    dcfg: loadDecisionsConfig(),
+    now,
+  });
+  const setup = async (failBatch: boolean) => {
+    const reg = new ToolRegistry(storage, infra);
+    const email = new FakeEmailSender();
+    registerOutreachTools(reg, { storage, cfg: infra, email });
+    const { task } = await newTask(`opp:unknown:${failBatch}`);
+    const call = () =>
+      reg.call("send_email", args, { task, role: "operator", step_tools: ["send_email"] });
+    if (failBatch) {
+      const core = (
+        storage as unknown as {
+          driver: { stores: { core: Record<string, (...a: unknown[]) => Promise<unknown>> } };
+        }
+      ).driver.stores.core;
+      const orig = core.batch as (...a: unknown[]) => Promise<unknown>;
+      core.batch = async (...a: unknown[]) => {
+        if ((a[0] as { sql: string }[]).some((x) => x.sql.startsWith("INSERT INTO outbox")))
+          throw new Error("D1 unavailable");
+        return orig.apply(core, a);
+      };
+      await expect(call()).rejects.toThrow("D1 unavailable");
+      core.batch = orig;
+    } else await call();
+    const open = async () =>
+      (
+        await storage.decisions.list({ status: "open", type: "uncertain_effect", limit: 50 })
+      ).filter((x) => (x.context as { task_id?: string }).task_id === task.task_id);
+    const outbox = async () =>
+      (await storage.outbox.list(100)).filter((m) => m.task_id === task.task_id);
+    return { email, task, call, open, outbox };
+  };
+
+  it("a failed batch creates exactly one decision, after the grace period, with who/what/when", async () => {
+    const { open } = await setup(true);
+    await syncDecisions(deps(later(1)));
+    expect(await open()).toHaveLength(0); // still inside the grace period
+    await syncDecisions(deps(later(16)));
+    await syncDecisions(deps(later(30)));
+    const [x, ...rest] = await open();
+    expect(rest).toHaveLength(0);
+    expect(x?.options.map((o) => o.label)).toEqual([
+      "Mark as sent",
+      "Mark as not sent",
+      "Leave it",
+    ]);
+    expect(x?.safe_default).toBe("leave");
+    expect(x?.context).toMatchObject({
+      tool: "send_email",
+      recipient: "info@acme.example",
+      entity_id: ENTITY,
+    });
+    expect((x?.context as { provider_id?: string | null } | undefined)?.provider_id).toBeTruthy();
+    expect(x?.summary).toMatch(/info@acme\.example/);
+    expect(x?.recommended).toBe("happened"); // the provider gave a message id
+  });
+
+  it("'Mark as sent' writes the missing outbox row and outcome without calling the provider", async () => {
+    const { email, task, call, open, outbox } = await setup(true);
+    await syncDecisions(deps(later(16)));
+    const [x] = await open();
+    expect(await outbox()).toHaveLength(0);
+    await decide(deps(later(16)), x?.id as string, "happened", "archie");
+    expect(email.sent).toHaveLength(1); // still the one original send
+    const rows = await outbox();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.recipient).toBe("info@acme.example");
+    const sent = (await storage.outcomeLedger.list({ limit: 100 })).filter(
+      (o) => o.task_id === task.task_id && o.event === "sent",
+    );
+    expect(sent).toHaveLength(1);
+    expect((await storage.effects.forTask(task.task_id))[0]?.status).toBe("done");
+    // A re-delivered job now returns the settled result: no second send, no second row.
+    const again = await call();
+    expect((again.result as { outbox_id: string }).outbox_id).toBe(rows[0]?.id);
+    expect(email.sent).toHaveLength(1);
+    expect(await outbox()).toHaveLength(1);
+  });
+
+  it("'Mark as not sent' closes it and lets the task try once more", async () => {
+    const { email, task, call, open, outbox } = await setup(true);
+    await expect(call()).rejects.toThrow(/outcome is unknown/); // blocked until settled
+    await syncDecisions(deps(later(16)));
+    const [x] = await open();
+    await decide(deps(later(16)), x?.id as string, "did_not_happen", "archie");
+    expect((await storage.tasks.get(task.task_id))?.status).toBe("queued");
+    await call();
+    expect(email.sent).toHaveLength(2); // the retry Archie allowed
+    expect(await outbox()).toHaveLength(1);
+    expect(await open()).toHaveLength(0);
+  });
+
+  it("a successful send creates no decision", async () => {
+    const { open } = await setup(false);
+    await syncDecisions(deps(later(60)));
+    expect(await open()).toHaveLength(0);
   });
 });

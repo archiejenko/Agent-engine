@@ -69,6 +69,15 @@
       "model": false,
       "playbooks": ["claim_site", "human_report", "monitoring_subscription"],
       "tools": []
+    },
+    {
+      "name": "GEMINI_API_KEY",
+      "label": "Gemini API",
+      "host": "generativelanguage.googleapis.com",
+      "purpose": "Website extraction with Gemini 4 Hydrogen, only when models.json website_extractor.model is \"gemini-4-hydrogen\". No agent uses it.",
+      "model": false,
+      "playbooks": ["website_ingest"],
+      "tools": []
     }
   ]
 }

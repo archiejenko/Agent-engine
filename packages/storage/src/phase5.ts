@@ -173,8 +173,10 @@ export function phase5(db: SqlDriver, bodies: Bodies) {
     },
 
     outbox: {
-      add: async (m: Omit<OutboxRow, "id" | "created_at"> & { synthetic?: boolean }) => {
-        const id = crypto.randomUUID();
+      add: async (
+        m: Omit<OutboxRow, "id" | "created_at"> & { synthetic?: boolean; id?: string },
+      ) => {
+        const id = m.id ?? crypto.randomUUID();
         const body = await bodies.put("outbox", id, m.body);
         await db.run(
           "INSERT INTO outbox (id, task_id, thread_id, attempt, entity_id, recipient, sender, subject, body, body_key, body_size, body_sha256, status, reason, created_at, synthetic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",

@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./anthropic": "./src/anthropic.ts"
+    "./anthropic": "./src/anthropic.ts",
+    "./gemini": "./src/gemini.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

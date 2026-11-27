@@ -1,6 +1,7 @@
 import type { InfraConfig } from "@ae/config";
 import type { Autonomy } from "@ae/contracts";
 import type { Storage } from "@ae/storage";
+import { dailyCapProblems } from "@ae/verification";
 
 /**
  * Kill switches, spend caps, queue pause and autonomy, stored in the controls table.
@@ -54,9 +55,6 @@ export async function playbookAutonomy(
   return (await storage.controls.get<Autonomy>(K.autonomy(playbook))) ?? fallback;
 }
 
-const startOfDay = (now: Date) =>
-  new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
-
 export class SpendCapError extends Error {}
 
 /**
@@ -71,29 +69,17 @@ export async function checkSpend(
   now = new Date(),
   o: { recorded?: boolean } = {},
 ): Promise<void> {
-  const day = startOfDay(now);
   // `recorded`: the cost is already in cost_events (written at call time), so the daily sums include
   // it and only the task budget still needs `extraGbp` added.
-  const dailyExtra = o.recorded ? 0 : extraGbp;
   const problems: string[] = [];
   if (task.cost_gbp + extraGbp > task.budget_gbp + 1e-9)
     problems.push(`task budget £${task.budget_gbp.toFixed(2)}`);
-  const pbCap =
-    cfg.caps.per_playbook_per_day_gbp[task.playbook] ??
-    cfg.caps.per_playbook_per_day_gbp.default ??
-    0;
-  const ex = cfg.caps.exclude_steps;
-  if (
-    (await storage.costEvents.spendSince(day, { playbook: task.playbook, excludeSteps: ex })) +
-      dailyExtra >
-    pbCap + 1e-9
-  )
-    problems.push(`${task.playbook} daily cap £${pbCap}`);
-  if (
-    (await storage.costEvents.spendSince(day, { excludeSteps: ex })) + dailyExtra >
-    cfg.caps.global_per_day_gbp + 1e-9
-  )
-    problems.push(`global daily cap £${cfg.caps.global_per_day_gbp}`);
+  problems.push(
+    ...(await dailyCapProblems(storage, cfg.caps, task.playbook, {
+      now,
+      extraGbp: o.recorded ? 0 : extraGbp,
+    })),
+  );
   if (problems.length) {
     if (!problems[0]?.startsWith("task budget"))
       await storage.controls.set(K.queuePaused, true, "spend_cap");

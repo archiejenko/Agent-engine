@@ -22,12 +22,15 @@ export interface EffectRow {
   error: string | null;
   started_at: string;
   finished_at: string | null;
+  /** The call's arguments (never keys), so an unknown outcome can be explained and settled. */
+  args: unknown;
 }
 const toEffect = (r: Row): EffectRow => ({
   key: r.key as string,
   task_id: r.task_id as string,
   tool: r.tool as string,
   dry_run: Number(r.dry_run) === 1,
+  args: r.args === null || r.args === undefined ? null : JSON.parse(r.args as string),
   status: r.status as EffectStatus,
   result: pj(r.result),
   error: (r.error as string | null) ?? null,
@@ -220,12 +223,20 @@ export function runtimeStorage(db: SqlDriver) {
         return r ? toEffect(r) : null;
       },
       /** Records the call before it runs. False if a record already exists (the caller must not run it). */
-      start: async (e: { key: string; task_id: string; tool: string; dry_run: boolean }) => {
+      start: async (e: {
+        key: string;
+        task_id: string;
+        tool: string;
+        dry_run: boolean;
+        args?: unknown;
+        /** Defaults to now (gates seed an action stuck since earlier). */
+        started_at?: string;
+      }) => {
         const before = await first(db, "SELECT key FROM external_effects WHERE key = ?", [e.key]);
         if (before) return false;
         await db.run(
-          "INSERT OR IGNORE INTO external_effects (key, task_id, tool, dry_run, status, started_at) VALUES (?, ?, ?, ?, 'started', ?)",
-          [e.key, e.task_id, e.tool, e.dry_run ? 1 : 0, nowIso()],
+          "INSERT OR IGNORE INTO external_effects (key, task_id, tool, dry_run, status, started_at, args) VALUES (?, ?, ?, ?, 'started', ?, ?)",
+          [e.key, e.task_id, e.tool, e.dry_run ? 1 : 0, e.started_at ?? nowIso(), j(e.args)],
         );
         return true;
       },
@@ -240,12 +251,17 @@ export function runtimeStorage(db: SqlDriver) {
           [status, j(result), error, nowIso(), key],
         );
       },
-      /** Effects whose outcome nobody knows (a crash between start and finish, or an error). */
-      unresolved: async (limit = 100) =>
+      /**
+       * Effects whose outcome nobody knows (a crash between start and finish, or an error), newest
+       * first. `startedBefore` leaves out the ones still inside their grace period (a call in flight).
+       */
+      unresolved: async (limit = 100, o: { startedBefore?: string } = {}) =>
         (
           await db.all<Row>(
-            "SELECT * FROM external_effects WHERE status IN ('started', 'unknown') ORDER BY started_at DESC LIMIT ?",
-            [limit],
+            o.startedBefore
+              ? "SELECT * FROM external_effects WHERE status IN ('started', 'unknown') AND started_at < ? ORDER BY started_at DESC LIMIT ?"
+              : "SELECT * FROM external_effects WHERE status IN ('started', 'unknown') ORDER BY started_at DESC LIMIT ?",
+            o.startedBefore ? [o.startedBefore, limit] : [limit],
           )
         ).map(toEffect),
       forTask: async (taskId: string) =>

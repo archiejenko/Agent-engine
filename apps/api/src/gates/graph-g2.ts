@@ -9,7 +9,7 @@ import {
   type GateCriterion,
   loadPlaybooks,
 } from "@ae/agent-runner";
-import { loadInfraConfig } from "@ae/config";
+import { loadInfraConfig, loadInfraPricesConfig, loadModelsConfig } from "@ae/config";
 import type { CompiledGraph } from "@ae/contracts";
 import { rollUp } from "@ae/graph";
 import {
@@ -287,7 +287,15 @@ export async function runGraphG2Gate(
         events.filter((e) => e.category === "model").length === modelCalls &&
         events.filter((e) => e.category === "tool").length === toolCalls &&
         Math.abs(sumNodes - sumAll) < 1e-12 &&
-        events.every((e) => e.price_table_version === "2026-11-18")
+        // Each event carries the CURRENT price table's version: models.json for model and tool
+        // calls, infra-prices.json for infra.
+        events.every(
+          (e) =>
+            e.price_table_version ===
+            (e.category === "infra"
+              ? loadInfraPricesConfig().price_table_version
+              : loadModelsConfig().price_table_version),
+        )
           ? "passed (synthetic)"
           : "failed",
       evidence: `${modelCalls} model calls → ${events.filter((e) => e.category === "model").length} model events; ${toolCalls} tool calls → ${events.filter((e) => e.category === "tool").length} tool events; ${events.filter((e) => e.category === "infra").length} infra events; per-node roll-up £${sumNodes.toFixed(6)} = sum £${sumAll.toFixed(6)}`,

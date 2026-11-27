@@ -38,6 +38,7 @@ const FACTS = [
   "module_runs",
   "backtests",
   "weight_suggestions",
+  "page_cuts",
 ] as const;
 
 const TELEMETRY = ["run_log", "trigger_stats", "runtime_status", "dead_letters"] as const;

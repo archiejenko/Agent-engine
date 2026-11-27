@@ -1,3 +1,4 @@
+import { loadVerificationConfig } from "@ae/config";
 import { Claim } from "@ae/contracts";
 import {
   type FetchedPage,
@@ -9,6 +10,7 @@ import {
 import type { EntityRow, Storage } from "@ae/storage";
 import { canonicalJson, stableUuid } from "../../ids.ts";
 import { domainOf, nameSimilarity, normalisePostcode } from "../../resolve.ts";
+import { type ModelTextConfig, type PageCutInfo, pagesForModel } from "./model-text.ts";
 import { ALLOWED_EXTRACT_FIELDS, ROLE_EMAIL, WEBSITE_EXTRACT } from "./prompts.ts";
 
 /**
@@ -25,6 +27,8 @@ export interface WebsitePorts {
   finder: WebsiteFinder;
   fetcher: WebFetcher;
   model: ModelClient;
+  /** Used for a page when `model` errors or returns invalid JSON twice (Gemini → Claude). */
+  fallbackModel?: ModelClient;
 }
 
 export interface WebsiteResult {
@@ -32,6 +36,8 @@ export interface WebsiteResult {
   quarantined: boolean;
   rejected_extractions: { field: string; reason: string }[];
   model_usage: { input_tokens: number; output_tokens: number; model: string } | null;
+  /** Pages cut to the per-page token budget before the model saw them. */
+  page_cuts: PageCutInfo[];
 }
 
 const PAGES = ["", "contact", "careers"];
@@ -41,12 +47,14 @@ export async function collectWebsiteClaims(
   ports: WebsitePorts,
   runId: string,
   storage: Storage,
+  o: { modelText?: ModelTextConfig } = {},
 ): Promise<WebsiteResult> {
   const result: WebsiteResult = {
     claims: [],
     quarantined: false,
     rejected_extractions: [],
     model_usage: null,
+    page_cuts: [],
   };
   const mk = async (
     source: string,
@@ -119,6 +127,13 @@ export async function collectWebsiteClaims(
     .filter((p) => p.status === 200)
     .map((p) => ({ url: p.url, text: htmlToText(p.body), html: p.body }));
   const allText = texts.map((t) => t.text).join("\n");
+  // The model sees each page's useful text, cut to the per-page budget; the full text above still
+  // feeds every check in code.
+  const forModel = pagesForModel(
+    texts.map((t) => ({ url: t.url, html: t.html })),
+    o.modelText ?? loadVerificationConfig().website_extraction,
+  );
+  result.page_cuts = forModel.cuts;
 
   // ---- Extraction first: it decides whether this site is really this company's.
   const extracted: { field: string; value: unknown; evidence: string; url: string }[] = [];
@@ -128,7 +143,7 @@ export async function collectWebsiteClaims(
     role: "extractor",
     system: WEBSITE_EXTRACT.system,
     user: `Company: ${entity.name}. Extract the allowed facts from the website pages below.`,
-    untrusted: texts.map((t) => `--- ${t.url}\n${t.text}`).join("\n\n"),
+    untrusted: forModel.pages.map((t) => `--- ${t.url}\n${t.text}`).join("\n\n"),
     json_schema: WEBSITE_EXTRACT.schema as unknown as Record<string, unknown>,
     max_tokens: 2000,
   });

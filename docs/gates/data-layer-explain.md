@@ -69,8 +69,8 @@ How to read a plan line:
   - USE TEMP B-TREE FOR ORDER BY
 - `SELECT * FROM site_claims ORDER BY updated_at DESC LIMIT ?` (core)
   - SCAN site_claims USING INDEX site_claims_updated
-- `SELECT * FROM external_effects WHERE status IN ('started', 'unknown') ORDER BY started_at DESC LIMIT ?` (core)
-  - SEARCH external_effects USING INDEX external_effects_status (status=?)
+- `SELECT * FROM external_effects WHERE status IN ('started', 'unknown') AND started_at < ? ORDER BY started_at DESC LIMIT ?` (core)
+  - SEARCH external_effects USING INDEX external_effects_open (status=? AND started_at<?)
   - USE TEMP B-TREE FOR ORDER BY
 - `SELECT * FROM dead_letters WHERE resolved_at IS NULL ORDER BY received_at DESC LIMIT ?` (telemetry)
   - SEARCH dead_letters USING INDEX dead_letters_open (resolved_at=?)

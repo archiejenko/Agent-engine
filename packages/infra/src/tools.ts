@@ -35,7 +35,17 @@ export interface ToolResult {
 
 export type ToolHandler = (
   args: unknown,
-  env: { task: StoredTask; dryRun: boolean; keys?: Record<string, string> },
+  env: {
+    task: StoredTask;
+    dryRun: boolean;
+    keys?: Record<string, string>;
+    /**
+     * Queue the writes that record what the call did (data layer plan follow-up): the registry runs
+     * them in ONE batch per database together with the effect's result and the call's cost event, or
+     * writes none of them. A handler that throws has its queued writes discarded.
+     */
+    record: (fn: (s: Storage) => Promise<void>) => void;
+  },
 ) => Promise<{ result: unknown; untrusted?: boolean }>;
 
 export class ToolBlockedError extends Error {
@@ -161,15 +171,24 @@ export class ToolRegistry {
           task_id: ctx.task.task_id,
           tool: name,
           dry_run: dryRun,
+          // Kept so an unknown outcome can be explained and settled without a second call.
+          args: scrub(args, secrets),
         });
     }
+    // What the tool reported (provider message id…), kept if recording it afterwards fails.
+    let reported: unknown = null;
     try {
+      const recorded: ((s: Storage) => Promise<void>)[] = [];
       const raw = await t.handler(args, {
         task: ctx.task,
         dryRun,
         ...(injected ? { keys: injected.keys } : {}),
+        record: (fn) => {
+          recorded.push(fn);
+        },
       });
       const out = { ...raw, result: scrub(raw.result, secrets) };
+      reported = out.result;
       if (injected && this.keys) for (const k of reg.keys ?? []) await this.keys.used(k, true);
       // After the call: the effect's result, the task cost and the call's cost event in ONE batch
       // (data layer plan, step 5), so none can be written without the others. The effect's start was
@@ -178,6 +197,7 @@ export class ToolRegistry {
       // didn't incur its price: recorded as dry_run at £0, so it never counts as live spend.
       const m = { ...taskMeter(ctx.task, null), ...(ctx.meter ?? {}) };
       await this.storage.unit(async (s) => {
+        for (const fn of recorded) await fn(s);
         if (effectKey) await s.effects.finish(effectKey, "done", out.result);
         if (reg.cost_gbp_per_call > 0)
           await s.tasks.addCost(ctx.task.task_id, reg.cost_gbp_per_call);
@@ -218,7 +238,7 @@ export class ToolRegistry {
         await this.storage.effects.finish(
           effectKey,
           e instanceof ToolBlockedError || e instanceof KeyFailedError ? "not_happened" : "unknown",
-          null,
+          reported,
           message,
         );
       this.calls.push({ tool: name, args, result: null, blocked: false, error: message });
