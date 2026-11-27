@@ -12,6 +12,7 @@ import {
   parseCardRef,
 } from "./idea-cards.ts";
 import { recordOutcome } from "./ledger.ts";
+import { settleUnknownSend } from "./outreach.ts";
 import { applyGraphPlanOption, parsePlanRef } from "./plans.ts";
 import { decidePrintBatch } from "./playbooks/sme_letter.ts";
 import { applyPromotionOption } from "./promotion.ts";
@@ -205,25 +206,59 @@ export async function syncDecisions(d: DecisionDeps): Promise<number> {
       synthetic: c.synthetic,
     });
 
-  // External actions with an unknown outcome (never repeated until settled).
-  for (const e of await storage.effects.unresolved(100))
+  // External actions with an unknown outcome (never repeated until settled), once they're past the
+  // grace period (a call still in flight isn't stuck). Never re-sent automatically: the safe default
+  // leaves it blocked.
+  const graceMs = d.dcfg.uncertain_effect_grace_minutes * 60_000;
+  const cutoff = new Date((d.now?.() ?? new Date()).getTime() - graceMs).toISOString();
+  for (const e of await storage.effects.unresolved(100, { startedBefore: cutoff })) {
+    const a = (e.args ?? {}) as { recipients?: string[]; entity_id?: string };
+    const reported = (e.result ?? {}) as { provider_id?: string };
+    const isSend = e.tool === "send_email";
+    const recipient = a.recipients?.join(", ") ?? null;
+    const company = a.entity_id ? `${await name(a.entity_id)} (${a.entity_id})` : null;
+    const when = e.started_at.slice(0, 16).replace("T", " ");
     await open({
       type: "uncertain_effect",
       source_ref: `effect:${e.key}`,
-      summary: `Did "${e.tool}" happen? (task ${e.task_id.slice(0, 8)})`,
+      summary: isSend
+        ? `Did the email to ${recipient ?? "?"}${company ? ` at ${company}` : ""} go out? ${when} UTC${reported.provider_id ? `, provider id ${reported.provider_id}` : ", no provider id"}${e.dry_run ? " (dry run)" : ""}`
+        : `Did "${e.tool}" happen? (task ${e.task_id.slice(0, 8)}, ${when} UTC)`,
       money_at_stake_gbp: 0,
       money_kind: "none",
-      options: [
-        opt("happened", "It happened", "recorded as done; never repeated"),
-        opt("did_not_happen", "It didn't happen", "the step may try once more"),
-        opt("leave", "Leave it", "stays blocked; never repeated"),
-      ],
-      recommended: "leave",
+      options: isSend
+        ? [
+            opt(
+              "happened",
+              "Mark as sent",
+              "writes the missing outbox row and outcome; the email is never sent again",
+            ),
+            opt("did_not_happen", "Mark as not sent", "the task is queued again and may send once"),
+            opt("leave", "Leave it", "stays blocked; never sent again"),
+          ]
+        : [
+            opt("happened", "It happened", "recorded as done; never repeated"),
+            opt("did_not_happen", "It didn't happen", "the task is queued again and may try once"),
+            opt("leave", "Leave it", "stays blocked; never repeated"),
+          ],
+      // A provider message id means the provider accepted it; without one, nobody can tell.
+      recommended: reported.provider_id ? "happened" : "leave",
       safe_default: "leave",
       deadline: deadline(d, "uncertain_effect"),
-      context: { key: e.key, tool: e.tool, error: e.error, started_at: e.started_at },
+      context: {
+        key: e.key,
+        tool: e.tool,
+        task_id: e.task_id,
+        recipient,
+        entity_id: a.entity_id ?? null,
+        provider_id: reported.provider_id ?? null,
+        dry_run: e.dry_run,
+        error: e.error,
+        started_at: e.started_at,
+      },
       synthetic: false,
     });
+  }
 
   // Failed jobs set aside.
   for (const x of await storage.deadLetters.list({ open: true, limit: 50 }))
@@ -567,13 +602,27 @@ async function apply(
     }
     case "uncertain_effect": {
       const e = await storage.effects.get(id);
-      if (!e || option === "leave") return;
-      await storage.effects.finish(
-        e.key,
-        option === "happened" ? "done" : "not_happened",
-        e.result,
-        `settled by Archie: ${option === "happened" ? "it happened" : "it did not happen"}`,
-      );
+      if (!e || option === "leave" || o.defaulted) return;
+      if (option === "happened") {
+        // A send: write what the failed batch didn't (outbox row, outcome, follow-up) with the effect
+        // settled, in one batch. The provider is not called.
+        if (e.tool === "send_email") await settleUnknownSend(storage, d.cfg, e);
+        else
+          await storage.effects.finish(e.key, "done", e.result, "settled by Archie: it happened");
+        return;
+      }
+      // Didn't happen: the step may try once more, so a task that failed on it is queued again.
+      await storage.unit(async (s) => {
+        await s.effects.finish(
+          e.key,
+          "not_happened",
+          e.result,
+          "settled by Archie: it did not happen",
+        );
+        const t = await storage.tasks.get(e.task_id);
+        if (t && (t.status === "failed" || t.status === "running"))
+          await s.tasks.update(t.task_id, { status: "queued", error: null });
+      });
       return;
     }
     case "dead_letter":

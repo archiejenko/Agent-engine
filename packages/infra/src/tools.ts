@@ -171,8 +171,12 @@ export class ToolRegistry {
           task_id: ctx.task.task_id,
           tool: name,
           dry_run: dryRun,
+          // Kept so an unknown outcome can be explained and settled without a second call.
+          args: scrub(args, secrets),
         });
     }
+    // What the tool reported (provider message id…), kept if recording it afterwards fails.
+    let reported: unknown = null;
     try {
       const recorded: ((s: Storage) => Promise<void>)[] = [];
       const raw = await t.handler(args, {
@@ -184,6 +188,7 @@ export class ToolRegistry {
         },
       });
       const out = { ...raw, result: scrub(raw.result, secrets) };
+      reported = out.result;
       if (injected && this.keys) for (const k of reg.keys ?? []) await this.keys.used(k, true);
       // After the call: the effect's result, the task cost and the call's cost event in ONE batch
       // (data layer plan, step 5), so none can be written without the others. The effect's start was
@@ -233,7 +238,7 @@ export class ToolRegistry {
         await this.storage.effects.finish(
           effectKey,
           e instanceof ToolBlockedError || e instanceof KeyFailedError ? "not_happened" : "unknown",
-          null,
+          reported,
           message,
         );
       this.calls.push({ tool: name, args, result: null, blocked: false, error: message });

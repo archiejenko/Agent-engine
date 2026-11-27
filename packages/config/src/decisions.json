@@ -19,5 +19,7 @@
     "promotion": 168
   },
   "max_open_leads": 50,
+  "_uncertain_effect_note": "Minutes an external action whose outcome is unknown waits before it shows on Needs you (a call still in flight isn't stuck).",
+  "uncertain_effect_grace_minutes": 15,
   "digest_hour_utc": 6
 }

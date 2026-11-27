@@ -473,6 +473,8 @@ export const DecisionsConfig = z.object({
   deadline_hours: z.record(z.string(), z.number().positive()),
   max_open_leads: z.number().int().min(1).max(1000),
   digest_hour_utc: z.number().int().min(0).max(23),
+  /** An external action whose outcome is unknown shows on Needs you only after this many minutes. */
+  uncertain_effect_grace_minutes: z.number().int().min(1).max(1440).default(15),
 });
 export type DecisionsConfig = z.infer<typeof DecisionsConfig>;
 /** v3 Phase 5: the key catalogue (names and dependants only; values never live in config). */

@@ -897,3 +897,30 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   before, so their budget gates bite in simulated worlds.
 - **Flag:** the extractor sends whole pages with no size limit, so one huge site could cost more than
   the estimate. The cap bounds the day, not a single call.
+
+## 2026-11-27 — Unknown sends on Needs you
+
+- **Before this change**, a send whose after-call batch failed left:
+  - the email sent once, no outbox row, and its effect `unknown` with an empty result, so the
+    provider message id was lost;
+  - nothing in `dead_letters` and no alert.
+
+  An `uncertain_effect` decision did appear on Needs you at the next sync ("Check an action": it
+  happened / it didn't / leave it), and the Health page listed it. The gaps:
+  - no grace period, so a call in flight showed straight away;
+  - no recipient, company or provider id in the decision;
+  - "It happened" only marked the effect done, never writing the missing outbox row or outcome;
+  - "It didn't happen" never queued the failed task again.
+- **Now:**
+  - The registry keeps the call's arguments with the effect (core `0030`, which also adds an index
+    on `(status, started_at)`). It also keeps the tool's reported result, including the provider
+    message id, when recording fails.
+  - Effects still unknown after `uncertain_effect_grace_minutes` (15, in `decisions.json`) open one
+    decision. It shows the tool, recipient, company, provider id and time, and is deduplicated by
+    source.
+  - For a send, **"Mark as sent"** writes the missing outbox row, outcome and follow-up, and settles
+    the effect, in one batch, with no provider call. It uses the same `recordSend` as a normal send.
+    **"Mark as not sent"** settles it as not happened and queues a failed task again, so it may try
+    once.
+  - **The safe default is "Leave it"**, so nothing is ever re-sent automatically. The recommendation
+    is "Mark as sent" only when the provider gave a message id.
