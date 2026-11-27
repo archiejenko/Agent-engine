@@ -167,6 +167,7 @@ describe("data layer migrations run up, down and up again", () => {
     ["core", "0028_daily_rollups.sql"],
     ["core", "0029_indexes.sql"],
     ["core", "0030_effect_args.sql"],
+    ["facts", "0003_page_cuts.sql"],
     ["facts", "0002_indexes.sql"],
     ["telemetry", "0003_indexes.sql"],
   ] as const)("%s %s", async (store, n) => {

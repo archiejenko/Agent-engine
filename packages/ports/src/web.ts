@@ -49,6 +49,23 @@ export class FakeWebsiteFinder implements WebsiteFinder {
   }
 }
 
+/**
+ * A page's useful text for the extractor: visible text without scripts and styles, and without the
+ * parts that are boilerplate on every site (navigation menus, sidebars, forms, inline SVG and iframes,
+ * cookie or consent banners). Headers and footers are KEPT: they carry the company number, address and
+ * copyright year the extractor looks for.
+ */
+export function usefulText(html: string): string {
+  return htmlToText(
+    html
+      .replace(/<(nav|aside|form|svg|iframe|template|button|select)\b[\s\S]*?<\/\1>/gi, " ")
+      .replace(
+        /<(div|section)\b[^>]*(?:id|class)\s*=\s*["'][^"']*(?:cookie|consent|gdpr)[^"']*["'][^>]*>[\s\S]*?<\/\1>/gi,
+        " ",
+      ),
+  );
+}
+
 /** Strip HTML to visible text (scripts/styles removed). Used before any model sees a page. */
 export function htmlToText(html: string): string {
   return html

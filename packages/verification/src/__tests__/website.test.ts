@@ -381,3 +381,35 @@ describe("website_ingest daily cap (guardrail 6)", () => {
     expect(r.stopped).toBeNull();
   });
 });
+
+describe("per-page cut is recorded", () => {
+  it("a huge page is cut before the model sees it, and the cut is stored with its original size", async () => {
+    const huge = `<p>Acme Widgets Ltd. Company number 01234567.</p>${Array.from({ length: 6000 }, (_, i) => `<p>Kitchen project ${i} in Greater Manchester, fitted and finished.</p>`).join("")}`;
+    const pages = goodSite();
+    pages.set(`${URL}careers`, page(huge));
+    const model = new FakeModel({ website_extract: fakeWebsiteExtractor });
+    await storage.entities.upsertMany([entity], runId);
+    await storage.universe.setMany(
+      [
+        {
+          universe: "test",
+          entity_id: entity.entity_id,
+          included: true,
+          reason: "t",
+          staff_flag: "known",
+        },
+      ],
+      runId,
+    );
+    const r = await ingestWebsites(storage, ctx, { name: "test" } as never, ports(pages, model));
+    expect(r.pages_cut).toBe(1);
+    const [cut, ...rest] = await storage.pageCuts.list(r.run_id);
+    expect(rest).toHaveLength(0);
+    expect(cut).toMatchObject({ entity_id: entity.entity_id, url: `${URL}careers` });
+    expect(cut?.original_tokens).toBeGreaterThan(80_000);
+    expect(cut?.kept_tokens).toBeLessThanOrEqual(6000);
+    // What the model was sent stays near the budget, not the whole page.
+    const sent = model.calls[0]?.untrusted ?? "";
+    expect(sent.length).toBeLessThan(3 * 6000 * 4 + 1000);
+  });
+});

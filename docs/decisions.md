@@ -924,3 +924,21 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
     once.
   - **The safe default is "Leave it"**, so nothing is ever re-sent automatically. The recommendation
     is "Mark as sent" only when the provider gave a message id.
+
+## 2026-11-27 — Per-page text limit for the website extractor
+
+- **What the model sees:** each page's useful text, with scripts, styles, menus, sidebars, forms,
+  inline SVG, iframes and cookie/consent banners dropped. Lines already seen on an earlier page of
+  the same site (the same footer three times) are sent once. Then each page is cut to
+  **6,000 tokens** (`verification.json` → `website_extraction.page_token_budget`). Tokens are
+  estimated as characters ÷ 4.
+- **Why 6,000:** calls average ~8,500 input tokens over up to 3 pages, which is about 2,600 tokens
+  a page after ~600 tokens of prompt. 6,000 is about 2.3× the average, so normal pages pass
+  untouched and only huge ones are cut. The worst case becomes ~18,600 input tokens a call, about
+  £0.07 on `claude-opus-5-5`.
+- **Headers and footers are kept** on purpose: they carry the company number, address and
+  copyright year.
+- **Only the model's input is cut.** The full page text still feeds every deterministic check and
+  the evidence check.
+- **Every cut is recorded** in the new `page_cuts` table (facts database, migration `0003`): run,
+  company, page, original and kept tokens, and when. The run's stats also count `pages_cut`.

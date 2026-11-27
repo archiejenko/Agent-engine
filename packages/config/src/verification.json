@@ -43,5 +43,10 @@
     "calls_per_company": 4.2,
     "request_weight": 3,
     "opportunity_weight": 2
+  },
+  "website_extraction": {
+    "_note": "Per-page text limit before the model sees a page. Calls average ~8,500 input tokens over up to 3 pages, about 2,600 tokens a page after ~600 tokens of prompt. 6,000 tokens a page (~2.3x the average) lets normal pages through untouched and cuts only huge ones; the worst case is ~18,600 input tokens a call. Tokens are estimated as characters / chars_per_token.",
+    "page_token_budget": 6000,
+    "chars_per_token": 4
   }
 }

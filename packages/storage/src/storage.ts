@@ -46,6 +46,15 @@ export interface EntityRow {
   incorporation_date: string | null;
 }
 
+export interface PageCut {
+  run_id: string;
+  entity_id: string;
+  url: string;
+  original_tokens: number;
+  kept_tokens: number;
+  cut_at: string;
+}
+
 export interface UniverseMember {
   universe: string;
   entity_id: string;
@@ -189,6 +198,11 @@ export interface Storage
       }[]
     >;
     markProcessed(requestIds: string[]): Promise<void>;
+  };
+  /** Website pages cut to the extractor's token budget (one row per run, company and page). */
+  pageCuts: {
+    record(c: PageCut): Promise<void>;
+    list(runId: string): Promise<PageCut[]>;
   };
   dropped: {
     record(source: string, sourceField: string, runId: string, occurrences: number): Promise<void>;

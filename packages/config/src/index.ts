@@ -104,6 +104,10 @@ export const VerificationConfig = z.object({
     request_weight: z.number().positive(),
     opportunity_weight: z.number().positive(),
   }),
+  website_extraction: z.object({
+    page_token_budget: z.number().int().min(500).max(200_000),
+    chars_per_token: z.number().positive(),
+  }),
 });
 export type VerificationConfig = z.infer<typeof VerificationConfig>;
 

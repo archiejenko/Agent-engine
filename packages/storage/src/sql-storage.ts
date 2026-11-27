@@ -16,6 +16,7 @@ import { runtimeStorage } from "./runtime.ts";
 import type {
   EntityRow,
   FactListQuery,
+  PageCut,
   ProgressStatus,
   Run,
   RunStatus,
@@ -760,6 +761,28 @@ export class SqlStorage implements Storage {
         })),
       );
     },
+  };
+
+  pageCuts = {
+    record: async (c: PageCut) => {
+      await this.db.run(
+        "INSERT INTO page_cuts (run_id, entity_id, url, original_tokens, kept_tokens, cut_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (run_id, entity_id, url) DO UPDATE SET original_tokens = excluded.original_tokens, kept_tokens = excluded.kept_tokens, cut_at = excluded.cut_at",
+        [c.run_id, c.entity_id, c.url, c.original_tokens, c.kept_tokens, c.cut_at],
+      );
+    },
+    list: async (runId: string): Promise<PageCut[]> =>
+      (
+        await this.db.all<Row>("SELECT * FROM page_cuts WHERE run_id = ? ORDER BY entity_id, url", [
+          runId,
+        ])
+      ).map((r) => ({
+        run_id: str(r.run_id),
+        entity_id: str(r.entity_id),
+        url: str(r.url),
+        original_tokens: Number(r.original_tokens),
+        kept_tokens: Number(r.kept_tokens),
+        cut_at: str(r.cut_at),
+      })),
   };
 
   dropped = {

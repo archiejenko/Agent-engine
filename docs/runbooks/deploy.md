@@ -114,7 +114,7 @@ The R2 bucket `agent-engine-files` exists (created 2026-11-26 21:06 UTC by deplo
 remotely); `0029_indexes` rebuilds two small tables WITHOUT ROWID, keeping their rows. Both still work
 with the previous Worker code, since migrations run first.
 
-To check: `/api/health` (behind Access) reports `databases: { core: 30, facts: 2, telemetry: 3 }`.
+To check: `/api/health` (behind Access) reports `databases: { core: 30, facts: 3, telemetry: 3 }`.
 
 **Turn on read replication (free, optional, once).** In the Cloudflare dashboard, go to Storage &
 databases → D1. For each of `agent-engine`, `agent-engine-facts` and `agent-engine-telemetry`, open

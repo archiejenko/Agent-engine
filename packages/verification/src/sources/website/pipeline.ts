@@ -59,6 +59,8 @@ export async function ingestWebsites(
     quarantined: 0,
     claims: 0,
     rejected_extractions: 0,
+    /** Pages cut to the per-page token budget (each one recorded in page_cuts). */
+    pages_cut: 0,
     /** Why the run stopped early (a daily spend cap), or null. */
     stopped: null as string | null,
   };
@@ -85,6 +87,17 @@ export async function ingestWebsites(
         break;
       }
       const r = await collectWebsiteClaims(entity, metered, run.run_id, storage);
+      for (const c of r.page_cuts) {
+        stats.pages_cut++;
+        await storage.pageCuts.record({
+          run_id: run.run_id,
+          entity_id: id,
+          url: c.url,
+          original_tokens: c.original_tokens,
+          kept_tokens: c.kept_tokens,
+          cut_at: new Date().toISOString(),
+        });
+      }
       stats.companies++;
       if (r.quarantined) stats.quarantined++;
       if (r.claims.some((c) => c.field === "website_found" && c.value === true)) stats.found++;
