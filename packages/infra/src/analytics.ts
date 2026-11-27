@@ -73,6 +73,7 @@ export async function homeFigures(
   // Costs and minutes (tasks created in the range), with Archie's minutes at the hourly rate.
   const econ = await unitEconomics(storage, cfg, {
     since: o.from,
+    until: o.to,
     includeSynthetic: o.includeSynthetic,
   });
   const rate = cfg.owner.hourly_gbp;

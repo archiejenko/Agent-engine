@@ -95,7 +95,11 @@ async function liveRollups(c: PanelFilters & { storage: Storage }, from = c.from
   return c.playbook ? rows.filter((r) => r.playbook === c.playbook) : rows;
 }
 
-/** The previous window of the same length (compare=1). */
+/** "28 Oct to 26 Nov" for the window [from, to): the last day shown is the day before `to`. */
+export const spanLabel = (from: string, to: string) =>
+  `${dayOf(from)} to ${dayOf(new Date(Date.parse(to) - 1).toISOString())}`;
+
+/** The previous window of the same length, ending exactly where this one starts (compare=1). */
 const previousWindow = (c: PanelFilters) => ({
   from: new Date(Date.parse(c.from) - (Date.parse(c.to) - Date.parse(c.from))).toISOString(),
   to: c.from,
@@ -200,9 +204,17 @@ const kpis: PanelDef = {
     return {
       kind: "figures",
       figures,
+      // Both windows are [from, to): the previous one ends exactly where this one starts, so no day
+      // is in both. The note names each window's first and last day.
+      meta: {
+        period_from: c.from,
+        period_to: c.to,
+        previous_from: c.compare ? prevW.from : null,
+        previous_to: c.compare ? prevW.to : null,
+      },
       note: c.compare
-        ? `compared with ${dayOf(prevW.from)} to ${dayOf(new Date(Date.parse(prevW.to) - 1).toISOString())}`
-        : null,
+        ? `${spanLabel(c.from, c.to)}, compared with ${spanLabel(prevW.from, prevW.to)}`
+        : spanLabel(c.from, c.to),
       empty: "Figures appear once the ledger has sends, replies or payments.",
     };
   },
@@ -305,7 +317,15 @@ const runway: PanelDef = {
     return {
       kind: "figures",
       figures: [
-        { key: "runway_days", label: "Runway", value: r.days, unit: "days", kind: "real", note },
+        // The "record a top-up" hint is the panel's note; the figure doesn't repeat it.
+        {
+          key: "runway_days",
+          label: "Runway",
+          value: r.days,
+          unit: "days",
+          kind: "real",
+          note: r.recorded ? note : null,
+        },
         {
           key: "pool_balance",
           label: "Agent pool",
@@ -350,23 +370,65 @@ const DECISION_LABEL: Record<string, string> = {
   promotion: "Promotion",
 };
 
+/**
+ * Whether a decision is about simulated data. Decisions carry their own flag, but some sources don't set
+ * it, so it's also worked out from the source task and from the company's outreach cohorts.
+ */
+async function decisionIsSynthetic(
+  d: { synthetic: boolean; source_ref: string },
+  entity: string | null,
+  taskSynthetic: boolean | null,
+  syntheticCohortEntities: () => Promise<{ synthetic: Set<string>; real: Set<string> }>,
+): Promise<boolean> {
+  if (d.synthetic || taskSynthetic) return true;
+  if (!entity) return false;
+  const cohorts = await syntheticCohortEntities();
+  // A company only ever drawn into simulated cohorts is a simulated company.
+  return cohorts.synthetic.has(entity) && !cohorts.real.has(entity);
+}
+
 const needs_you: PanelDef = {
   // The decisions queue: a cached copy would show an item again after Archie decides it.
   cacheable: false,
   run: async (c) => {
-    const open = await needsYou(c.decisions, { limit: 200 });
+    const limit = Math.min(50, Math.max(1, Number(c.args.limit ?? 20) || 20));
+    const open = await needsYou(c.decisions, { limit: 500 });
+    let cohortCache: { synthetic: Set<string>; real: Set<string> } | null = null;
+    const cohortEntities = async () => {
+      if (cohortCache) return cohortCache;
+      const out = { synthetic: new Set<string>(), real: new Set<string>() };
+      for (const co of await c.storage.cohorts.list({ includeSynthetic: true, limit: 10_000 }))
+        for (const m of await c.storage.cohorts.members(co.id))
+          (co.synthetic ? out.synthetic : out.real).add(m.entity_id);
+      cohortCache = out;
+      return out;
+    };
     const rows: PanelRow[] = [];
-    for (const d of open.filter((x) => c.includeSynthetic || !x.synthetic).slice(0, 20)) {
+    let total = 0;
+    for (const d of open) {
       const ctx = (d.context ?? {}) as Record<string, unknown>;
-      // The company a decision is about, so the guard can withhold holdout companies (rule 22).
+      // The company and task a decision is about (for the simulated label; never to hide it).
       let entity = typeof ctx.entity_id === "string" ? ctx.entity_id : null;
-      if (!entity && d.source_ref.startsWith("task:")) {
-        const t = await c.storage.tasks.get(d.source_ref.slice(5));
-        if (t) entity = entityOfRef(t.source_ref);
+      let taskSynthetic: boolean | null = null;
+      const taskId = d.source_ref.startsWith("task:")
+        ? d.source_ref.slice(5)
+        : typeof ctx.task_id === "string"
+          ? ctx.task_id
+          : null;
+      if (taskId) {
+        const t = await c.storage.tasks.get(taskId);
+        if (t) {
+          entity ??= entityOfRef(t.source_ref);
+          taskSynthetic = t.synthetic;
+        }
       }
       if (!entity && d.source_ref.startsWith("opportunity:"))
         entity = (await c.storage.opportunities.get(d.source_ref.slice(12)))?.entity_id ?? null;
       if (!entity && d.source_ref.startsWith("fact:")) entity = d.source_ref.split(":")[1] ?? null;
+      const synthetic = await decisionIsSynthetic(d, entity, taskSynthetic, cohortEntities);
+      if (synthetic && !c.includeSynthetic) continue;
+      total++;
+      if (rows.length >= limit) continue;
       const reasoning = ["rationale", "reasoning", "why"]
         .map((k) => ctx[k])
         .find((v) => typeof v === "string");
@@ -383,7 +445,7 @@ const needs_you: PanelDef = {
         deadline: d.deadline,
         reasoning: (reasoning as string | undefined) ?? null,
         entity_id: entity,
-        synthetic: d.synthetic,
+        synthetic,
         drill:
           d.type === "graph_plan" && typeof ctx.graph_id === "string"
             ? `/plans/${ctx.graph_id}`
@@ -393,6 +455,7 @@ const needs_you: PanelDef = {
     return {
       kind: "rows",
       rows,
+      meta: { total_open: total, shown: rows.length },
       note: "highest money at stake first; every button goes through the one decisions path",
       empty: "Nothing needs you.",
     };
@@ -413,6 +476,10 @@ const brief: PanelDef = {
       .reduce((a, r) => a + r.runs, 0);
     const h = d.happened;
     const cap = c.cfg.caps.global_per_day_gbp;
+    // "Waiting" is counted exactly as Needs you counts it (same simulated filter), so they agree.
+    const waiting = Number(
+      (await needs_you.run({ ...c, args: { limit: "1" } })).meta?.total_open ?? 0,
+    );
     const lines: PanelRow[] = [
       {
         key: "activity",
@@ -437,11 +504,11 @@ const brief: PanelDef = {
       },
       {
         key: "waiting",
-        label: d.waiting.open ? `${d.waiting.open} item(s) waiting for you` : "Nothing waiting",
+        label: waiting ? `${waiting} item(s) waiting for you` : "Nothing waiting",
         detail: d.defaulted.length
           ? `${d.defaulted.length} defaulted (recorded as defaulted)`
           : null,
-        status: d.waiting.open ? "warn" : "ok",
+        status: waiting ? "warn" : "ok",
         drill: "/",
       },
     ];
@@ -513,11 +580,14 @@ const live_runs: PanelDef = {
         drill: "/controls",
       });
     }
+    // Counted after the simulated filter, so "N in all" matches what the guard lets through.
+    const shown = rows.filter((r) => c.includeSynthetic || !r.synthetic);
+    const limit = Math.min(30, Math.max(1, Number(c.args.limit ?? 30) || 30));
     return {
       kind: "rows",
-      rows: rows.slice(0, 30),
+      rows: shown.slice(0, limit),
       value_kind: "real",
-      meta: { total: rows.length },
+      meta: { total: shown.length, shown: Math.min(limit, shown.length) },
       note: null,
       empty: "No agent is running. Runs show here while they work or wait for you.",
     };
@@ -861,25 +931,20 @@ export const SECRET_FIELD =
 /** A value shaped like a key (Stripe, GitHub, Slack, AWS, PEM, JWT) is refused outright (rule 20). */
 export const SECRET_VALUE =
   /\b(?:sk|rk|pk|whsec)_(?:live|test)_[A-Za-z0-9]{6,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bxox[abprs]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY|\bAKIA[0-9A-Z]{16}\b|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\./;
-/** Assignment details that would reveal the holdout (rule 22). */
-const ARM_FIELDS = new Set(["arm", "cohort", "cohort_id"]);
+/**
+ * Assignment details that would reveal the holdout (rule 22). Rule 22 means blind, not drop: rows about
+ * holdout companies stay (their drafts must reach Archie, unlabelled, like any other), and only the
+ * fields that say which group something is in are removed.
+ */
+export const ARM_FIELD = /^(arm|cohort|cohort_id|cohorts)$|holdout/i;
 
 export interface GuardCtx {
   includeSynthetic: boolean;
-  /** Company numbers in the random holdout. */
-  holdout: Set<string>;
 }
 
-const mentionsHoldout = (v: unknown, holdout: Set<string>): boolean => {
-  if (!holdout.size) return false;
-  if (typeof v === "string") return holdout.has(v) || holdout.has(entityOfRef(v));
-  if (Array.isArray(v)) return v.some((x) => mentionsHoldout(x, holdout));
-  if (v && typeof v === "object") return Object.values(v).some((x) => mentionsHoldout(x, holdout));
-  return false;
-};
-
 /**
- * Every panel result passes here (cockpit UI plan §3.2): drops holdout rows (rule 22), drops simulated
+ * Every panel result passes here (cockpit UI plan §3.2): strips arm, cohort and holdout fields so no
+ * row says which group it's in (rule 22), drops simulated
  * rows unless asked for and labels them when included (rule 10), refuses any secret-like field or value
  * (rule 20), and rounds money to pennies.
  */
@@ -903,7 +968,6 @@ export function toPanelResult(
       for (const item of v) {
         if (item && typeof item === "object" && !Array.isArray(item)) {
           const o = item as Record<string, unknown>;
-          if (mentionsHoldout(o, g.holdout)) continue;
           const sim = o.synthetic === true || o.kind === "synthetic";
           if (sim && !g.includeSynthetic) continue;
           const c = clean(o, key, gbp) as Record<string, unknown>;
@@ -924,7 +988,7 @@ export function toPanelResult(
       for (const [k, x] of Object.entries(o)) {
         if (SECRET_FIELD.test(k))
           throw new PanelRefused(`refused a secret-like field ${query}.${k}`);
-        if (ARM_FIELDS.has(k)) continue;
+        if (ARM_FIELD.test(k)) continue;
         const isMoney =
           k.endsWith("_gbp") ||
           (money && ["value", "previous", "change", "goal", "spark", "ci95"].includes(k));
@@ -948,15 +1012,6 @@ export function toPanelResult(
   };
 }
 
-/** Company numbers in the random holdout of any cohort (simulated cohorts included: never shown). */
-export async function holdoutEntities(storage: Storage): Promise<Set<string>> {
-  const out = new Set<string>();
-  for (const c of await storage.cohorts.list({ includeSynthetic: true, limit: 10_000 }))
-    for (const m of await storage.cohorts.members(c.id))
-      if (m.arm === "holdout") out.add(m.entity_id);
-  return out;
-}
-
 // ---- the route ------------------------------------------------------------------------------
 
 const Filters = z.object({
@@ -973,6 +1028,8 @@ const Filters = z.object({
   set: z.enum(["primary", "secondary"]).optional(),
   split: z.enum(["playbook"]).optional(),
   group: z.enum(["playbook", "agent"]).optional(),
+  /** needs_you and live_runs: how many rows to return (the total is always in meta). */
+  limit: z.coerce.number().int().min(1).max(50).optional(),
 });
 
 /** Default view (Archie, 26 Nov): the last 30 days, live only, compare on. */
@@ -1023,8 +1080,8 @@ export function mountPanels(
     const f = parseFilters(q.data, now);
     const storage = deps.storage(c.env);
     const args: Record<string, string> = {};
-    for (const k of ["set", "split", "group"] as const)
-      if (q.data[k]) args[k] = q.data[k] as string;
+    for (const k of ["set", "split", "group", "limit"] as const)
+      if (q.data[k] !== undefined) args[k] = String(q.data[k]);
     const raw = await PANELS[name].run({
       ...f,
       storage,
@@ -1035,15 +1092,7 @@ export function mountPanels(
       args,
     });
     try {
-      return c.json(
-        toPanelResult(
-          name,
-          raw,
-          f,
-          { includeSynthetic: f.includeSynthetic, holdout: await holdoutEntities(storage) },
-          now,
-        ),
-      );
+      return c.json(toPanelResult(name, raw, f, { includeSynthetic: f.includeSynthetic }, now));
     } catch (e) {
       if (e instanceof PanelRefused) return c.json({ error: "refused", reason: e.message }, 500);
       throw e;

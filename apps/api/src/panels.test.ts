@@ -10,7 +10,6 @@ import { memoryCache } from "./cache.ts";
 import { runPhase5Gate } from "./gates/phase5.ts";
 import {
   CACHEABLE_PANELS,
-  holdoutEntities,
   PANELS,
   PanelRefused,
   parseFilters,
@@ -52,9 +51,12 @@ const Shape = z
   })
   .refine((r) => r[r.kind] !== undefined, "the payload named by kind is present");
 
-const HOLDOUT = "HOLDOUT1";
+// A neutral company number: the word "holdout" must never appear in a result, even inside an id.
+const HOLDOUT = "HCO00001";
 const RANKED = "RANKED01";
 const SIMCO = "SIMCO001";
+/** A company drawn only into a simulated cohort, whose draft decision carries no synthetic flag. */
+const SIMLEAD = "SIMLEAD1";
 const FAKE_KEY = "sk_test_FAKEKEYVALUE0123456789";
 const today = new Date().toISOString().slice(0, 10);
 
@@ -138,6 +140,26 @@ async function fixture() {
     });
   }
   await task(s, SIMCO, "running", true);
+  await s.cohorts.create({
+    id: "c-sim",
+    seed: "s",
+    holdout_share: 0.2,
+    ranked: 1,
+    holdout: 0,
+    synthetic: true,
+  });
+  const simTask = await task(s, SIMLEAD, "awaiting_approval");
+  await s.cohorts.addMember({
+    cohort_id: "c-sim",
+    entity_id: SIMLEAD,
+    arm: "ranked",
+    channel: "email",
+    p_paid: 0.1,
+    ev_gbp: 10,
+    task_id: simTask,
+    status: "assigned",
+    reason: null,
+  });
   await s.costEvents.add(cost({ at: `${today}T01:00:00.000Z`, amount_gbp: 0.5 }));
   await s.costEvents.add(
     cost({ at: `${today}T01:00:00.000Z`, amount_gbp: 9, synthetic: true, playbook: "sme_letter" }),
@@ -146,6 +168,17 @@ async function fixture() {
   const keys = new FakeKeyStore();
   await new KeyRing(keys, s).set("ANTHROPIC_API_KEY", FAKE_KEY, "test");
   return { s, keys };
+}
+
+/** Every field name (at any depth) that would say which group something is in (rule 22). */
+function armFields(v: unknown, path = ""): string[] {
+  if (Array.isArray(v)) return v.flatMap((x, i) => armFields(x, `${path}[${i}]`));
+  if (v && typeof v === "object")
+    return Object.entries(v).flatMap(([k, x]) => [
+      ...(/^(arm|cohort|cohort_id|cohorts)$|holdout/i.test(k) ? [`${path}.${k}`] : []),
+      ...armFields(x, `${path}.${k}`),
+    ]);
+  return [];
 }
 
 const all = async (app: ReturnType<typeof createApp>, q: string) => {
@@ -186,17 +219,66 @@ describe("panel registry (cockpit UI plan §3.2)", () => {
     }
   });
 
-  it("the seeded holdout company never appears; the ranked one does (positive control)", async () => {
+  it("holdout rows are kept but blind: the holdout company's draft is in Needs you, unlabelled", async () => {
     for (const q of ["", "synthetic=1"]) {
       const res = await all(app, q);
       for (const [name, r] of Object.entries(res)) {
-        expect(r.text, name).not.toContain(HOLDOUT);
-        // The aggregate "Ranked vs holdout" lift is allowed (it names no company); arm fields are not.
-        expect(r.text, name).not.toMatch(/"arm"|cohort/i);
+        // No field anywhere says which group something is in.
+        expect(armFields(r.body), name).toEqual([]);
+        // The aggregate "Ranked vs holdout" lift is a label, not a field; nothing else names an arm.
+        expect(r.text.replace(/Ranked vs holdout[^"]*/g, ""), name).not.toMatch(
+          /holdout|"arm"|cohort/i,
+        );
       }
+      const rows = res.needs_you?.body.rows as { entity_id: string | null; type: string }[];
+      // Both the holdout and the ranked company's drafts reach Archie, looking exactly alike.
+      const hold = rows.find((r) => r.entity_id === HOLDOUT);
+      const ranked = rows.find((r) => r.entity_id === RANKED);
+      expect(hold?.type).toBe("draft");
+      expect(Object.keys(hold ?? {}).sort()).toEqual(Object.keys(ranked ?? {}).sort());
+      expect(res.live_runs?.text).toContain(HOLDOUT);
       expect(res.live_runs?.text).toContain(RANKED);
-      expect(res.needs_you?.text).toContain(RANKED);
     }
+  });
+
+  it("needs_you respects the simulated switch, working the flag out from the task and cohort", async () => {
+    const off = (await all(app, "")).needs_you?.body as {
+      rows: { entity_id: string }[];
+      meta: { total_open: number; shown: number };
+    };
+    expect(off.rows.map((r) => r.entity_id)).not.toContain(SIMLEAD);
+    expect(off.rows.map((r) => r.entity_id)).not.toContain(SIMCO);
+    const on = (await all(app, "synthetic=1")).needs_you?.body as {
+      rows: { entity_id: string; kind?: string; synthetic?: boolean }[];
+      meta: { total_open: number };
+      synthetic_included: boolean;
+    };
+    expect(on.rows.find((r) => r.entity_id === SIMLEAD)).toMatchObject({
+      kind: "synthetic",
+      synthetic: true,
+    });
+    expect(on.synthetic_included).toBe(true);
+    expect(on.meta.total_open).toBe(off.meta.total_open + 1);
+  });
+
+  it("the brief's waiting count is the Needs you count (same simulated filter)", async () => {
+    for (const q of ["", "synthetic=1"]) {
+      const res = await all(app, q);
+      const total = (res.needs_you?.body.meta as { total_open: number } | undefined)?.total_open;
+      const waiting = ((res.brief?.body.rows ?? []) as { key: string; label: string }[]).find(
+        (r) => r.key === "waiting",
+      );
+      expect(waiting?.label).toBe(`${total} item(s) waiting for you`);
+    }
+  });
+
+  it("needs_you returns the top N and the total open count", async () => {
+    const r = (await (await app.request("/api/panels/needs_you?limit=1")).json()) as {
+      rows: { money_at_stake_gbp: number }[];
+      meta: { total_open: number; shown: number };
+    };
+    expect(r.rows).toHaveLength(1);
+    expect(r.meta).toEqual({ total_open: 2, shown: 1 });
   });
 
   it("simulated rows are left out by default, and labelled when included", async () => {
@@ -240,23 +322,26 @@ describe("panel registry (cockpit UI plan §3.2)", () => {
 });
 
 describe("the gate's simulator world", () => {
-  it("no panel reveals a holdout company there either", async () => {
+  it("holdout companies stay in the panels, with no arm, cohort or holdout field anywhere", async () => {
     const s = await openSqliteStorage(":memory:");
     await runPhase5Gate(s, process.cwd(), { count: 400, leads: 3, letters: 3 });
-    const holdout = [...(await holdoutEntities(s))];
+    const holdout: string[] = [];
+    for (const c of await s.cohorts.list({ includeSynthetic: true, limit: 100 }))
+      for (const m of await s.cohorts.members(c.id))
+        if (m.arm === "holdout") holdout.push(m.entity_id);
     expect(holdout.length).toBeGreaterThan(0);
     const app = createApp({ runtime: "node", storage: () => s });
     for (const q of ["", "synthetic=1"])
       for (const [name, r] of Object.entries(await all(app, q))) {
         expect(r.status, name).toBe(200);
-        for (const h of holdout) expect(r.text, name).not.toContain(h);
+        expect(armFields(r.body), name).toEqual([]);
       }
   }, 60_000);
 });
 
 describe("toPanelResult guard", () => {
   const w = { from: "2026-11-01T00:00:00.000Z", to: "2026-11-02T00:00:00.000Z" };
-  const g = { includeSynthetic: false, holdout: new Set([HOLDOUT]) };
+  const g = { includeSynthetic: false };
   const base = { kind: "rows" as const, note: null, empty: "e" };
 
   it("refuses a field named like a secret, and a value shaped like a key", () => {
@@ -276,21 +361,25 @@ describe("toPanelResult guard", () => {
     ).toThrow(PanelRefused);
   });
 
-  it("drops holdout rows and arm/cohort fields", () => {
+  it("keeps holdout rows and strips arm, cohort and holdout fields (blind, not drop)", () => {
     const r = toPanelResult(
       "x",
       {
         ...base,
         rows: [
-          { key: "1", label: "a", entity_id: HOLDOUT },
-          { key: "2", label: "b", ref: `lead:sme:entity:${HOLDOUT}` },
-          { key: "3", label: "c", entity_id: RANKED, arm: "ranked", cohort_id: "c1" },
+          { key: "1", label: "a", entity_id: HOLDOUT, arm: "holdout", cohort_id: "c1" },
+          { key: "2", label: "b", entity_id: RANKED, arm: "ranked", cohort: { id: "c1" } },
         ],
+        meta: { holdout_count: 1, holdout_share: 0.2, total: 2 },
       },
       w,
       g,
     );
-    expect(r.rows).toEqual([{ key: "3", label: "c", entity_id: RANKED }]);
+    expect(r.rows).toEqual([
+      { key: "1", label: "a", entity_id: HOLDOUT },
+      { key: "2", label: "b", entity_id: RANKED },
+    ]);
+    expect(r.meta).toEqual({ total: 2 });
   });
 
   it("drops simulated rows unless asked, and labels them when included", () => {
@@ -424,7 +513,7 @@ describe("kpis with compare=1", () => {
     };
     // 1–10 Nov is 10 days, so the previous window is 22–31 Oct.
     expect([body.from, body.to]).toEqual(["2026-11-01T00:00:00.000Z", "2026-11-11T00:00:00.000Z"]);
-    expect(body.note).toBe("compared with 2026-10-22 to 2026-10-31");
+    expect(body.note).toBe("2026-11-01 to 2026-11-10, compared with 2026-10-22 to 2026-10-31");
     const spend = body.figures.find((f) => f.key === "live_spend");
     expect(spend).toMatchObject({ value: 3, previous: 7, change: -4, change_ratio: -0.5714 });
     for (const f of body.figures.filter((x) => x.key !== "live_agents"))
@@ -435,6 +524,45 @@ describe("kpis with compare=1", () => {
       figures: object[];
     };
     for (const f of off.figures) expect(f).not.toHaveProperty("previous");
+  });
+
+  it("the two windows share no day: an event at the boundary counts once, in the newer window", async () => {
+    const s = await openSqliteStorage(":memory:");
+    // Exactly at midnight on 1 Nov: the first instant of the current window.
+    await s.costEvents.add(cost({ at: "2026-11-01T00:00:00.000Z", amount_gbp: 2 }));
+    // The last millisecond of 31 Oct: the previous window only.
+    await s.costEvents.add(cost({ at: "2026-10-31T23:59:59.999Z", amount_gbp: 5 }));
+    for (const [id, at] of [
+      ["at-boundary", "2026-11-01T00:00:00.000Z"],
+      ["just-before", "2026-10-31T23:59:59.999Z"],
+    ] as const)
+      await s.reviewSessions.add({
+        id,
+        item_type: "draft",
+        item_id: id,
+        task_ids: [],
+        started_at: at,
+        decided_at: at,
+        active_ms: 60_000,
+        synthetic: false,
+      });
+    const app = createApp({ runtime: "node", storage: () => s });
+    const body = (await (
+      await app.request("/api/panels/kpis?from=2026-11-01&to=2026-11-10&compare=1")
+    ).json()) as {
+      meta: Record<string, string>;
+      figures: { key: string; value: number | null; previous?: number | null }[];
+    };
+    expect(body.meta.previous_to).toBe(body.meta.period_from);
+    expect(body.meta).toMatchObject({
+      period_from: "2026-11-01T00:00:00.000Z",
+      period_to: "2026-11-11T00:00:00.000Z",
+      previous_from: "2026-10-22T00:00:00.000Z",
+      previous_to: "2026-11-01T00:00:00.000Z",
+    });
+    const fig = (k: string) => body.figures.find((f) => f.key === k);
+    expect(fig("live_spend")).toMatchObject({ value: 2, previous: 5 });
+    expect(fig("review_minutes")).toMatchObject({ value: 1, previous: 1 });
   });
 
   it("defaults to the last 30 days, live only, compare on", () => {

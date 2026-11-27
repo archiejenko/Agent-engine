@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./layouts/home.json": "./src/layouts/home.json",
+    "./layouts/builtin": "./src/layouts/builtin.ts",
+    "./layouts/check": "./src/layouts/check.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

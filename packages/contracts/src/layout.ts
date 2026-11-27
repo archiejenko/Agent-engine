@@ -7,35 +7,9 @@ import { z } from "zod";
  * The browser never computes figures: a panel only formats what its query returns (rule 4).
  */
 
-/** The component kit (apps/dashboard/src/kit/). A layout naming anything else is refused. */
-export const PANEL_COMPONENTS = [
-  "Kpi",
-  "TrendChart",
-  "Funnel",
-  "Leaderboard",
-  "SegmentedBar",
-  "Heatmap",
-  "SmallMultiples",
-  "StatusList",
-  "HealthStrip",
-  "DecisionCard",
-] as const;
-export type PanelComponent = (typeof PANEL_COMPONENTS)[number];
+import { PANEL_COMPONENTS, PANEL_QUERIES } from "./layout-names.ts";
 
-/** The panel registry (apps/api/src/panels.ts). A layout naming anything else is refused. */
-export const PANEL_QUERIES = [
-  "kpis",
-  "money_by_day",
-  "runway",
-  "needs_you",
-  "brief",
-  "live_runs",
-  "pipeline",
-  "playbook_board",
-  "spend_split",
-  "health",
-] as const;
-export type PanelQuery = (typeof PANEL_QUERIES)[number];
+export * from "./layout-names.ts";
 
 const Id = z.string().regex(/^[a-z][a-z0-9_]*$/, "lower_snake_case id");
 /** A dashboard route (hash path), e.g. "/crm" or "/controls/keys". */

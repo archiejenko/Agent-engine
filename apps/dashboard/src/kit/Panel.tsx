@@ -22,9 +22,15 @@ export function Panel({
   result,
   error,
   onRetry,
+  count,
+  seeAll,
   children,
 }: {
   title: string;
+  /** A total shown beside the title (e.g. open decisions), from the API's meta. */
+  count?: number | null;
+  /** "See all (N)": shown when the panel holds fewer rows than exist. */
+  seeAll?: { href: string; total: number } | null;
   span?: number;
   drill?: string | null;
   status: "loading" | "ok" | "error";
@@ -41,12 +47,25 @@ export function Panel({
       aria-label={title}
     >
       <header className="panel-head">
-        <h3>{title}</h3>
-        {result?.value_kind && <KindBadge kind={result.value_kind} />}
-        {drill && (
-          <a className="panel-drill" href={`#${drill}`} aria-label={`Open ${title}`}>
-            Open ›
+        <h3>
+          {title}
+          {count !== undefined && count !== null && (
+            <span className="panel-count num" title={`${count} in all`}>
+              {count}
+            </span>
+          )}
+        </h3>
+        {result?.value_kind && !isEmpty(result) && <KindBadge kind={result.value_kind} />}
+        {seeAll ? (
+          <a className="panel-drill" href={`#${seeAll.href}`}>
+            See all ({seeAll.total}) ›
           </a>
+        ) : (
+          drill && (
+            <a className="panel-drill" href={`#${drill}`} aria-label={`Open ${title}`}>
+              Open ›
+            </a>
+          )
         )}
       </header>
       {status === "error" ? (

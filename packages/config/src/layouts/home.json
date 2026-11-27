@@ -58,7 +58,7 @@
     },
     {
       "id": "needs_you_section",
-      "title": "Needs you",
+      "title": null,
       "panels": [
         {
           "id": "needs_you",
@@ -67,13 +67,16 @@
           "query": "needs_you",
           "span": 4,
           "refresh_s": 60,
-          "drill": "/"
+          "drill": "/?tab=queue",
+          "args": {
+            "limit": 5
+          }
         }
       ]
     },
     {
       "id": "money_section",
-      "title": "Revenue vs spend",
+      "title": null,
       "panels": [
         {
           "id": "money_by_day",
@@ -109,7 +112,10 @@
           "query": "live_runs",
           "span": 2,
           "refresh_s": 30,
-          "drill": "/controls"
+          "drill": "/controls",
+          "args": {
+            "limit": 6
+          }
         },
         {
           "id": "pipeline",
@@ -131,7 +137,7 @@
           "title": "Playbook leaderboard",
           "component": "Leaderboard",
           "query": "playbook_board",
-          "span": 2,
+          "span": 4,
           "refresh_s": 60,
           "drill": "/controls"
         },
@@ -143,7 +149,7 @@
           "args": {
             "group": "playbook"
           },
-          "span": 2,
+          "span": 4,
           "refresh_s": 60,
           "drill": "/controls"
         }

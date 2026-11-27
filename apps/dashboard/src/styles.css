@@ -159,6 +159,18 @@ ul.facts-list {
   border-color: #1f5fbf;
   color: #fff;
 }
+/* Home's tabs are links (so each tab has an address). */
+nav.tabs a {
+  padding: 3px 12px;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  text-decoration: none;
+}
+nav.tabs a[aria-current="page"] {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: #fff;
+}
 .pager {
   display: flex;
   flex-wrap: wrap;

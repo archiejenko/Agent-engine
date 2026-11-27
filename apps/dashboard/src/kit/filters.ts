@@ -24,6 +24,7 @@ export const DEFAULT_FILTERS: Filters = {
 };
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const FILTER_KEYS = ["period", "from", "to", "playbook", "synthetic", "compare"];
 const SLUG = /^[a-z][a-z0-9_]*$/;
 
 export function parseFilters(hash: string): Filters {
@@ -80,8 +81,12 @@ export function useFilters(): [Filters, (f: Filters) => void] {
     return () => window.removeEventListener("hashchange", on);
   }, []);
   const set = useCallback((f: Filters) => {
-    const route = (window.location.hash.slice(1) || "/").split("?")[0];
-    const q = hashQuery(f);
+    const [route, query] = (window.location.hash.slice(1) || "/").split("?");
+    // Keep anything that isn't a filter (e.g. Home's tab), then write the filters.
+    const keep = new URLSearchParams(query ?? "");
+    for (const k of FILTER_KEYS) keep.delete(k);
+    for (const [k, v] of new URLSearchParams(hashQuery(f))) keep.set(k, v);
+    const q = keep.toString();
     window.location.hash = q ? `${route}?${q}` : (route ?? "/");
   }, []);
   return [parseFilters(hash), set];

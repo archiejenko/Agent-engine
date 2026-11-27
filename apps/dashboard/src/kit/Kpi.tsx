@@ -18,7 +18,8 @@ export function Kpi({ f }: { f: PanelFigure }) {
     <div className="kpi">
       <div className="kpi-label">
         <span>{f.label}</span>
-        <KindBadge kind={f.kind} />
+        {/* "–" is no number, so it carries no kind. */}
+        {f.value !== null && <KindBadge kind={f.kind} />}
       </div>
       <div className="kpi-value num">{fmt(f.value, f.unit)}</div>
       {hasChange && (
@@ -65,6 +66,32 @@ export function KpiRow({ figures }: { figures: PanelFigure[] }) {
       {figures.map((f) => (
         <Kpi key={f.key} f={f} />
       ))}
+    </div>
+  );
+}
+
+/**
+ * A one-column stack (e.g. Runway beside the KPI row): the first figure as a full KPI, the others as
+ * compact label–value lines, so the panel stays about as tall as the row next to it.
+ */
+export function KpiStack({ figures }: { figures: PanelFigure[] }) {
+  const [head, ...rest] = figures;
+  if (!head) return null;
+  return (
+    <div className="kpi-stack">
+      <Kpi f={head} />
+      {rest.length > 0 && (
+        <dl className="kpi-lines">
+          {rest.map((f) => (
+            <div key={f.key} title={f.note ?? undefined}>
+              <dt>{f.label}</dt>
+              <dd className="num">
+                {fmt(f.value, f.unit)} {f.value !== null && <KindBadge kind={f.kind} />}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </div>
   );
 }

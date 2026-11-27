@@ -4,7 +4,7 @@ import { Funnel } from "./Funnel.tsx";
 import type { Filters } from "./filters.ts";
 import { HealthStrip } from "./HealthStrip.tsx";
 import { type HeatCell, Heatmap } from "./Heatmap.tsx";
-import { KpiRow } from "./Kpi.tsx";
+import { KpiRow, KpiStack } from "./Kpi.tsx";
 import { Leaderboard } from "./Leaderboard.tsx";
 import { Panel } from "./Panel.tsx";
 import { SegmentedBar } from "./SegmentedBar.tsx";
@@ -21,9 +21,12 @@ export function PanelBody({
   result,
   dryRun,
   onDecided,
+  span = 4,
 }: {
   component: PanelComponent;
   result: PanelResult;
+  /** A one-column Kpi panel stacks: its first figure big, the rest as compact lines. */
+  span?: number;
   dryRun?: boolean;
   onDecided?: () => void;
 }) {
@@ -31,7 +34,11 @@ export function PanelBody({
   const meta = result.meta ?? {};
   switch (component) {
     case "Kpi":
-      return <KpiRow figures={result.figures ?? []} />;
+      return span === 1 ? (
+        <KpiStack figures={result.figures ?? []} />
+      ) : (
+        <KpiRow figures={result.figures ?? []} />
+      );
     case "TrendChart":
       return <TrendChart series={result.series ?? []} />;
     case "SmallMultiples":
@@ -85,6 +92,11 @@ export function PanelBody({
 export function LivePanel({ spec, filters }: { spec: PanelSpec; filters: Filters }) {
   const args: Record<string, string | number | boolean> = spec.args ?? {};
   const p = usePanel(spec.query, args, filters, spec.refresh_s);
+  // Totals come from the API: needs_you counts open decisions, live_runs counts runs.
+  const meta = p.result?.meta ?? {};
+  const total = num(meta.total_open) ?? (spec.query === "live_runs" ? num(meta.total) : null);
+  const shown = num(meta.shown);
+  const more = total !== null && shown !== null && total > shown && spec.drill;
   return (
     <Panel
       title={spec.title}
@@ -94,8 +106,12 @@ export function LivePanel({ spec, filters }: { spec: PanelSpec; filters: Filters
       result={p.result}
       error={p.error}
       onRetry={p.retry}
+      count={num(meta.total_open)}
+      seeAll={more && spec.drill ? { href: spec.drill, total } : null}
     >
-      {(r) => <PanelBody component={spec.component} result={r} onDecided={p.retry} />}
+      {(r) => (
+        <PanelBody component={spec.component} result={r} onDecided={p.retry} span={spec.span} />
+      )}
     </Panel>
   );
 }

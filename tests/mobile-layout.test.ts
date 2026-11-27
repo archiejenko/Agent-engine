@@ -25,6 +25,9 @@ const DIST = join(ROOT, "apps/dashboard/dist");
 // Every page and tab in the v3 navigation (the nav list is checked against App.tsx below).
 const PAGES = [
   "/",
+  // Home's tabs (cockpit U2): the full decisions queue and Quality (the old collapsed sections).
+  "/?tab=queue",
+  "/?tab=quality",
   "/ideas",
   "/board",
   "/vault",
@@ -146,9 +149,12 @@ async function sidewaysScroll(base: string, hash: string, width: number) {
     const x = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
-    // AE_SCREENS=docs/screens saves the kit screenshots for the cockpit gate report.
-    if (process.env.AE_SCREENS && hash === "/kit") {
-      const kind = base === emptyUrl ? "kit-empty" : "kit";
+    // AE_SCREENS=docs/screens saves the cockpit screenshots for the gate reports (Home and the kit).
+    // AE_SCREENS_TAG (e.g. "before") goes into the file name.
+    const shot = { "/": "home", "/kit": "kit" }[hash];
+    if (process.env.AE_SCREENS && shot) {
+      const tag = process.env.AE_SCREENS_TAG ? `-${process.env.AE_SCREENS_TAG}` : "";
+      const kind = `${shot}${tag}${base === emptyUrl ? "-empty" : ""}`;
       await page.screenshot({
         path: join(ROOT, process.env.AE_SCREENS, `dashboard-${kind}-${width}-light.png`),
         fullPage: true,
@@ -240,4 +246,103 @@ describe("no sideways scroll on any page", () => {
       expect(over).toEqual([]);
     }, 120_000);
   }
+});
+
+/** Panels on Home: the cockpit's frames, by title and state. */
+async function homePanels(page: import("playwright").Page) {
+  await page.waitForSelector("[data-panel-state]");
+  await page.waitForFunction(() => !document.querySelector('[data-panel-state="loading"]'), null, {
+    timeout: 20_000,
+  });
+  return page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>(".cockpit [data-panel-state]")].map((p) => ({
+      title: p.getAttribute("aria-label") ?? "",
+      state: p.dataset.panelState ?? "",
+    })),
+  );
+}
+
+describe("Home cockpit (cockpit U2)", () => {
+  it("one panel query failing leaves every other Home panel rendered, and Retry recovers it", async () => {
+    const layout = JSON.parse(
+      readFileSync(join(ROOT, "packages/config/src/layouts/home.json"), "utf8"),
+    ) as { sections: { panels: { title: string; query: string }[] }[] };
+    const panels = layout.sections.flatMap((s) => s.panels);
+    const failing = panels.filter((p) => p.query === "kpis").map((p) => p.title);
+    expect(failing.length).toBeGreaterThan(0);
+
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    let broken = true;
+    await page.route("**/api/panels/kpis?**", (route) =>
+      broken
+        ? route.fulfill({
+            status: 500,
+            contentType: "application/json",
+            body: '{"error":"forced failure (test)"}',
+          })
+        : route.continue(),
+    );
+    try {
+      await page.goto(`${seededUrl}/#/`);
+      const seen = await homePanels(page);
+      // Every panel in home.json is on the page.
+      expect(seen.map((p) => p.title).sort()).toEqual(panels.map((p) => p.title).sort());
+      for (const p of seen)
+        expect(p.state, p.title).toBe(failing.includes(p.title) ? "error" : "ok");
+      const text = (await page.textContent(".cockpit")) ?? "";
+      expect(text).toContain("Couldn't load this panel: forced failure (test)");
+
+      broken = false;
+      const title = failing[0] as string;
+      await page.click(`section[aria-label="${title}"] .panel-error button`);
+      await page.waitForSelector(`section[aria-label="${title}"][data-panel-state="ok"]`);
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
+
+  it("Needs you shows the top 5 with the open count, and its buttons post only to /api/decisions/:id/decide", async () => {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const posts: string[] = [];
+    page.on("request", (r) => {
+      if (r.method() !== "GET") posts.push(new URL(r.url()).pathname);
+    });
+    try {
+      await page.goto(`${seededUrl}/#/`);
+      await homePanels(page);
+      const panel = 'section[aria-label="Needs you"]';
+      const cards = await page.locator(`${panel} .decision-card`).count();
+      const count = Number(await page.textContent(`${panel} .panel-count`));
+      expect(cards).toBe(Math.min(5, count));
+      expect(await page.textContent(`${panel} .panel-drill`)).toContain(`See all (${count})`);
+      expect(await page.getAttribute(`${panel} .panel-drill`, "href")).toBe("#/?tab=queue");
+
+      // Choose the safe option on the first card that has buttons.
+      const button = page.locator(`${panel} .decision-actions button`, { hasText: "Skip" }).first();
+      await button.click();
+      await page.waitForFunction(
+        ([sel, before]) => Number(document.querySelector(sel)?.textContent) === before - 1,
+        [`${panel} .panel-count`, count] as const,
+        { timeout: 20_000 },
+      );
+      const approvals = posts.filter((p) => p !== "/api/review-sessions");
+      expect(approvals.length).toBe(1);
+      expect(approvals[0]).toMatch(/^\/api\/decisions\/[^/]+\/decide$/);
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
+
+  it("the See all link opens the full queue on Home", async () => {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+    try {
+      await page.goto(`${seededUrl}/#/?tab=queue`);
+      await page.waitForSelector(".card.decision");
+      expect(await page.getAttribute('nav.tabs a[aria-current="page"]', "href")).toBe(
+        "#/?tab=queue",
+      );
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
 });

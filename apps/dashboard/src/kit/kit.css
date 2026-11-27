@@ -490,3 +490,66 @@ fieldset.chips {
   max-width: 100%;
   overflow-x: auto;
 }
+/* Where the funnel's unit changes (ideas → revenue paths). */
+.funnel-divider {
+  border-top: 2px dashed var(--c-border);
+  padding-top: 6px;
+  font-size: 0.78rem;
+  color: var(--c-muted);
+}
+.panel-count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--c-accent);
+  color: #fff;
+  font-size: 0.75rem;
+  vertical-align: middle;
+}
+.kpi-lines {
+  margin: 8px 0 0;
+  display: grid;
+  gap: 2px;
+  font-size: 0.82rem;
+}
+.kpi-lines div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.kpi-lines dt {
+  color: var(--c-muted);
+}
+.kpi-lines dd {
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Home cockpit */
+.cockpit-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+}
+.data-badge {
+  display: inline-block;
+  padding: 1px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  border: 1px solid currentColor;
+}
+.data-badge.live {
+  color: var(--c-kind-real);
+}
+.data-badge.sim {
+  color: var(--c-kind-synthetic);
+}
+.cockpit-section {
+  margin-bottom: 4px;
+}
+.cockpit-title {
+  font-size: 1.05rem;
+  margin: 0.6rem 0 0.4rem;
+}

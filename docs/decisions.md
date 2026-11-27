@@ -865,3 +865,40 @@ theme only (CSS variables); default view last 30 days, live only, compare on. Ma
 - **Approvals static test:** kit code may post only to `/api/decisions/:id/decide`. Four older pages
   post approvals to their own routes (owner approvals, promote, board action, print batch); the test
   lists them, checks each records through the decisions path on the server, and fails on any new one.
+
+## 2026-11-27 — Cockpit U2: Home cockpit (U1 approved with changes)
+
+Archie's answers at the U1 gate, now built:
+
+- **Rule 22 means blind, not drop.** `toPanelResult` keeps rows about holdout companies and strips every
+  field named arm, cohort, cohort_id or …holdout…, at any depth. Holdout drafts reach Needs you
+  unlabelled. Totals include holdout money; only the lift figure compares the groups.
+- **Needs you on Home:** the top 5 by money at stake, the open count beside the title, and "See all (N)",
+  which opens the full queue in a new Home tab (`#/?tab=queue`).
+- **Health and Needs you are never cached** (approved).
+- **No `/api/layouts/home`.** `home.json` is checked with the full LayoutSpec by a Vite plugin
+  (`apps/dashboard/layout-check.ts`) before every build and dev start; a bad file fails the build. The
+  dashboard imports the JSON directly, runs only a light check (no Zod in the bundle) and keeps the
+  built-in fallback.
+- **Chart chunk accepted;** Home starts fetching it the moment it mounts.
+- **The four older approval buttons move to `/api/decisions/:id/decide` in U3.**
+
+Choices made while building:
+
+- **Compare periods.** Both windows are [from, to): the previous one ends exactly where the current
+  one starts. The real overlap was in `unitEconomics` (behind margin, cost to acquire and cost to
+  serve): it had a start date but no end, so the previous period also counted every task created in
+  the current period. It now takes an optional `until`, and `homeFigures` passes the window's end. The
+  note names both windows' first and last days.
+- **Simulated decisions.** A decision counts as simulated if its own flag says so, if its source task
+  is simulated, or if its company was only ever drawn into simulated cohorts. In the gate's simulator
+  world, the "SYNTHETIC TRADING …" leads still carry no flag anywhere: the companies come from fake
+  Companies House files loaded through the normal pipeline. Not guessed from the name; open question
+  for Archie (U2 report).
+- **The brief's "waiting" count is the Needs you count** (same code), so the two always agree.
+- **Home layout:** the leaderboard and spend split are full width (the leaderboard's table doesn't fit
+  half a row); Runway (one column) shows one big figure and two compact lines so it stays level with
+  the KPI row; Live runs shows up to 6 (with "See all" when there are more); single-panel sections
+  have no heading of their own.
+- **Home has three tabs** in the hash: Cockpit, Needs you (all), and Quality (every figure, the daily
+  digest, "Data and today", "Quality, lift and unit economics"). Nothing removed.

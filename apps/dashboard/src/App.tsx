@@ -57,8 +57,10 @@ export function App() {
     if (to) window.location.replace(`#${to}`);
   }, [to]);
   const route = to ?? raw;
+  // The part before "?" is the page; after it come Home's tab and the cockpit's filters.
+  const page = route.split("?")[0] ?? "";
   const active = (path: string) =>
-    path === "/" ? route === "/" || route === "" : route.startsWith(path);
+    path === "/" ? page === "/" || page === "" : page.startsWith(path);
   return (
     <main className="app">
       <nav className="top" aria-label="Main">
@@ -94,7 +96,7 @@ export function App() {
       ) : route.startsWith("/vault") ? (
         <Vault route={route} />
       ) : (
-        <Home />
+        <Home route={route} />
       )}
     </main>
   );
