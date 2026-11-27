@@ -473,6 +473,8 @@ export const DecisionsConfig = z.object({
   deadline_hours: z.record(z.string(), z.number().positive()),
   max_open_leads: z.number().int().min(1).max(1000),
   digest_hour_utc: z.number().int().min(0).max(23),
+  /** Runway (days) below which one "Top up or pause" decision opens (cockpit U3). */
+  low_runway_days: z.number().positive().max(365).default(14),
 });
 export type DecisionsConfig = z.infer<typeof DecisionsConfig>;
 /** v3 Phase 5: the key catalogue (names and dependants only; values never live in config). */

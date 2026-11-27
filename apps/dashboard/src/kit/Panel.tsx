@@ -24,9 +24,12 @@ export function Panel({
   onRetry,
   count,
   seeAll,
+  action,
   children,
 }: {
   title: string;
+  /** A control in the header (e.g. the leaderboard's "Show all (N)" toggle). */
+  action?: ReactNode;
   /** A total shown beside the title (e.g. open decisions), from the API's meta. */
   count?: number | null;
   /** "See all (N)": shown when the panel holds fewer rows than exist. */
@@ -56,6 +59,7 @@ export function Panel({
           )}
         </h3>
         {result?.value_kind && !isEmpty(result) && <KindBadge kind={result.value_kind} />}
+        {action}
         {seeAll ? (
           <a className="panel-drill" href={`#${seeAll.href}`}>
             See all ({seeAll.total}) ›

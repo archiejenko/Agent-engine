@@ -626,6 +626,7 @@ export function createApp(deps: AppDeps) {
     storage: deps.storage,
     decisions: decisionDeps,
     keys: deps.keys ?? (() => fallbackKeys),
+    vault: deps.vault ?? (async () => BRAIN_NOTES),
     ...(deps.cache ? { cache: deps.cache } : {}),
   });
   mountClaims(app, {

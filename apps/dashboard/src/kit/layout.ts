@@ -1,5 +1,23 @@
+import boardJson from "@ae/config/layouts/board.json";
 import { BUILT_IN_LAYOUTS } from "@ae/config/layouts/builtin";
+import controlsJson from "@ae/config/layouts/controls.json";
+import crmJson from "@ae/config/layouts/crm.json";
 import homeJson from "@ae/config/layouts/home.json";
+import ideasJson from "@ae/config/layouts/ideas.json";
+import inboxJson from "@ae/config/layouts/inbox.json";
+import vaultJson from "@ae/config/layouts/vault.json";
+
+/** Each page's layout file (checked in full at build time; see layout-check.ts). */
+const FILES: Record<keyof typeof BUILT_IN_LAYOUTS, unknown> = {
+  home: homeJson,
+  ideas: ideasJson,
+  board: boardJson,
+  crm: crmJson,
+  inbox: inboxJson,
+  controls: controlsJson,
+  vault: vaultJson,
+};
+
 import type { LayoutSpec, PanelSpec } from "@ae/contracts";
 import { PANEL_COMPONENTS, PANEL_QUERIES } from "@ae/contracts/layout-names";
 
@@ -40,7 +58,7 @@ export function lightCheck(raw: unknown): string[] {
 /** A page's layout, or the built-in one if the file is refused. */
 export function pageLayout(
   page: keyof typeof BUILT_IN_LAYOUTS,
-  raw: unknown = homeJson,
+  raw: unknown = FILES[page],
 ): { layout: LayoutSpec; fallback: boolean; problems: string[] } {
   const problems = lightCheck(raw);
   if (problems.length) return { layout: BUILT_IN_LAYOUTS[page], fallback: true, problems };

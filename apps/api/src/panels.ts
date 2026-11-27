@@ -14,12 +14,14 @@ import {
   buildDigest,
   type DecisionDeps,
   entityOfRef,
+  type GitNote,
   homeFigures,
   K,
   KeyRing,
   loadBundledPlaybooks,
   needsYou,
   playbookDailyCap,
+  runwayFigures,
   spendTier,
 } from "@ae/infra";
 import type { KeyStore } from "@ae/ports";
@@ -27,6 +29,14 @@ import type { DailyRollupRow, Storage } from "@ae/storage";
 import type { Hono } from "hono";
 import { z } from "zod";
 import { type CacheStore, cacheMiddleware } from "./cache.ts";
+import {
+  boardHeatmap,
+  crmPipeline,
+  ideasBoard,
+  inboxStrip,
+  type PageCtx,
+  vaultLearned,
+} from "./panels-pages.ts";
 
 /**
  * The cockpit's panel registry (cockpit UI plan §3.2): one read-only function per panel query, all
@@ -56,6 +66,8 @@ export interface PanelCtx extends PanelFilters {
   keys: KeyStore;
   now: Date;
   args: Record<string, string>;
+  /** brain/ notes for the Vault feed (git notes; versions come from storage). */
+  vault: PageCtx["vault"];
 }
 
 type Raw = Omit<PanelResult, "query" | "as_of" | "from" | "to" | "synthetic_included">;
@@ -275,42 +287,15 @@ const money_by_day: PanelDef = {
   },
 };
 
-/**
- * Runway = pool balance ÷ average live daily spend over the last 7 complete days (Archie, 26 Nov).
- * Pool balance = every pool event (top-ups and adjustments) − live spend since the first pool event.
- * Live only, whatever the synthetic switch says: this is money that controls spending.
- */
-export async function runwayFigures(storage: Storage, now: Date) {
-  const events = await storage.poolEvents.list();
-  const topups = events.filter((e) => e.kind === "topup");
-  const today = dayOf(now.toISOString());
-  if (!topups.length)
-    return { recorded: false as const, balance: null, avg7: null, days: null, top_up_by: null };
-  const first = dayOf(events[0]?.at ?? today);
-  const live = (await storage.dailyRollups.range({ from: first, to: addDays(today, 1) })).filter(
-    (r) => isLive(r, false),
-  );
-  const spent = live.reduce((a, r) => a + r.cost_gbp, 0);
-  const balance = events.reduce((a, e) => a + e.amount_gbp, 0) - spent;
-  const weekStart = addDays(today, -7);
-  const avg7 =
-    live.filter((r) => r.day >= weekStart && r.day < today).reduce((a, r) => a + r.cost_gbp, 0) / 7;
-  const days = avg7 > 0 ? Math.max(0, balance) / avg7 : null;
-  return {
-    recorded: true as const,
-    balance: round2(balance),
-    avg7: round2(avg7),
-    days: days === null ? null : Math.round(days * 10) / 10,
-    top_up_by: days === null ? null : addDays(today, Math.floor(days)),
-  };
-}
+/** Runway's maths lives in packages/infra/src/runway.ts, shared with the low-runway decision. */
+export { runwayFigures };
 
 const runway: PanelDef = {
   cacheable: false,
   run: async (c) => {
     const r = await runwayFigures(c.storage, c.now);
     const note = !r.recorded
-      ? "record a top-up in Controls"
+      ? "record a top-up in Controls → Agent pool"
       : r.days === null
         ? "no live spend in the last 7 days, so the pool isn't running down"
         : `top up by ${r.top_up_by}`;
@@ -449,7 +434,9 @@ const needs_you: PanelDef = {
         drill:
           d.type === "graph_plan" && typeof ctx.graph_id === "string"
             ? `/plans/${ctx.graph_id}`
-            : null,
+            : typeof ctx.drill === "string"
+              ? ctx.drill
+              : null,
       });
     }
     return {
@@ -742,21 +729,28 @@ const playbook_board: PanelDef = {
     rows.sort(
       (a, b) => (b.net_gbp as number) - (a.net_gbp as number) || a.key.localeCompare(b.key),
     );
-    const top = Math.max(0, ...rows.map((r) => Math.abs(r.net_gbp as number)));
-    rows.forEach((r, i) => {
+    // Only playbooks with activity in the period: live money in or out, by the same simulated filter as
+    // the rest of the panel (today's cap spend includes simulated spend, so it doesn't count). all=1
+    // shows every playbook. Ranks are over the rows shown.
+    const active = rows.filter(
+      (r) => (r.revenue_gbp as number) !== 0 || (r.spend_gbp as number) !== 0,
+    );
+    const shown = c.args.all === "1" ? rows : active;
+    const top = Math.max(0, ...shown.map((r) => Math.abs(r.net_gbp as number)));
+    shown.forEach((r, i) => {
       r.rank = i + 1;
       r.bar_share = top > 0 ? round4(Math.abs(r.net_gbp as number) / top) : 0;
     });
-    const anyMoney = rows.some(
-      (r) => (r.revenue_gbp as number) !== 0 || (r.spend_gbp as number) !== 0,
-    );
     return {
       kind: "rows",
-      rows,
+      rows: shown,
       value_kind: "real",
-      meta: { has_money: anyMoney ? 1 : 0 },
-      note: "ranked by live revenue minus live spend in the period; today's spend against each cap",
-      empty: "Playbooks rank here once they earn or spend real money.",
+      meta: { total: rows.length, active: active.length, shown: shown.length },
+      note:
+        c.args.all === "1"
+          ? "every playbook: today's spend against its cap; ranked by live revenue minus live spend in the period"
+          : "playbooks with live money in the period, ranked by revenue minus spend; today's spend against each cap",
+      empty: "No playbook earned or spent real money in this period.",
     };
   },
 };
@@ -916,6 +910,13 @@ export const PANELS: Record<PanelQuery, PanelDef> = {
   playbook_board,
   spend_split,
   health,
+  // U3 pages. Cacheable: none reads caps, budgets or the decisions queue... except the Ideas board,
+  // whose pass/fail buttons must never show a decision that was just made.
+  ideas_board: { cacheable: false, run: ideasBoard },
+  board_heatmap: { cacheable: true, run: boardHeatmap },
+  crm_pipeline: { cacheable: true, run: crmPipeline },
+  inbox_strip: { cacheable: true, run: inboxStrip },
+  vault_learned: { cacheable: true, run: vaultLearned },
 };
 
 /** Panel queries that may be served from the 60-second cache (everything that doesn't read caps). */
@@ -1028,6 +1029,11 @@ const Filters = z.object({
   set: z.enum(["primary", "secondary"]).optional(),
   split: z.enum(["playbook"]).optional(),
   group: z.enum(["playbook", "agent"]).optional(),
+  /** ideas_board: a function (taxonomy node) or market filter. */
+  function: z.string().trim().min(1).max(100).optional(),
+  market: z.string().trim().min(1).max(200).optional(),
+  /** playbook_board: every playbook, not only those active in the period. */
+  all: z.enum(["0", "1"]).optional(),
   /** needs_you and live_runs: how many rows to return (the total is always in meta). */
   limit: z.coerce.number().int().min(1).max(50).optional(),
 });
@@ -1058,6 +1064,7 @@ export function mountPanels(
     storage: (env: unknown) => Storage;
     decisions: (env: unknown) => DecisionDeps;
     keys: (env: unknown) => KeyStore;
+    vault: () => Promise<GitNote[]>;
     cache?: (env: unknown) => CacheStore | null;
     now?: () => Date;
   },
@@ -1080,7 +1087,7 @@ export function mountPanels(
     const f = parseFilters(q.data, now);
     const storage = deps.storage(c.env);
     const args: Record<string, string> = {};
-    for (const k of ["set", "split", "group", "limit"] as const)
+    for (const k of ["set", "split", "group", "limit", "all", "function", "market"] as const)
       if (q.data[k] !== undefined) args[k] = String(q.data[k]);
     const raw = await PANELS[name].run({
       ...f,
@@ -1088,6 +1095,7 @@ export function mountPanels(
       cfg: loadInfraConfig(),
       decisions: deps.decisions(c.env),
       keys: deps.keys(c.env),
+      vault: deps.vault,
       now,
       args,
     });

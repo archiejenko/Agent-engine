@@ -15,6 +15,10 @@ export const PANEL_COMPONENTS = [
   "StatusList",
   "HealthStrip",
   "DecisionCard",
+  // Cockpit U3 (other pages)
+  "Kanban",
+  "Gauges",
+  "StatStrip",
 ] as const;
 export type PanelComponent = (typeof PANEL_COMPONENTS)[number];
 
@@ -30,5 +34,11 @@ export const PANEL_QUERIES = [
   "playbook_board",
   "spend_split",
   "health",
+  // Cockpit U3 (other pages)
+  "ideas_board",
+  "board_heatmap",
+  "crm_pipeline",
+  "inbox_strip",
+  "vault_learned",
 ] as const;
 export type PanelQuery = (typeof PANEL_QUERIES)[number];

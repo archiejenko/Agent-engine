@@ -1,0 +1,21 @@
+{
+  "page": "inbox",
+  "version": 1,
+  "sections": [
+    {
+      "id": "inbox_section",
+      "title": null,
+      "panels": [
+        {
+          "id": "inbox_strip",
+          "title": "Sends and replies",
+          "component": "StatStrip",
+          "query": "inbox_strip",
+          "span": 4,
+          "refresh_s": 300,
+          "drill": "/inbox/sent"
+        }
+      ]
+    }
+  ]
+}

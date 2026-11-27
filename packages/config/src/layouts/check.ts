@@ -3,7 +3,12 @@ import { join } from "node:path";
 import { LayoutSpec } from "@ae/contracts";
 
 /** Every page layout file, checked when the dashboard builds (cockpit U2). */
-export const LAYOUT_FILES = { home: join(import.meta.dirname, "home.json") } as const;
+export const LAYOUT_FILES = Object.fromEntries(
+  ["home", "ideas", "board", "crm", "inbox", "controls", "vault"].map((p) => [
+    p,
+    join(import.meta.dirname, `${p}.json`),
+  ]),
+) as Record<"home" | "ideas" | "board" | "crm" | "inbox" | "controls" | "vault", string>;
 
 export class LayoutFileError extends Error {}
 

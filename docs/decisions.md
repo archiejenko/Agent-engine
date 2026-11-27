@@ -902,3 +902,49 @@ Choices made while building:
   have no heading of their own.
 - **Home has three tabs** in the hash: Cockpit, Needs you (all), and Quality (every figure, the daily
   digest, "Data and today", "Quality, lift and unit economics"). Nothing removed.
+
+## 2026-11-27 — Cockpit U3: the other pages (U2 approved with changes)
+
+Archie's answers at the U2 gate, now built:
+
+- **Simulated leads: option (b), test data only.** `markTestWorldLeadsSimulated` (apps/api/src/gates/
+  test-world.ts) marks the test world's lead decisions simulated through a new storage method,
+  `decisions.markSynthetic`. No migration, no guessing from names. An architecture test allows calls
+  only from the test world: marking a real decision would hide it from Archie.
+- **Production databases can't be written by the simulator or rehearsal loaders**, and a test proves it
+  (tests/simulator-isolation.test.ts). There was no such path, so nothing was stopped for. Found on the
+  way and reported: the deployed Worker's pre-cutover fake model includes the website extractor; it
+  quotes real pages and invents nothing. Its file is now separate from the fake-website generator,
+  which (with every other generator, gate and loader) is proved absent from the Worker bundle.
+- **Leaderboard:** only playbooks with live money in the period, plus "Show all (N)". Today's cap spend
+  doesn't count as activity (it includes simulated spend, as caps always have). One compact card per
+  playbook on a phone.
+- **Runway → Controls top-up form.** No form existed (only a gate ever wrote pool_events), so one was
+  built: it opens a "record top-up" decision and records it through /api/decisions/:id/decide, with
+  Archie's approval id on the pool event. Raising the pool raises what agents may spend, so it is an
+  approval, like raising a spend tier.
+- **Low runway:** below `low_runway_days` (packages/config/src/decisions.json, default 14) one "Top up
+  or pause" decision opens; safe default = pause the task queue (spends nothing, rule 19). One per
+  pool event: once raised (whatever the outcome) it never repeats until another top-up or adjustment
+  is recorded. The runway maths moved to packages/infra/src/runway.ts, shared with the panel.
+- **The four older approval buttons** (Budgets raise-tier, Controls promote, Board pin/kill, Letters
+  batch) now resolve through /api/decisions/:id/decide. Things Archie starts himself first open a
+  decision with POST /api/decisions/request, which approves nothing. The static test has no allow-list.
+
+Choices made while building:
+
+- **Ideas confidence** is the lowest current confidence among the card's evidence facts (the same rule
+  as an opportunity's confidence). Columns: new = proposed or parked; approved = passed or
+  budget_pending; executing = testing; earning = succeeded; killed = killed or failed. Held-back cards
+  never appear. **Ask** stays a question on the card's page (a thread entry); routing it through
+  /decide would close the card's decision.
+- **Board heatmap:** rows are industries, columns what we'd sell (the market's field). Colour = the
+  market's best live idea's expected profit per hour of Archie's time, scaled to the best market
+  (estimated); number = agent spend there.
+- **Inbox strip:** per playbook (or test, where a send belongs to one), counted in companies; reply and
+  positive-reply rates are per company sent to.
+- **Vault feed:** agent-written notes (author `agent:…`) from the last 7 days, with author, source count,
+  ledger rows and labels.
+- **One layout file per page** (ideas, board, crm, inbox, controls, vault), checked at build time like
+  home.json, each with a built-in fallback. Not cached: the Ideas board (its buttons must never show a
+  decision just made), plus the U2 list.

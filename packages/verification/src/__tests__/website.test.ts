@@ -2,8 +2,9 @@ import { FakeModel, FakeWebFetcher, FakeWebsiteFinder } from "@ae/ports";
 import type { Storage } from "@ae/storage";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { VerificationContext } from "../context.ts";
+import { fakeWebsiteExtractor } from "../sources/website/fake-extractor.ts";
 import { collectWebsiteClaims } from "../sources/website/ingest.ts";
-import { fakeWebsiteExtractor, generateSites } from "../sources/website/synthetic.ts";
+import { generateSites } from "../sources/website/synthetic.ts";
 import { setup } from "./helpers.ts";
 
 const entity = {

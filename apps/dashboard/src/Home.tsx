@@ -56,7 +56,13 @@ export function Home({ route }: { route: string }) {
       ) : tab === "quality" ? (
         <>
           <h2>All figures</h2>
-          <Suspense fallback={<p className="muted">Loading the figures…</p>}>
+          <Suspense
+            fallback={
+              <p className="muted" data-panel-state="loading">
+                Loading the figures…
+              </p>
+            }
+          >
             <AllFigures />
           </Suspense>
           <Digest />
@@ -66,7 +72,13 @@ export function Home({ route }: { route: string }) {
           <Metrics />
         </>
       ) : (
-        <Suspense fallback={<p className="muted">Loading the cockpit…</p>}>
+        <Suspense
+          fallback={
+            <p className="muted" data-panel-state="loading">
+              Loading the cockpit…
+            </p>
+          }
+        >
           <Cockpit />
         </Suspense>
       )}

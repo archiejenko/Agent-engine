@@ -131,8 +131,14 @@ const ORDER: PanelComponent[] = [
   "StatusList",
   "HealthStrip",
   "DecisionCard",
+  "Kanban",
+  "Gauges",
+  "StatStrip",
 ];
 const WIDE = new Set<PanelComponent>([
+  "Kanban",
+  "Gauges",
+  "StatStrip",
   "Kpi",
   "TrendChart",
   "SmallMultiples",

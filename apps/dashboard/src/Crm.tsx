@@ -4,6 +4,7 @@ import { Company } from "./Company.tsx";
 import { Facts } from "./Facts.tsx";
 import { EmptyRow, label } from "./format.tsx";
 import { Golden } from "./Golden.tsx";
+import { PagePanels } from "./pagePanels.tsx";
 
 const STAGES = [
   "new",
@@ -244,6 +245,35 @@ function CompanyView({ id }: { id: string }) {
 }
 
 /** CRM: every company we've touched, its stage and full history; plus the facts browser and Verify. */
+/** Companies: the pipeline board (default) or today's table; the choice lives in the address. */
+const viewOf = (route: string): "board" | "table" =>
+  new URLSearchParams(route.split("?")[1] ?? "").get("view") === "table" ? "table" : "board";
+
+function Companies({ view }: { view: "board" | "table" }) {
+  return (
+    <>
+      <nav className="tabs" aria-label="Companies view">
+        <a href="#/crm" aria-current={view === "board" ? "page" : undefined}>
+          Pipeline board
+        </a>
+        <a href="#/crm?view=table" aria-current={view === "table" ? "page" : undefined}>
+          Table
+        </a>
+      </nav>
+      {view === "table" ? (
+        <CompanyList />
+      ) : (
+        <>
+          <PagePanels page="crm" />
+          <p>
+            <a href="/api/crm.csv">Export CSV</a> · the table has search and stage filters.
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
 export function Crm({ route }: { route: string }) {
   const id = route.match(/^\/crm\/([A-Za-z0-9]{8})/)?.[1]?.toUpperCase();
   if (id) return <CompanyView id={id} />;
@@ -272,7 +302,13 @@ export function Crm({ route }: { route: string }) {
           </a>
         ))}
       </div>
-      {tab === "facts" ? <Facts /> : tab === "verify" ? <Golden /> : <CompanyList />}
+      {tab === "facts" ? (
+        <Facts />
+      ) : tab === "verify" ? (
+        <Golden />
+      ) : (
+        <Companies view={viewOf(route)} />
+      )}
     </>
   );
 }

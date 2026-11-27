@@ -40,7 +40,7 @@
           "query": "runway",
           "span": 1,
           "refresh_s": 300,
-          "drill": "/controls"
+          "drill": "/controls?section=pool"
         },
         {
           "id": "kpis_secondary",

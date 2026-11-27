@@ -63,6 +63,8 @@ export interface PanelStage {
   rate_from_previous: number | null;
   kind: ValueKind;
   note?: string | null;
+  /** Money in this stage or column (e.g. pipeline value), computed by the API. */
+  value_gbp?: number | null;
 }
 
 export interface PanelResult {

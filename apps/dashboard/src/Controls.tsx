@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { getJson } from "./api.ts";
 import { Budgets } from "./Budgets.tsx";
+import { requestThenDecide } from "./decide.ts";
 import { EmptyRow } from "./format.tsx";
 import { Health } from "./Health.tsx";
+import { PagePanels } from "./pagePanels.tsx";
+import { TopUp } from "./TopUp.tsx";
 
 interface ControlsData {
   kill_global: boolean;
@@ -86,6 +89,8 @@ export function Controls() {
           .map(([k, v]) => `${k} £${v}`)
           .join(", ")}
       </p>
+      <PagePanels page="controls" />
+      <TopUp onDone={load} />
       <h2>Playbooks and autonomy</h2>
       <table>
         <thead>
@@ -137,7 +142,14 @@ export function Controls() {
                 {p.autonomy !== "L3" && (
                   <button
                     type="button"
-                    onClick={() => act(post(`/api/playbooks/${p.playbook}/promote`, {}))}
+                    onClick={() =>
+                      // Promotion is an approval: opened as a decision, recorded through /decide.
+                      act(
+                        requestThenDecide({ kind: "autonomy", playbook: p.playbook }).then((e) => {
+                          if (e) throw new Error(e);
+                        }),
+                      )
+                    }
                   >
                     Promote
                   </button>

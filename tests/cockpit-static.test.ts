@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { moneyMaths, sourceFiles, stripComments, writeUrls } from "./cockpit-static.helpers.ts";
+import { moneyMaths, sourceFiles, writeUrls } from "./cockpit-static.helpers.ts";
 
 /**
  * Cockpit UI static checks (plan §2 and §6):
@@ -72,19 +72,10 @@ const NOT_APPROVALS = new Set([
   "/api/vault/note",
   "/api/review-sessions",
   "/api/playbooks/:x/spend-tier",
+  // Opens a decision for something Archie starts himself; it approves nothing. The choice is then
+  // recorded by /api/decisions/:id/decide (apps/dashboard/src/decide.ts).
+  "/api/decisions/request",
 ]);
-/**
- * Pages built before the cockpit that post an approval to its own route. Each route is checked below to
- * record through the decisions path on the server (requestAndDecide / decideSource), so rule 18 holds;
- * U3 moves these buttons onto /api/decisions/:id/decide. No new entry may be added.
- */
-const LEGACY_APPROVAL_ROUTES: Record<string, string> = {
-  "/api/owner-approvals": "/api/owner-approvals",
-  "/api/playbooks/:x/promote": "/api/playbooks/:name/promote",
-  "/api/board/:x/action": "/api/board/:key/action",
-  "/api/letters/batches/:x/decision": "/api/letters/batches/:id/decision",
-};
-
 describe("one decisions path (rule 18)", () => {
   const writes = sourceFiles(DASH).flatMap((f) =>
     writeUrls(readFileSync(f, "utf8")).map((url) => ({ file: rel(f), url })),
@@ -92,6 +83,7 @@ describe("one decisions path (rule 18)", () => {
 
   it("the scan finds the dashboard's writes (positive control)", () => {
     expect(writes.some((w) => w.url === DECIDE && w.file === "kit/DecisionCard.tsx")).toBe(true);
+    expect(writes.some((w) => w.url === DECIDE && w.file === "decide.ts")).toBe(true);
     expect(writes.some((w) => w.url === "/api/vault/note")).toBe(true);
     expect(writes.length).toBeGreaterThan(15);
   });
@@ -102,23 +94,18 @@ describe("one decisions path (rule 18)", () => {
     expect(kit.filter((w) => w.url !== DECIDE)).toEqual([]);
   });
 
-  it("no dashboard file posts an approval anywhere else (legacy routes are server-side decisions)", () => {
-    const stray = writes.filter(
-      (w) => w.url !== DECIDE && !NOT_APPROVALS.has(w.url) && !(w.url in LEGACY_APPROVAL_ROUTES),
-    );
+  it("no dashboard file posts an approval anywhere else: there is no allow-list", () => {
+    const stray = writes.filter((w) => w.url !== DECIDE && !NOT_APPROVALS.has(w.url));
     expect(stray).toEqual([]);
   });
 
-  it("each legacy approval route records through the decisions path on the server", () => {
-    const api = sourceFiles(join(ROOT, "apps/api/src"))
-      .map((f) => stripComments(readFileSync(f, "utf8")))
-      .join("\n");
-    for (const route of Object.values(LEGACY_APPROVAL_ROUTES)) {
-      const at = api.indexOf(`app.post("${route}"`);
-      expect(at, route).toBeGreaterThan(-1);
-      const next = api.indexOf("app.", at + 10);
-      const handler = api.slice(at, next === -1 ? undefined : next);
-      expect(handler, route).toMatch(/requestAndDecide|decideSource|viaDecision/);
-    }
+  it("the older approval routes are no longer called from the dashboard (U3)", () => {
+    for (const old of [
+      "/api/owner-approvals",
+      "/api/playbooks/:x/promote",
+      "/api/board/:x/action",
+      "/api/letters/batches/:x/decision",
+    ])
+      expect(writes.filter((w) => w.url === old)).toEqual([]);
   });
 });

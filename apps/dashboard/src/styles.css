@@ -465,3 +465,13 @@ p.error {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
+/* Controls → record a top-up (cockpit U3). */
+.topup-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: end;
+}
+form.topup-form input[type] {
+  max-width: 100%;
+}

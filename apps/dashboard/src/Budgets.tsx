@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getJson } from "./api.ts";
+import { requestThenDecide } from "./decide.ts";
 
 interface BudgetsData {
   global: { cap_gbp: number; spent_today_gbp: number };
@@ -33,18 +34,24 @@ export function Budgets() {
       )
     )
       return;
-    const r = up
-      ? await fetch("/api/owner-approvals", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ kind: "spend_tier", playbook, tier: to }),
-        })
-      : await fetch(`/api/playbooks/${playbook}/spend-tier`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ tier: to }),
-        });
-    setMsg(r.ok ? `${playbook} is now ${to}.` : ((await r.json()).error ?? `HTTP ${r.status}`));
+    // Raising a tier is an approval: opened as a decision and recorded through /api/decisions/:id/decide.
+    // Lowering one is always allowed (it spends less) and needs no approval.
+    let err: string | null = null;
+    if (up)
+      err = await requestThenDecide({
+        kind: "spend_tier",
+        playbook,
+        tier: to as "S1" | "S2" | "S3",
+      });
+    else {
+      const r = await fetch(`/api/playbooks/${playbook}/spend-tier`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tier: to }),
+      });
+      if (!r.ok) err = ((await r.json()) as { error?: string }).error ?? `HTTP ${r.status}`;
+    }
+    setMsg(err ?? `${playbook} is now ${to}.`);
     load();
   };
   return (

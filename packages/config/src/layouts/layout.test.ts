@@ -29,6 +29,14 @@ describe("LayoutSpec (cockpit UI plan §3.1)", () => {
     ]);
   });
 
+  it("every page's layout file is accepted (cockpit U3: one file per page that uses panels)", () => {
+    for (const page of Object.keys(BUILT_IN_LAYOUTS) as (keyof typeof BUILT_IN_LAYOUTS)[]) {
+      const r = loadLayout(page);
+      expect(r.errors, page).toEqual([]);
+      expect(r.layout.page).toBe(page);
+    }
+  });
+
   it("the built-in layouts are themselves valid", () => {
     for (const l of Object.values(BUILT_IN_LAYOUTS))
       expect(LayoutSpec.safeParse(l).success).toBe(true);

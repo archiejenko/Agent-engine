@@ -3,6 +3,7 @@ import { getJson } from "./api.ts";
 import { EmptyRow } from "./format.tsx";
 import { Letters } from "./Letters.tsx";
 import { NeedsYou } from "./NeedsYou.tsx";
+import { PagePanels } from "./pagePanels.tsx";
 import { Stage5Card } from "./Stage5.tsx";
 
 interface Msg {
@@ -88,6 +89,7 @@ export function Inbox({ route }: { route: string }) {
   return (
     <>
       <h2>Inbox</h2>
+      <PagePanels page="inbox" />
       <div className="tabs" role="tablist">
         {TABS.map(([k, name]) => (
           <a

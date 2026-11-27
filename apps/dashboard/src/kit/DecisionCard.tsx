@@ -21,19 +21,24 @@ const REVIEW_TYPE: Record<string, ReviewItemType> = {
 };
 
 /** The one place a cockpit button records a choice (rule 18): POST /api/decisions/:id/decide. */
-export async function decide(id: string, option: string): Promise<string | null> {
+export async function decide(
+  id: string,
+  option: string,
+  extra: { reason?: string; edited_text?: string; exclude?: string[] } = {},
+): Promise<string | null> {
   const r = await fetch(`/api/decisions/${encodeURIComponent(id)}/decide`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ option }),
+    body: JSON.stringify({ option, ...extra }),
   });
   if (r.ok) return null;
   return ((await r.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${r.status}`;
 }
 
 /**
- * A Needs-you item: title, money at stake (with its kind), deadline, the recommended option, one button
- * per option, and what happens if you don't decide. The agent's reasoning sits collapsed underneath.
+ * A Needs-you item as one compact row: type, title, money at stake (with its kind), due date and the
+ * buttons. "Details" expands the agent's reason and the economics: what each option does and what
+ * happens if you don't decide.
  */
 export function DecisionCard({
   d,
@@ -46,11 +51,13 @@ export function DecisionCard({
   dryRun?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const options = (d.options as Option[] | undefined) ?? [];
   const type = d.type as string;
   const safe = options.find((o) => o.key === d.safe_default);
   const moneyKind = d.money_kind as string;
+  const detailsId = `decision-${d.key}`;
   const choose = async (o: Option) => {
     if (dryRun) {
       setMsg(`(kit page) would choose "${o.label}"`);
@@ -64,53 +71,75 @@ export function DecisionCard({
     if (!err) onDone?.(d.key, o.label);
   };
   return (
-    <article className="decision-card">
-      <header>
+    <article className="decision-card compact">
+      <div className="decision-line">
         <span className="kind">{d.detail ?? type}</span>
-        <b>{d.label}</b>
-      </header>
-      <p className="muted decision-facts">
+        <b className="decision-title">{d.label}</b>
         {moneyKind !== "none" && (
-          <>
-            <span className="num">{money(d.money_at_stake_gbp as number, { whole: true })}</span> at
-            stake{" "}
+          <span className="decision-money num">
+            {money(d.money_at_stake_gbp as number, { whole: true })}{" "}
             <KindBadge
               kind={
                 moneyKind === "real" ? "real" : moneyKind === "assumed" ? "assumed" : "estimated"
               }
-            />{" "}
-            ·{" "}
-          </>
+            />
+          </span>
         )}
-        due {when(d.deadline as string)} · if you don't decide: <i>{safe?.label ?? "nothing"}</i>
-      </p>
-      {READ_FIRST.has(type) ? (
-        <p>
-          <a href={`#${d.drill ?? "/"}`}>Read it in full before deciding ›</a>
-        </p>
-      ) : (
-        <div className="decision-actions">
-          {options.map((o) => (
-            <button
-              key={o.key}
-              type="button"
-              disabled={busy}
-              className={o.key === d.recommended ? "primary" : undefined}
-              title={o.effect}
-              onClick={() => choose(o)}
-            >
-              {o.label}
-              {o.key === d.recommended && <small> (recommended)</small>}
-            </button>
-          ))}
+        <span className="decision-due muted">due {when(d.deadline as string)}</span>
+        {READ_FIRST.has(type) ? (
+          <a className="decision-read" href={`#${d.drill ?? "/?tab=queue"}`}>
+            Read it first ›
+          </a>
+        ) : (
+          <span className="decision-actions">
+            {options.map((o) => (
+              <button
+                key={o.key}
+                type="button"
+                disabled={busy}
+                className={o.key === d.recommended ? "primary" : undefined}
+                title={o.effect}
+                onClick={() => choose(o)}
+              >
+                {o.label}
+              </button>
+            ))}
+          </span>
+        )}
+        <button
+          type="button"
+          className="decision-more"
+          aria-expanded={open}
+          aria-controls={detailsId}
+          onClick={() => setOpen(!open)}
+        >
+          {open ? "Less" : "Details"}
+        </button>
+      </div>
+      {msg && <p className="muted decision-msg">{msg}</p>}
+      {open && (
+        <div className="decision-details" id={detailsId}>
+          {typeof d.reasoning === "string" && d.reasoning ? (
+            <p>
+              <b>Why:</b> {d.reasoning}
+            </p>
+          ) : (
+            <p className="muted">The agent gave no reason for this one.</p>
+          )}
+          <ul>
+            {options.map((o) => (
+              <li key={o.key}>
+                <b>{o.label}</b>
+                {o.key === d.recommended && " (recommended)"}: {o.effect}
+              </li>
+            ))}
+          </ul>
+          <p className="muted">
+            If you don't decide by {when(d.deadline as string)}: <i>{safe?.label ?? "nothing"}</i>
+            {safe?.effect ? ` (${safe.effect})` : ""}. That's recorded as "defaulted", never as your
+            approval.
+          </p>
         </div>
-      )}
-      {msg && <p className="muted">{msg}</p>}
-      {typeof d.reasoning === "string" && d.reasoning && (
-        <details>
-          <summary>Why the agent suggests this</summary>
-          <p>{d.reasoning}</p>
-        </details>
       )}
     </article>
   );

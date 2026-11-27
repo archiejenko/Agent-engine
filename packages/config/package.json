@@ -7,7 +7,13 @@
     ".": "./src/index.ts",
     "./layouts/home.json": "./src/layouts/home.json",
     "./layouts/builtin": "./src/layouts/builtin.ts",
-    "./layouts/check": "./src/layouts/check.ts"
+    "./layouts/check": "./src/layouts/check.ts",
+    "./layouts/ideas.json": "./src/layouts/ideas.json",
+    "./layouts/board.json": "./src/layouts/board.json",
+    "./layouts/crm.json": "./src/layouts/crm.json",
+    "./layouts/inbox.json": "./src/layouts/inbox.json",
+    "./layouts/controls.json": "./src/layouts/controls.json",
+    "./layouts/vault.json": "./src/layouts/vault.json"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

@@ -8,6 +8,7 @@ import { z } from "zod";
 import { createApp } from "./app.ts";
 import { memoryCache } from "./cache.ts";
 import { runPhase5Gate } from "./gates/phase5.ts";
+import { markTestWorldLeadsSimulated } from "./gates/test-world.ts";
 import {
   CACHEABLE_PANELS,
   PANELS,
@@ -272,6 +273,17 @@ describe("panel registry (cockpit UI plan §3.2)", () => {
     }
   });
 
+  it("the leaderboard shows playbooks active in the period; all=1 shows every playbook", async () => {
+    type Board = { rows: { key: string; rank: number }[]; meta: Record<string, number> };
+    const active = (await (await app.request("/api/panels/playbook_board")).json()) as Board;
+    // Only sme_outreach had live (non-simulated) money: £0.50.
+    expect(active.rows.map((r) => [r.key, r.rank])).toEqual([["sme_outreach", 1]]);
+    const all = (await (await app.request("/api/panels/playbook_board?all=1")).json()) as Board;
+    expect(active.meta).toEqual({ total: all.rows.length, active: 1, shown: 1 });
+    expect(all.rows.length).toBeGreaterThan(5);
+    expect(all.meta.shown).toBe(all.rows.length);
+  });
+
   it("needs_you returns the top N and the total open count", async () => {
     const r = (await (await app.request("/api/panels/needs_you?limit=1")).json()) as {
       rows: { money_at_stake_gbp: number }[];
@@ -330,7 +342,19 @@ describe("the gate's simulator world", () => {
       for (const m of await s.cohorts.members(c.id))
         if (m.arm === "holdout") holdout.push(m.entity_id);
     expect(holdout.length).toBeGreaterThan(0);
+    // Test data only (U2 answer b): the fake-Companies-House leads are marked simulated.
+    expect(await markTestWorldLeadsSimulated(s)).toBeGreaterThan(0);
     const app = createApp({ runtime: "node", storage: () => s });
+    const type = async (q: string) =>
+      (
+        (await (await app.request(`/api/panels/needs_you?limit=50&${q}`)).json()) as {
+          rows: { type: string; kind?: string }[];
+        }
+      ).rows.filter((r) => r.type === "lead");
+    expect(await type("")).toEqual([]);
+    const on = await type("synthetic=1");
+    expect(on.length).toBeGreaterThan(0);
+    expect(on.every((r) => r.kind === "synthetic")).toBe(true);
     for (const q of ["", "synthetic=1"])
       for (const [name, r] of Object.entries(await all(app, q))) {
         expect(r.status, name).toBe(200);
@@ -474,6 +498,7 @@ describe("runway (Archie, 26 Nov 2026)", () => {
       avg7: 2,
       days: 34.5,
       top_up_by: "2026-12-30",
+      last_event_id: "p2",
     });
   });
 
@@ -486,7 +511,7 @@ describe("runway (Archie, 26 Nov 2026)", () => {
       figures: { key: string; value: number | null }[];
     };
     expect(body.figures.every((f) => f.value === null)).toBe(true);
-    expect(body.note).toBe("record a top-up in Controls");
+    expect(body.note).toBe("record a top-up in Controls → Agent pool");
   });
 });
 
@@ -581,11 +606,15 @@ describe("kpis with compare=1", () => {
 describe("panel caching (KV, 60 s)", () => {
   it("budget, cap and control panels are never served from KV; the others are", async () => {
     expect([...CACHEABLE_PANELS].sort()).toEqual([
+      "board_heatmap",
       "brief",
+      "crm_pipeline",
+      "inbox_strip",
       "kpis",
       "live_runs",
       "money_by_day",
       "pipeline",
+      "vault_learned",
     ]);
     const s = await openSqliteStorage(":memory:");
     const cache = memoryCache();

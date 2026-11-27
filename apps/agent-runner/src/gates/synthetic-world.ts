@@ -7,7 +7,6 @@ import type { Storage } from "@ae/storage";
 import {
   CompaniesHouseClient,
   defaultContext,
-  generateSites,
   ingestWebsites,
   TokenBucket,
 } from "@ae/verification";
@@ -18,6 +17,8 @@ import {
   ingestCompanies,
   syntheticChFetch,
 } from "@ae/verification/node";
+// The fake-website generator: test worlds only, never in the Worker (tests/simulator-isolation.test.ts).
+import { generateSites } from "@ae/verification/synthetic-websites";
 
 /** Builds a synthetic Phase 1 + websites world in `storage` (no network, no keys). */
 export async function buildSyntheticWorld(

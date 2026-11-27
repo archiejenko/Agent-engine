@@ -553,3 +553,264 @@ fieldset.chips {
   font-size: 1.05rem;
   margin: 0.6rem 0 0.4rem;
 }
+
+/* Leaderboard: compact cards on a phone, the table on wider screens. */
+.lb-cards {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
+}
+.lb-cards li {
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.lb-cards li.killed {
+  color: var(--c-muted);
+}
+.lb-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+.lb-rank {
+  color: var(--c-muted);
+}
+.lb-net {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.lb-card-meta {
+  font-size: 0.8rem;
+  margin-top: 3px;
+}
+.panel-toggle {
+  font-size: 0.8rem;
+  padding: 1px 8px;
+}
+@media (max-width: 600px) {
+  .lb-cards {
+    display: grid;
+  }
+  .lb-table {
+    display: none;
+  }
+}
+
+/* Needs you: one compact row per decision; details expand on click. */
+.decision-card.compact {
+  padding: 6px 10px;
+}
+.decision-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.decision-title {
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.decision-money,
+.decision-due {
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+.decision-line .decision-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.decision-more {
+  font-size: 0.8rem;
+  padding: 1px 8px;
+}
+.decision-details {
+  margin-top: 6px;
+  font-size: 0.88rem;
+  border-top: 1px solid var(--c-border);
+  padding-top: 4px;
+}
+.decision-details ul {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+.decision-msg {
+  margin: 4px 0 0;
+}
+
+/* Kanban (Ideas, CRM): columns scroll inside the panel; on a phone they stack. */
+.kanban {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(210px, 1fr);
+  gap: 10px;
+  overflow-x: auto;
+  max-width: 100%;
+  padding-bottom: 4px;
+}
+.kanban-col {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 6px;
+  min-width: 0;
+}
+.kanban-col header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  align-items: baseline;
+}
+.kanban-value {
+  margin-left: auto;
+  font-size: 0.82rem;
+}
+.kanban-col ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.kanban-card {
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: 5px;
+  padding: 6px;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.kanban-title {
+  font-weight: 600;
+}
+.kanban-detail,
+.kanban-empty {
+  font-size: 0.78rem;
+}
+.kanban-figures {
+  margin: 4px 0;
+  display: grid;
+  gap: 1px;
+}
+.kanban-figures div {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.kanban-figures dt {
+  color: var(--c-muted);
+}
+.kanban-figures dd {
+  margin: 0;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .kanban {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    overflow-x: visible;
+  }
+}
+
+/* Gauges (Controls) */
+.gauges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+}
+.gauges > li {
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  min-width: 0;
+}
+.gauges > li.killed {
+  color: var(--c-muted);
+}
+.gauge-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: baseline;
+  font-size: 0.88rem;
+}
+.gauge {
+  height: 10px;
+  background: var(--c-grid);
+  border-radius: 5px;
+  overflow: hidden;
+  margin: 4px 0;
+}
+.gauge-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--c-success);
+  transform-origin: left center;
+}
+.gauge.high .gauge-fill {
+  background: var(--c-warning);
+}
+.gauge.full .gauge-fill {
+  background: var(--c-danger);
+}
+.autonomy-steps {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  font-size: 0.75rem;
+  text-align: center;
+}
+.autonomy-steps li {
+  border: 1px solid var(--c-border);
+  border-radius: 3px;
+  color: var(--c-muted);
+}
+.autonomy-steps li.past {
+  background: var(--c-grid);
+}
+.autonomy-steps li.on {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: #fff;
+}
+
+/* Stat strip (Inbox) */
+.stat-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+.stat-strip > li {
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  min-width: 0;
+}
+.stat-strip dl {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin: 4px 0 0;
+}
+.stat-strip dt {
+  font-size: 0.75rem;
+  color: var(--c-muted);
+}
+.stat-strip dd {
+  margin: 0;
+  font-weight: 600;
+}

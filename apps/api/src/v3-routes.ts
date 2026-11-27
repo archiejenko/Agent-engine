@@ -6,6 +6,7 @@ import {
   crmCompany,
   crmCsv,
   crmList,
+  type DashboardRequest,
   type DecisionDeps,
   DecisionError,
   decide,
@@ -20,7 +21,9 @@ import {
   importIdeas,
   KeyError,
   KeyRing,
+  loadBundledPlaybooks,
   needsYou,
+  openRequest,
   searchVault,
   stage5Review,
   storageMailbox,
@@ -81,6 +84,26 @@ const CrmQuery = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(100),
   offset: z.coerce.number().int().min(0).default(0),
 });
+
+const DecisionRequest = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("spend_tier"),
+    playbook: z.string().regex(/^[a-z][a-z0-9_]*$/),
+    tier: z.enum(["S1", "S2", "S3"]),
+  }),
+  z.object({ kind: z.literal("autonomy"), playbook: z.string().regex(/^[a-z][a-z0-9_]*$/) }),
+  z.object({
+    kind: z.literal("board"),
+    key: z.string().min(1).max(200),
+    action: z.enum(["pin", "kill", "unpin"]),
+  }),
+  z.object({
+    kind: z.literal("pool_topup"),
+    amount_gbp: z.number().positive().max(100_000),
+    note: z.string().max(500).optional(),
+  }),
+]);
+const opt = (key: string, label: string, effect: string) => ({ key, label, effect });
 
 const Decide = z.object({
   option: z.string().min(1).max(40),
@@ -254,6 +277,74 @@ export function mountV3(
       // open decisions the recent list came back empty.)
       recent: await d.storage.decisions.recentClosed(15),
     });
+  });
+
+  /**
+   * Opens a decision for something Archie asks for on the dashboard (cockpit U3). It never approves
+   * anything: the dashboard then decides it through /api/decisions/:id/decide, the one recorded path.
+   */
+  app.post("/api/decisions/request", async (c) => {
+    const b = DecisionRequest.safeParse(await c.req.json().catch(() => null));
+    if (!b.success) return c.json({ error: "bad_request", issues: b.error.issues }, 400);
+    const d = decisionDeps(c.env);
+    const r = b.data;
+    const keep = (effect: string) => opt("keep", "Keep as it is", effect);
+    let req: DashboardRequest;
+    if (r.kind === "spend_tier") {
+      if (!(await loadBundledPlaybooks()).has(r.playbook))
+        return c.json({ error: "not_found" }, 404);
+      req = {
+        type: "spend_tier",
+        source_ref: `spend_tier:${r.playbook}:${r.tier}`,
+        summary: `Raise ${r.playbook} to ${r.tier}`,
+        option: "raise",
+        options: [opt("raise", `Raise to ${r.tier}`, "a higher daily cap"), keep("no change")],
+      };
+    } else if (r.kind === "autonomy") {
+      const pb = (await loadBundledPlaybooks()).get(r.playbook);
+      if (!pb) return c.json({ error: "not_found" }, 404);
+      req = {
+        type: "autonomy",
+        source_ref: `autonomy:${r.playbook}`,
+        summary: `Promote ${r.playbook} (to L3 if it's at L2)`,
+        option: "promote",
+        options: [opt("promote", "Promote", "one level up"), keep("no change")],
+        context: { base: pb.spec.autonomy },
+      };
+    } else if (r.kind === "board") {
+      if (!(await d.storage.board.get(r.key))) return c.json({ error: "not_found" }, 404);
+      req = {
+        type: "board",
+        source_ref: `board:${r.key}`,
+        summary: `${r.action} ${r.key}`,
+        option: r.action,
+        options: [
+          // Last = the safe default: unpin changes nothing that spends or sends.
+          opt("pin", "Pin", "Keep it at the top of its column"),
+          opt("kill", "Kill", "Move it to killed and stop its running tests"),
+          opt("unpin", "Unpin", "Let it sort normally"),
+        ],
+      };
+    } else {
+      req = {
+        type: "pool_topup",
+        source_ref: `pool:${crypto.randomUUID()}`,
+        summary: `Record a £${r.amount_gbp.toFixed(2)} top-up to the agent pool`,
+        option: "record",
+        options: [
+          opt(
+            "record",
+            "Record the top-up",
+            "the pool grows by this amount; runway is recalculated",
+          ),
+          opt("cancel", "Cancel", "nothing is recorded"),
+        ],
+        money_at_stake_gbp: r.amount_gbp,
+        context: { amount_gbp: r.amount_gbp, note: r.note ?? null },
+      };
+    }
+    const x = await openRequest(d, req);
+    return c.json({ decision_id: x.id, option: req.option }, 201);
   });
 
   app.post("/api/decisions/:id/decide", async (c) => {

@@ -1,14 +1,18 @@
 import type { PanelComponent, PanelResult, PanelRow, PanelSpec } from "@ae/contracts";
+import { useState } from "react";
 import { DecisionList } from "./DecisionCard.tsx";
 import { Funnel } from "./Funnel.tsx";
 import type { Filters } from "./filters.ts";
+import { Gauges } from "./Gauges.tsx";
 import { HealthStrip } from "./HealthStrip.tsx";
 import { type HeatCell, Heatmap } from "./Heatmap.tsx";
+import { Kanban } from "./Kanban.tsx";
 import { KpiRow, KpiStack } from "./Kpi.tsx";
 import { Leaderboard } from "./Leaderboard.tsx";
 import { Panel } from "./Panel.tsx";
 import { SegmentedBar } from "./SegmentedBar.tsx";
 import { SmallMultiples } from "./SmallMultiples.tsx";
+import { StatStrip } from "./StatStrip.tsx";
 import { StatusList } from "./StatusList.tsx";
 import { TrendChart } from "./TrendChart.tsx";
 import { usePanel } from "./usePanel.ts";
@@ -69,6 +73,14 @@ export function PanelBody({
           {...(onDecided ? { onDone: () => onDecided() } : {})}
         />
       );
+    case "Kanban":
+      return (
+        <Kanban stages={result.stages ?? []} rows={rows} {...(onDecided ? { onDecided } : {})} />
+      );
+    case "Gauges":
+      return <Gauges rows={rows} />;
+    case "StatStrip":
+      return <StatStrip rows={rows} />;
     case "Heatmap": {
       const cells: HeatCell[] = rows.flatMap((r: PanelRow) =>
         ((r.cells as Omit<HeatCell, "row">[] | undefined) ?? []).map((c) => ({
@@ -90,13 +102,27 @@ export function PanelBody({
 
 /** A panel from a layout spec: fetches its own query and fails on its own. */
 export function LivePanel({ spec, filters }: { spec: PanelSpec; filters: Filters }) {
-  const args: Record<string, string | number | boolean> = spec.args ?? {};
+  // The leaderboard lists active playbooks; "Show all (N)" asks the API for every one.
+  const [showAll, setShowAll] = useState(false);
+  const args: Record<string, string | number | boolean> = {
+    ...(spec.args ?? {}),
+    ...(showAll ? { all: 1 } : {}),
+  };
   const p = usePanel(spec.query, args, filters, spec.refresh_s);
   // Totals come from the API: needs_you counts open decisions, live_runs counts runs.
   const meta = p.result?.meta ?? {};
   const total = num(meta.total_open) ?? (spec.query === "live_runs" ? num(meta.total) : null);
   const shown = num(meta.shown);
   const more = total !== null && shown !== null && total > shown && spec.drill;
+  const active = num(meta.active);
+  const allCount = num(meta.total);
+  const toggle =
+    // No toggle when the layout already asks for every playbook (Controls' gauges).
+    !spec.args?.all && active !== null && allCount !== null && (showAll || allCount > active) ? (
+      <button type="button" className="panel-toggle" onClick={() => setShowAll(!showAll)}>
+        {showAll ? `Active only (${active})` : `Show all (${allCount})`}
+      </button>
+    ) : null;
   return (
     <Panel
       title={spec.title}
@@ -108,6 +134,7 @@ export function LivePanel({ spec, filters }: { spec: PanelSpec; filters: Filters
       onRetry={p.retry}
       count={num(meta.total_open)}
       seeAll={more && spec.drill ? { href: spec.drill, total } : null}
+      action={toggle}
     >
       {(r) => (
         <PanelBody component={spec.component} result={r} onDecided={p.retry} span={spec.span} />

@@ -13,6 +13,7 @@ import { type Browser, chromium } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../apps/api/src/app.ts";
 import { runPhase5Gate } from "../apps/api/src/gates/phase5.ts";
+import { markTestWorldLeadsSimulated } from "../apps/api/src/gates/test-world.ts";
 import { seedIdeaFixtures } from "../apps/api/src/gates/v3-phase6.ts";
 
 /**
@@ -88,6 +89,8 @@ beforeAll(async () => {
   execFileSync("pnpm", ["build:dashboard"], { cwd: ROOT, stdio: "pipe" });
   const seeded = await openSqliteStorage(":memory:");
   await runPhase5Gate(seeded, ROOT, { count: 400, leads: 3, letters: 3 });
+  // Test data only (U2 answer b): the fake-Companies-House leads are marked simulated.
+  await markTestWorldLeadsSimulated(seeded);
   companyId = (await seeded.facts.listCurrent({ limit: 1, offset: 0 })).rows[0]?.entity_id ?? "";
   // Phase 6: idea cards (one with a question answered) and Board tiles, so those pages have real content.
   const seededIdeas = await seedIdeaFixtures(seeded, [
@@ -151,7 +154,16 @@ async function sidewaysScroll(base: string, hash: string, width: number) {
     );
     // AE_SCREENS=docs/screens saves the cockpit screenshots for the gate reports (Home and the kit).
     // AE_SCREENS_TAG (e.g. "before") goes into the file name.
-    const shot = { "/": "home", "/kit": "kit" }[hash];
+    const shot = {
+      "/": "home",
+      "/kit": "kit",
+      "/ideas": "ideas",
+      "/board": "board",
+      "/crm": "crm",
+      "/inbox": "inbox",
+      "/controls": "controls",
+      "/vault": "vault",
+    }[hash];
     if (process.env.AE_SCREENS && shot) {
       const tag = process.env.AE_SCREENS_TAG ? `-${process.env.AE_SCREENS_TAG}` : "";
       const kind = `${shot}${tag}${base === emptyUrl ? "-empty" : ""}`;
@@ -314,17 +326,19 @@ describe("Home cockpit (cockpit U2)", () => {
       const cards = await page.locator(`${panel} .decision-card`).count();
       const count = Number(await page.textContent(`${panel} .panel-count`));
       expect(cards).toBe(Math.min(5, count));
-      expect(await page.textContent(`${panel} .panel-drill`)).toContain(`See all (${count})`);
+      // "See all (N)" only when more are open than the panel shows; otherwise "Open" goes there too.
+      if (count > 5)
+        expect(await page.textContent(`${panel} .panel-drill`)).toContain(`See all (${count})`);
       expect(await page.getAttribute(`${panel} .panel-drill`, "href")).toBe("#/?tab=queue");
 
-      // Choose the safe option on the first card that has buttons.
-      const button = page.locator(`${panel} .decision-actions button`, { hasText: "Skip" }).first();
+      // Choose a non-recommended option on the first row that has buttons.
+      const button = page.locator(`${panel} .decision-actions button:not(.primary)`).first();
       await button.click();
-      await page.waitForFunction(
-        ([sel, before]) => Number(document.querySelector(sel)?.textContent) === before - 1,
-        [`${panel} .panel-count`, count] as const,
-        { timeout: 20_000 },
-      );
+      // Some choices reopen a fresh decision for the same item (e.g. "Leave it" on an unmatched
+      // record), so the count may not drop; what matters is where the choice was posted.
+      await expect
+        .poll(() => posts.filter((p) => p.endsWith("/decide")).length, { timeout: 20_000 })
+        .toBe(1);
       const approvals = posts.filter((p) => p !== "/api/review-sessions");
       expect(approvals.length).toBe(1);
       expect(approvals[0]).toMatch(/^\/api\/decisions\/[^/]+\/decide$/);
@@ -341,6 +355,80 @@ describe("Home cockpit (cockpit U2)", () => {
       expect(await page.getAttribute('nav.tabs a[aria-current="page"]', "href")).toBe(
         "#/?tab=queue",
       );
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
+});
+
+describe("other pages (cockpit U3)", () => {
+  /** Per page: the route, the panel query forced to fail, and what else must still render. */
+  const PAGES_WITH_PANELS: { route: string; query: string; still: string }[] = [
+    { route: "/ideas", query: "ideas_board", still: "select[aria-label='Function']" },
+    { route: "/board", query: "board_heatmap", still: ".board" },
+    { route: "/crm", query: "crm_pipeline", still: "a[href='/api/crm.csv']" },
+    { route: "/inbox", query: "inbox_strip", still: "div.tabs[role='tablist']" },
+    {
+      route: "/controls",
+      query: "runway",
+      still: "section[aria-label=\"Today's spend against each cap\"][data-panel-state='ok']",
+    },
+    { route: "/vault", query: "vault_learned", still: "input[aria-label='Search notes']" },
+  ];
+
+  for (const p of PAGES_WITH_PANELS)
+    it(`${p.route}: the ${p.query} panel failing leaves the rest of the page working`, async () => {
+      const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+      await page.route(`**/api/panels/${p.query}?**`, (r) =>
+        r.fulfill({
+          status: 500,
+          contentType: "application/json",
+          body: '{"error":"forced failure (test)"}',
+        }),
+      );
+      try {
+        await page.goto(`${seededUrl}/#${p.route}`);
+        await page.waitForSelector("[data-panel-state='error']", { timeout: 20_000 });
+        const err = await page.textContent("[data-panel-state='error']");
+        expect(err).toContain("forced failure (test)");
+        await page.waitForSelector(p.still, { timeout: 20_000 });
+        // Nothing else on the page is in an error state.
+        expect(await page.locator("[data-panel-state='error']").count()).toBe(1);
+      } finally {
+        await page.close();
+      }
+    }, 60_000);
+
+  it("the leaderboard is a table on a desktop and one compact card per playbook on a phone", async () => {
+    for (const [width, cards, table] of [
+      [390, true, false],
+      [1440, false, true],
+    ] as const) {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      try {
+        await page.goto(`${seededUrl}/#/`);
+        const sel = 'section[aria-label="Playbook leaderboard"]';
+        await page.waitForSelector(`${sel}[data-panel-state="ok"]`, { timeout: 20_000 });
+        expect(await page.isVisible(`${sel} .lb-cards`), `${width} cards`).toBe(cards);
+        expect(await page.isVisible(`${sel} .lb-table`), `${width} table`).toBe(table);
+        // Only active playbooks, plus "Show all (N)".
+        const toggle = page.locator(`${sel} .panel-toggle`);
+        expect(await toggle.textContent()).toMatch(/^Show all \(\d+\)$/);
+      } finally {
+        await page.close();
+      }
+    }
+  }, 60_000);
+
+  it("Runway links straight to the top-up form in Controls", async () => {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+    try {
+      await page.goto(`${seededUrl}/#/`);
+      const link = page.locator('section[aria-label="Runway"] .panel-drill');
+      expect(await link.getAttribute("href")).toBe("#/controls?section=pool");
+      await link.click();
+      await page.waitForSelector("#pool form");
+      expect(await page.isVisible("#pool input[type='number']")).toBe(true);
     } finally {
       await page.close();
     }

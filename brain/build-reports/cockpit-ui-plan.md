@@ -1,7 +1,7 @@
 ---
 type: plan
 date: 2026-11-26
-status: U1 approved; U2 built (see brain/build-reports/cockpit-u2.md); waiting at the U2 gate
+status: U1 and U2 approved; U3 built (see brain/build-reports/cockpit-u3.md); waiting at the U3 gate, not merged
 ---
 
 # Agent Engine cockpit UI: plan (maximum visibility, judge-only)
