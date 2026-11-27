@@ -1105,3 +1105,29 @@ Choices made while building:
 - **One layout file per page** (ideas, board, crm, inbox, controls, vault), checked at build time like
   home.json, each with a built-in fallback. Not cached: the Ideas board (its buttons must never show a
   decision just made), plus the U2 list.
+
+## 2026-11-27 — Cockpit branch brought up to date with claude/nifty-curie-91l1nq (merge, not rebase)
+
+- **How:** `origin/claude/nifty-curie-91l1nq` (8 commits since e42272e, up to f58444d) merged INTO
+  `claude/cockpit-ui-plan` as a merge commit, so no force push. Not merged the other way: Archie does that.
+- **Conflicts, all resolved by keeping both sides:**
+  - this file: every entry from both branches, by date (26 Nov, then 27 Nov; each branch's own order
+    within a day);
+  - `decisions.json` and the config schema: `uncertain_effect_grace_minutes` (15) and the £5/day
+    `website_ingest` cap from main, `low_runway_days` (14) from the cockpit;
+  - verification: main's behaviour unchanged (6,000-token page budget, Opus default, optional Gemini 4
+    Hydrogen extractor, extractor on the cost ledger, spend caps). The cockpit's split also stays: the
+    stand-in fake extractor in its own file, the fake-website generator a subpath export that never
+    ships in the Worker. Main's new `scripts/compare-extractors.ts` now imports the generator from
+    that subpath. Both held cleanly, so nothing needed Archie's choice.
+- **Unknown sends on the cockpit (main e9b5fa1):** Needs-you rows carry the company link, the
+  recipient and "what failed" (key-shaped text in a provider error is masked so the guard never has
+  to refuse the whole queue). The compact row shows a Company link; Details shows what failed. The
+  full queue now shows "what failed" even when the company isn't known. Mark as sent / Mark as not sent
+  resolve through /api/decisions/:id/decide; the static approvals test still has no allow-list.
+- **Board heatmap colour (Archie, U3 gate):** expected monthly profit per £1 of agent spend: for each
+  live idea card, its expected profit (first year of the test) ÷ 12 ÷ the agent spend it plans (its
+  test budget); the market takes its best card; colour is that scaled to the best market (estimated).
+  The planned test budget is used rather than spend so far, because spend so far is usually £0 before
+  a test runs. Profit per hour of Archie's time stays in the hover text; the number in each cell is
+  still agent spend so far.

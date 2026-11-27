@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { DecisionCard } from "./DecisionCard.tsx";
 import { Funnel } from "./Funnel.tsx";
+import { Heatmap } from "./Heatmap.tsx";
 import { Kpi } from "./Kpi.tsx";
 
 const stage = (key: string, unit: string): PanelStage => ({
@@ -103,5 +104,30 @@ describe("DecisionCard (compact Needs-you row)", () => {
     const html = renderToStaticMarkup(createElement(DecisionCard, { d: row("draft") }));
     expect(html).toContain("Read it first");
     expect(html).not.toContain("decision-actions");
+  });
+});
+
+describe("Heatmap (Board)", () => {
+  it("legend names the colour; hover keeps profit per hour of your time", () => {
+    const html = renderToStaticMarkup(
+      createElement(Heatmap, {
+        rows: ["construction"],
+        cols: ["sme websites"],
+        cells: [
+          {
+            row: "construction",
+            col: "sme websites",
+            intensity: 1,
+            spend_gbp: 12,
+            monthly_profit_per_gbp_spend: 2.5,
+            profit_per_hour_gbp: 80,
+          },
+        ],
+      }),
+    );
+    expect(html).toContain("Colour: expected monthly profit per £1 of agent spend");
+    expect(html).toContain(
+      'title="construction, sme websites · £2.50 expected monthly profit per £1 of agent spend · £80.00 per hour of your time · £12.00 spent so far"',
+    );
   });
 });

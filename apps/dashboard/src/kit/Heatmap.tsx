@@ -7,7 +7,27 @@ export interface HeatCell {
   intensity: number;
   /** The number printed in the cell (e.g. agent spend there). */
   spend_gbp: number | null;
+  /** Hover: expected monthly profit per £1 of agent spend, and per hour of Archie's time (API). */
+  monthly_profit_per_gbp_spend?: number | null;
+  profit_per_hour_gbp?: number | null;
   drill?: string | null;
+}
+
+/** Hover text: the cell's figures as the API computed them (formatting only). */
+function hoverOf(row: string, col: string, cell: HeatCell | undefined): string {
+  if (!cell) return `${row}, ${col}: no market yet`;
+  const per = cell.monthly_profit_per_gbp_spend;
+  const hour = cell.profit_per_hour_gbp;
+  return [
+    `${row}, ${col}`,
+    per === null || per === undefined
+      ? "no idea card yet"
+      : `${money(per)} expected monthly profit per £1 of agent spend`,
+    hour === null || hour === undefined ? null : `${money(hour)} per hour of your time`,
+    `${money(cell.spend_gbp)} spent so far`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /** A grid of rows × columns (industry × opportunity score band, for the Board in U3). */
@@ -47,7 +67,7 @@ export function Heatmap({
                     key={c}
                     className="heat"
                     style={{ "--i": cell?.intensity ?? 0 } as React.CSSProperties}
-                    title={`${r}, ${c}`}
+                    title={hoverOf(r, c, cell)}
                   >
                     {cell?.drill ? (
                       <a href={`#${cell.drill}`}>{money(cell.spend_gbp, { whole: true })}</a>
@@ -64,7 +84,8 @@ export function Heatmap({
         </tbody>
       </table>
       <p className="muted">
-        Colour: score. Number: agent spend there. <KindBadge kind={kind} />
+        Colour: expected monthly profit per £1 of agent spend (darker is better). Number: agent
+        spend there so far. Hover a cell for profit per hour of your time. <KindBadge kind={kind} />
       </p>
     </div>
   );

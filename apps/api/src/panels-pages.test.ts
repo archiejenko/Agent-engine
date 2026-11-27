@@ -9,6 +9,7 @@ import { seedIdeaFixtures } from "./gates/v3-phase6.ts";
 
 /** Cockpit U3: the panel queries behind Ideas, Board, CRM, Inbox and the Vault. */
 type Body = {
+  note?: string;
   rows: Record<string, unknown>[];
   stages?: { key: string; count: number; value_gbp: number | null; share: number }[];
   meta?: Record<string, unknown>;
@@ -134,17 +135,52 @@ describe("crm_pipeline", () => {
 });
 
 describe("board_heatmap", () => {
-  it("one row per industry; the best market's colour is full strength; spend is a number", async () => {
+  it("colour = expected monthly profit per £1 of planned agent spend, scaled to the best market", async () => {
     const b = await get("board_heatmap?synthetic=1");
     expect(b.rows.length).toBeGreaterThan(0);
-    const cells = b.rows.flatMap((r) => r.cells as { intensity: number; spend_gbp: number }[]);
-    expect(Math.max(...cells.map((c) => c.intensity))).toBe(1);
+    type Cell = {
+      intensity: number;
+      spend_gbp: number;
+      monthly_profit_per_gbp_spend: number | null;
+      profit_per_hour_gbp: number | null;
+    };
+    const cells = b.rows.flatMap((r) => r.cells as Cell[]);
+    // Worked out here from the cards: best (expected profit ÷ 12 ÷ test budget) per market.
+    const tiles = await s.board.list();
+    const expected: number[] = [];
+    for (const t of tiles) {
+      const cards = (await s.ideaCards.forMarket(t.market_key)).filter(
+        (x) => !["superseded", "killed", "failed"].includes(x.status),
+      );
+      const per = cards
+        .map(
+          (x) =>
+            x.card as {
+              economics: { expected_profit: { value: number } };
+              test: { budget_gbp: { value: number } };
+            },
+        )
+        .filter((c) => c.test.budget_gbp.value > 0)
+        .map((c) => c.economics.expected_profit.value / 12 / c.test.budget_gbp.value);
+      if (per.length) expected.push(Math.round(Math.max(...per) * 10_000) / 10_000);
+    }
+    expect(
+      cells
+        .map((c) => c.monthly_profit_per_gbp_spend)
+        .filter((x) => x !== null)
+        .sort(),
+    ).toEqual(expected.sort());
+    const top = Math.max(...cells.map((c) => c.monthly_profit_per_gbp_spend ?? 0));
     for (const c of cells) {
       expect(c.intensity).toBeGreaterThanOrEqual(0);
       expect(c.intensity).toBeLessThanOrEqual(1);
+      if (top > 0 && c.monthly_profit_per_gbp_spend === top) expect(c.intensity).toBe(1);
       expect(typeof c.spend_gbp).toBe("number");
     }
+    // Profit per hour of Archie's time is kept for the hover text.
+    expect(cells.some((c) => c.profit_per_hour_gbp !== null)).toBe(true);
     expect(b.value_kind).toBe("synthetic");
+    expect(b.note).toMatch(/monthly profit per £1 of agent spend/);
   });
 });
 

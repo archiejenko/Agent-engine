@@ -284,6 +284,36 @@ describe("panel registry (cockpit UI plan §3.2)", () => {
     expect(all.meta.shown).toBe(all.rows.length);
   });
 
+  it("an unknown send carries its company link and what failed (key-shaped text masked)", async () => {
+    const w = await openSqliteStorage(":memory:");
+    const t = await task(w, RANKED, "running");
+    await w.effects.start({
+      key: "k1",
+      task_id: t,
+      tool: "send_email",
+      dry_run: true,
+      args: { recipients: ["a@example.test"], entity_id: RANKED },
+      started_at: new Date(Date.now() - 3_600_000).toISOString(),
+    });
+    await w.effects.finish("k1", "unknown", {}, "auth failed for sk_live_abcdef1234567890");
+    const a = createApp({ runtime: "node", storage: () => w });
+    const r = await a.request("/api/panels/needs_you");
+    expect(r.status).toBe(200);
+    const row = ((await r.json()) as { rows: Record<string, unknown>[] }).rows.find(
+      (x) => x.type === "uncertain_effect",
+    );
+    expect(row).toMatchObject({
+      company_drill: `/crm/${RANKED}`,
+      failure: "auth failed for [hidden]",
+      recipient: "a@example.test",
+    });
+    expect(((row?.options ?? []) as { label: string }[]).map((o) => o.label)).toEqual([
+      "Mark as sent",
+      "Mark as not sent",
+      "Leave it",
+    ]);
+  });
+
   it("needs_you returns the top N and the total open count", async () => {
     const r = (await (await app.request("/api/panels/needs_you?limit=1")).json()) as {
       rows: { money_at_stake_gbp: number }[];

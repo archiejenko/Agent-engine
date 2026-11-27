@@ -430,6 +430,14 @@ const needs_you: PanelDef = {
         deadline: d.deadline,
         reasoning: (reasoning as string | undefined) ?? null,
         entity_id: entity,
+        // The company behind it, and for an unknown send what failed (main e9b5fa1). Key-shaped text in
+        // a provider's error is masked, so one message can't make the guard refuse the whole queue.
+        company_drill: entity ? `/crm/${entity}` : null,
+        failure:
+          typeof ctx.error === "string" && ctx.error
+            ? ctx.error.replace(new RegExp(SECRET_VALUE.source, "g"), "[hidden]")
+            : null,
+        recipient: typeof ctx.recipient === "string" ? ctx.recipient : null,
         synthetic,
         drill:
           d.type === "graph_plan" && typeof ctx.graph_id === "string"

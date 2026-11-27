@@ -240,17 +240,27 @@ export async function crmPipeline(c: PageCtx): Promise<Out> {
 
 export async function boardHeatmap(c: PageCtx): Promise<Out> {
   const tiles = (await boardView(c.storage)).filter((t) => c.includeSynthetic || !t.synthetic);
-  // Score: the market's best live idea card, by expected profit per hour of Archie's time, scaled
-  // against the best market on the board (0–1). Estimated: card economics rest on estimates.
-  const best = new Map<string, number>();
+  // Score (Archie, U3 gate): expected monthly profit per £1 of agent spend. For each live idea card:
+  // its expected profit (first year of the test: customers × first-year margin − test budget) ÷ 12,
+  // divided by the agent spend it plans (its test budget). The market takes its best card, and colour
+  // is that scaled against the best market on the board (0–1). Estimated: card economics are estimates.
+  // Profit per hour of Archie's time is kept for the hover text.
+  const best = new Map<string, { perGbp: number; perHour: number }>();
   for (const t of tiles) {
     const cards = (await c.storage.ideaCards.forMarket(t.market_key)).filter(
       (x) => !["superseded", "killed", "failed"].includes(x.status),
     );
-    const pph = cards.map((x) => (x.card as IdeaCard).economics.profit_per_owner_hour.value);
-    if (pph.length) best.set(t.market_key, Math.max(...pph));
+    for (const x of cards) {
+      const e = (x.card as IdeaCard).economics;
+      const budget = (x.card as IdeaCard).test.budget_gbp.value;
+      if (budget <= 0) continue;
+      const perGbp = e.expected_profit.value / 12 / budget;
+      const prev = best.get(t.market_key);
+      if (!prev || perGbp > prev.perGbp)
+        best.set(t.market_key, { perGbp, perHour: e.profit_per_owner_hour.value });
+    }
   }
-  const top = Math.max(0, ...best.values());
+  const top = Math.max(0, ...[...best.values()].map((b) => b.perGbp));
   const industries = new Map<string, PanelRow>();
   for (const t of tiles) {
     const industry = t.market_key.split(":")[1] ?? t.label;
@@ -262,11 +272,12 @@ export async function boardHeatmap(c: PageCtx): Promise<Out> {
         cells: [] as unknown[],
         synthetic: false,
       } as PanelRow);
-    const raw = best.get(t.market_key) ?? null;
+    const b = best.get(t.market_key) ?? null;
     (row.cells as unknown[]).push({
       col: t.field.replaceAll("_", " "),
-      intensity: raw !== null && raw > 0 ? share(raw, top) : 0,
-      score_per_hour_gbp: raw,
+      intensity: b && b.perGbp > 0 ? share(b.perGbp, top) : 0,
+      monthly_profit_per_gbp_spend: b ? round4(b.perGbp) : null,
+      profit_per_hour_gbp: b ? round2(b.perHour) : null,
       spend_gbp: round2(t.spent_gbp + (c.includeSynthetic ? t.spent_synthetic_gbp : 0)),
       column: t.col,
       drill: "/board",
@@ -279,7 +290,7 @@ export async function boardHeatmap(c: PageCtx): Promise<Out> {
     rows: [...industries.values()].sort((a, b) => a.label.localeCompare(b.label)),
     value_kind: "estimated",
     meta: { markets: tiles.length },
-    note: "colour: best idea's expected profit per hour of your time, scaled to the best market (estimated); number: agent spend there",
+    note: "colour: best idea's expected monthly profit per £1 of agent spend, scaled to the best market (estimated); number: agent spend there so far; hover for profit per hour of your time",
     empty: "The Board fills as scouts find markets.",
   };
 }

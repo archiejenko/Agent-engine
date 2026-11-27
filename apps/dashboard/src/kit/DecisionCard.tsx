@@ -86,6 +86,11 @@ export function DecisionCard({
           </span>
         )}
         <span className="decision-due muted">due {when(d.deadline as string)}</span>
+        {typeof d.company_drill === "string" && (
+          <a className="decision-company" href={`#${d.company_drill}`}>
+            Company ›
+          </a>
+        )}
         {READ_FIRST.has(type) ? (
           <a className="decision-read" href={`#${d.drill ?? "/?tab=queue"}`}>
             Read it first ›
@@ -119,6 +124,21 @@ export function DecisionCard({
       {msg && <p className="muted decision-msg">{msg}</p>}
       {open && (
         <div className="decision-details" id={detailsId}>
+          {typeof d.failure === "string" && d.failure && (
+            <p className="decision-failure">
+              <b>What failed:</b> {d.failure}
+            </p>
+          )}
+          {typeof d.recipient === "string" && d.recipient && (
+            <p>
+              <b>To:</b> {d.recipient}
+            </p>
+          )}
+          {typeof d.company_drill === "string" && (
+            <p>
+              <a href={`#${d.company_drill}`}>Open the company</a>
+            </p>
+          )}
           {typeof d.reasoning === "string" && d.reasoning ? (
             <p>
               <b>Why:</b> {d.reasoning}

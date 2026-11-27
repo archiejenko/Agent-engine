@@ -92,6 +92,17 @@ beforeAll(async () => {
   // Test data only (U2 answer b): the fake-Companies-House leads are marked simulated.
   await markTestWorldLeadsSimulated(seeded);
   companyId = (await seeded.facts.listCurrent({ limit: 1, offset: 0 })).rows[0]?.entity_id ?? "";
+  // An unknown send (main e9b5fa1): the email call started, then the outcome was lost.
+  const anyTask = (await seeded.tasks.list({ limit: 1 }))[0];
+  await seeded.effects.start({
+    key: "test-unknown-send",
+    task_id: anyTask?.task_id ?? "no-task",
+    tool: "send_email",
+    dry_run: true,
+    args: { recipients: ["owner@example.test"], entity_id: companyId },
+    started_at: new Date(Date.now() - 3_600_000).toISOString(),
+  });
+  await seeded.effects.finish("test-unknown-send", "unknown", {}, "SMTP timeout after 30 s");
   // Phase 6: idea cards (one with a question answered) and Board tiles, so those pages have real content.
   const seededIdeas = await seedIdeaFixtures(seeded, [
     ...new Set(
@@ -332,7 +343,12 @@ describe("Home cockpit (cockpit U2)", () => {
       expect(await page.getAttribute(`${panel} .panel-drill`, "href")).toBe("#/?tab=queue");
 
       // Choose a non-recommended option on the first row that has buttons.
-      const button = page.locator(`${panel} .decision-actions button:not(.primary)`).first();
+      // (Not the seeded unknown send: a later test checks that row.)
+      const button = page
+        .locator(`${panel} .decision-card`)
+        .filter({ hasNotText: "Did the email to owner@example.test" })
+        .locator(".decision-actions button:not(.primary)")
+        .first();
       await button.click();
       // Some choices reopen a fresh decision for the same item (e.g. "Leave it" on an unmatched
       // record), so the count may not drop; what matters is where the choice was posted.
@@ -429,6 +445,38 @@ describe("other pages (cockpit U3)", () => {
       await link.click();
       await page.waitForSelector("#pool form");
       expect(await page.isVisible("#pool input[type='number']")).toBe(true);
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
+});
+
+describe("unknown sends on Needs you (main e9b5fa1, cockpit merge)", () => {
+  it("the cockpit row and the full queue show the company link and what failed", async () => {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    try {
+      await page.goto(`${seededUrl}/#/`);
+      const row = page
+        .locator('section[aria-label="Needs you"] .decision-card')
+        .filter({ hasText: "Did the email to owner@example.test" });
+      await row.waitFor({ timeout: 20_000 });
+      expect(await row.locator(".decision-company").getAttribute("href")).toBe(
+        `#/crm/${companyId}`,
+      );
+      expect(await row.locator("button", { hasText: "Mark as sent" }).count()).toBe(1);
+      expect(await row.locator("button", { hasText: "Mark as not sent" }).count()).toBe(1);
+      await row.locator(".decision-more").click();
+      expect(await row.locator(".decision-failure").textContent()).toContain(
+        "What failed: SMTP timeout after 30 s",
+      );
+
+      await page.goto(`${seededUrl}/#/?tab=queue`);
+      const card = page
+        .locator(".card.decision")
+        .filter({ hasText: "Did the email to owner@example.test" });
+      await card.waitFor({ timeout: 20_000 });
+      expect(await card.locator(`a[href="#/crm/${companyId}"]`).count()).toBe(1);
+      expect(await card.textContent()).toContain("what failed: SMTP timeout after 30 s");
     } finally {
       await page.close();
     }

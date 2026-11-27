@@ -814,3 +814,10 @@ fieldset.chips {
   margin: 0;
   font-weight: 600;
 }
+.decision-company {
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.decision-failure {
+  color: var(--c-danger);
+}

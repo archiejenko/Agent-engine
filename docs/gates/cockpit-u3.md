@@ -31,5 +31,16 @@ only on pages with panels.
       existing column, test world only).
 - [x] Simulator and rehearsal code proved absent from the Worker bundle.
 - [x] Nothing deployed; kill switch defaults unchanged; holdout blind everywhere.
-- [ ] Archie reviews the screenshots and the open questions in `brain/build-reports/cockpit-u3.md`.
+- [x] Archie approved U3 (27 Nov).
+- [x] **Up to date with `claude/nifty-curie-91l1nq`:** its 8 commits since e42272e (up to f58444d)
+      merged in as a merge commit, no force push. Five conflicts (decisions log, decisions config and
+      schema, verification index, website test), all resolved by keeping both sides; details in
+      `docs/decisions.md` (27 Nov, "Cockpit branch brought up to date").
+- [x] After the merge: unknown sends show their company link and what failed in the cockpit's compact
+      rows and in the full queue, with Mark as sent / Mark as not sent through `/decide` (browser test).
+- [x] Board heatmap colour is expected monthly profit per £1 of agent spend (estimated); profit per
+      hour of your time is in the hover text.
+- [x] `pnpm check` green after the merge and these changes (95 files, **661 tests**); the full browser suite passes (phone
+      layout on every page, forced-failure tests, the approvals test with no allow-list).
 - [ ] Merge into `claude/nifty-curie-91l1nq` (Archie's call), then the GitHub Deploy workflow deploys.
+      The branch merges cleanly: it already contains everything on `claude/nifty-curie-91l1nq`.

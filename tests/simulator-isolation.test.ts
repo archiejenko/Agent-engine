@@ -23,6 +23,8 @@ const LOADERS = [
   /^scripts\/gate-[\w-]+\.ts$/,
   /^scripts\/screens\//,
   /^scripts\/lib\.ts$/,
+  // Main's extractor comparison (f58444d) runs models on generated fake websites.
+  /^scripts\/compare-extractors\.ts$/,
   /^packages\/verification\/src\/node\//,
   /^apps\/api\/src\/gates\//,
   /^apps\/agent-runner\/src\/gates\//,
@@ -116,6 +118,7 @@ describe("the loaders can only write local SQLite files", () => {
     expect(loaders).toContain("scripts/rehearse.ts");
     expect(loaders).toContain("packages/verification/src/node/synthetic.ts");
     expect(loaders).toContain("apps/api/src/gates/test-world.ts");
+    expect(loaders).toContain("scripts/compare-extractors.ts");
     expect(loaders.length).toBeGreaterThan(20);
   });
 
