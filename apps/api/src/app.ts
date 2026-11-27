@@ -57,6 +57,7 @@ import { CACHED_ROUTES, type CacheStore, cacheMiddleware } from "./cache.ts";
 import { claimWebhook, mountClaims } from "./claim-route.ts";
 import { type AskQuestion, mountIdeas } from "./ideas-routes.ts";
 import { mountLetters } from "./letters-route.ts";
+import { mountPanels } from "./panels.ts";
 import { mountV3 } from "./v3-routes.ts";
 import { mountX402, type X402Deps } from "./x402-route.ts";
 
@@ -620,6 +621,14 @@ export function createApp(deps: AppDeps) {
     deps.keys ?? (() => fallbackKeys),
   );
   mountIdeas(app, deps.storage, decisionDeps, accessUser, deps.ask);
+  // Cockpit UI (U1): read-only panel queries behind Access; budget and cap panels never cached.
+  mountPanels(app, {
+    storage: deps.storage,
+    decisions: decisionDeps,
+    keys: deps.keys ?? (() => fallbackKeys),
+    vault: deps.vault ?? (async () => BRAIN_NOTES),
+    ...(deps.cache ? { cache: deps.cache } : {}),
+  });
   mountClaims(app, {
     storage: deps.storage,
     ...(deps.payments ? { payments: deps.payments } : {}),

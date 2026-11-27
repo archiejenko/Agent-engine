@@ -16,10 +16,14 @@
     "idea_budget": 72,
     "board": 24,
     "graph_plan": 168,
-    "promotion": 168
+    "promotion": 168,
+    "pool_topup": 24,
+    "top_up_or_pause": 48
   },
   "max_open_leads": 50,
+  "digest_hour_utc": 6,
   "_uncertain_effect_note": "Minutes an external action whose outcome is unknown waits before it shows on Needs you (a call still in flight isn't stuck).",
   "uncertain_effect_grace_minutes": 15,
-  "digest_hour_utc": 6
+  "low_runway_days": 14,
+  "_low_runway_note": "Below this many days of runway (pool balance ÷ 7-day average live spend), one 'Top up or pause' decision opens; its safe default pauses the task queue (spends nothing). One per top-up: a new one can only open after another top-up is recorded."
 }

@@ -13,6 +13,7 @@ import { type Browser, chromium } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../apps/api/src/app.ts";
 import { runPhase5Gate } from "../apps/api/src/gates/phase5.ts";
+import { markTestWorldLeadsSimulated } from "../apps/api/src/gates/test-world.ts";
 import { seedIdeaFixtures } from "../apps/api/src/gates/v3-phase6.ts";
 
 /**
@@ -25,6 +26,9 @@ const DIST = join(ROOT, "apps/dashboard/dist");
 // Every page and tab in the v3 navigation (the nav list is checked against App.tsx below).
 const PAGES = [
   "/",
+  // Home's tabs (cockpit U2): the full decisions queue and Quality (the old collapsed sections).
+  "/?tab=queue",
+  "/?tab=quality",
   "/ideas",
   "/board",
   "/vault",
@@ -41,6 +45,9 @@ const PAGES = [
   "/inbox/letters",
   "/controls",
   "/controls/keys",
+  // Hidden (not in the nav): the cockpit component kit, every component on sample and empty data plus
+  // every panel query live (cockpit U1).
+  "/kit",
 ];
 const TYPES: Record<string, string> = {
   ".html": "text/html",
@@ -82,7 +89,20 @@ beforeAll(async () => {
   execFileSync("pnpm", ["build:dashboard"], { cwd: ROOT, stdio: "pipe" });
   const seeded = await openSqliteStorage(":memory:");
   await runPhase5Gate(seeded, ROOT, { count: 400, leads: 3, letters: 3 });
+  // Test data only (U2 answer b): the fake-Companies-House leads are marked simulated.
+  await markTestWorldLeadsSimulated(seeded);
   companyId = (await seeded.facts.listCurrent({ limit: 1, offset: 0 })).rows[0]?.entity_id ?? "";
+  // An unknown send (main e9b5fa1): the email call started, then the outcome was lost.
+  const anyTask = (await seeded.tasks.list({ limit: 1 }))[0];
+  await seeded.effects.start({
+    key: "test-unknown-send",
+    task_id: anyTask?.task_id ?? "no-task",
+    tool: "send_email",
+    dry_run: true,
+    args: { recipients: ["owner@example.test"], entity_id: companyId },
+    started_at: new Date(Date.now() - 3_600_000).toISOString(),
+  });
+  await seeded.effects.finish("test-unknown-send", "unknown", {}, "SMTP timeout after 30 s");
   // Phase 6: idea cards (one with a question answered) and Board tiles, so those pages have real content.
   const seededIdeas = await seedIdeaFixtures(seeded, [
     ...new Set(
@@ -128,13 +148,42 @@ async function sidewaysScroll(base: string, hash: string, width: number) {
       null,
       { timeout: 20_000 },
     );
+    // Cockpit panels load on their own: wait until none is still loading (no-op on other pages).
+    await page.waitForFunction(
+      () => !document.querySelector('[data-panel-state="loading"]'),
+      null,
+      {
+        timeout: 20_000,
+      },
+    );
     // Open every collapsed section too (e.g. score breakdowns), so they're measured as well.
     await page.evaluate(() => {
       for (const d of document.querySelectorAll("details")) d.open = true;
     });
-    return await page.evaluate(
+    const x = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
+    // AE_SCREENS=docs/screens saves the cockpit screenshots for the gate reports (Home and the kit).
+    // AE_SCREENS_TAG (e.g. "before") goes into the file name.
+    const shot = {
+      "/": "home",
+      "/kit": "kit",
+      "/ideas": "ideas",
+      "/board": "board",
+      "/crm": "crm",
+      "/inbox": "inbox",
+      "/controls": "controls",
+      "/vault": "vault",
+    }[hash];
+    if (process.env.AE_SCREENS && shot) {
+      const tag = process.env.AE_SCREENS_TAG ? `-${process.env.AE_SCREENS_TAG}` : "";
+      const kind = `${shot}${tag}${base === emptyUrl ? "-empty" : ""}`;
+      await page.screenshot({
+        path: join(ROOT, process.env.AE_SCREENS, `dashboard-${kind}-${width}-light.png`),
+        fullPage: true,
+      });
+    }
+    return x;
   } finally {
     await page.close();
   }
@@ -220,4 +269,216 @@ describe("no sideways scroll on any page", () => {
       expect(over).toEqual([]);
     }, 120_000);
   }
+});
+
+/** Panels on Home: the cockpit's frames, by title and state. */
+async function homePanels(page: import("playwright").Page) {
+  await page.waitForSelector("[data-panel-state]");
+  await page.waitForFunction(() => !document.querySelector('[data-panel-state="loading"]'), null, {
+    timeout: 20_000,
+  });
+  return page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>(".cockpit [data-panel-state]")].map((p) => ({
+      title: p.getAttribute("aria-label") ?? "",
+      state: p.dataset.panelState ?? "",
+    })),
+  );
+}
+
+describe("Home cockpit (cockpit U2)", () => {
+  it("one panel query failing leaves every other Home panel rendered, and Retry recovers it", async () => {
+    const layout = JSON.parse(
+      readFileSync(join(ROOT, "packages/config/src/layouts/home.json"), "utf8"),
+    ) as { sections: { panels: { title: string; query: string }[] }[] };
+    const panels = layout.sections.flatMap((s) => s.panels);
+    const failing = panels.filter((p) => p.query === "kpis").map((p) => p.title);
+    expect(failing.length).toBeGreaterThan(0);
+
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    let broken = true;
+    await page.route("**/api/panels/kpis?**", (route) =>
+      broken
+        ? route.fulfill({
+            status: 500,
+            contentType: "application/json",
+            body: '{"error":"forced failure (test)"}',
+          })
+        : route.continue(),
+    );
+    try {
+      await page.goto(`${seededUrl}/#/`);
+      const seen = await homePanels(page);
+      // Every panel in home.json is on the page.
+      expect(seen.map((p) => p.title).sort()).toEqual(panels.map((p) => p.title).sort());
+      for (const p of seen)
+        expect(p.state, p.title).toBe(failing.includes(p.title) ? "error" : "ok");
+      const text = (await page.textContent(".cockpit")) ?? "";
+      expect(text).toContain("Couldn't load this panel: forced failure (test)");
+
+      broken = false;
+      const title = failing[0] as string;
+      await page.click(`section[aria-label="${title}"] .panel-error button`);
+      await page.waitForSelector(`section[aria-label="${title}"][data-panel-state="ok"]`);
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
+
+  it("Needs you shows the top 5 with the open count, and its buttons post only to /api/decisions/:id/decide", async () => {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const posts: string[] = [];
+    page.on("request", (r) => {
+      if (r.method() !== "GET") posts.push(new URL(r.url()).pathname);
+    });
+    try {
+      await page.goto(`${seededUrl}/#/`);
+      await homePanels(page);
+      const panel = 'section[aria-label="Needs you"]';
+      const cards = await page.locator(`${panel} .decision-card`).count();
+      const count = Number(await page.textContent(`${panel} .panel-count`));
+      expect(cards).toBe(Math.min(5, count));
+      // "See all (N)" only when more are open than the panel shows; otherwise "Open" goes there too.
+      if (count > 5)
+        expect(await page.textContent(`${panel} .panel-drill`)).toContain(`See all (${count})`);
+      expect(await page.getAttribute(`${panel} .panel-drill`, "href")).toBe("#/?tab=queue");
+
+      // Choose a non-recommended option on the first row that has buttons.
+      // (Not the seeded unknown send: a later test checks that row.)
+      const button = page
+        .locator(`${panel} .decision-card`)
+        .filter({ hasNotText: "Did the email to owner@example.test" })
+        .locator(".decision-actions button:not(.primary)")
+        .first();
+      await button.click();
+      // Some choices reopen a fresh decision for the same item (e.g. "Leave it" on an unmatched
+      // record), so the count may not drop; what matters is where the choice was posted.
+      await expect
+        .poll(() => posts.filter((p) => p.endsWith("/decide")).length, { timeout: 20_000 })
+        .toBe(1);
+      const approvals = posts.filter((p) => p !== "/api/review-sessions");
+      expect(approvals.length).toBe(1);
+      expect(approvals[0]).toMatch(/^\/api\/decisions\/[^/]+\/decide$/);
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
+
+  it("the See all link opens the full queue on Home", async () => {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+    try {
+      await page.goto(`${seededUrl}/#/?tab=queue`);
+      await page.waitForSelector(".card.decision");
+      expect(await page.getAttribute('nav.tabs a[aria-current="page"]', "href")).toBe(
+        "#/?tab=queue",
+      );
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
+});
+
+describe("other pages (cockpit U3)", () => {
+  /** Per page: the route, the panel query forced to fail, and what else must still render. */
+  const PAGES_WITH_PANELS: { route: string; query: string; still: string }[] = [
+    { route: "/ideas", query: "ideas_board", still: "select[aria-label='Function']" },
+    { route: "/board", query: "board_heatmap", still: ".board" },
+    { route: "/crm", query: "crm_pipeline", still: "a[href='/api/crm.csv']" },
+    { route: "/inbox", query: "inbox_strip", still: "div.tabs[role='tablist']" },
+    {
+      route: "/controls",
+      query: "runway",
+      still: "section[aria-label=\"Today's spend against each cap\"][data-panel-state='ok']",
+    },
+    { route: "/vault", query: "vault_learned", still: "input[aria-label='Search notes']" },
+  ];
+
+  for (const p of PAGES_WITH_PANELS)
+    it(`${p.route}: the ${p.query} panel failing leaves the rest of the page working`, async () => {
+      const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+      await page.route(`**/api/panels/${p.query}?**`, (r) =>
+        r.fulfill({
+          status: 500,
+          contentType: "application/json",
+          body: '{"error":"forced failure (test)"}',
+        }),
+      );
+      try {
+        await page.goto(`${seededUrl}/#${p.route}`);
+        await page.waitForSelector("[data-panel-state='error']", { timeout: 20_000 });
+        const err = await page.textContent("[data-panel-state='error']");
+        expect(err).toContain("forced failure (test)");
+        await page.waitForSelector(p.still, { timeout: 20_000 });
+        // Nothing else on the page is in an error state.
+        expect(await page.locator("[data-panel-state='error']").count()).toBe(1);
+      } finally {
+        await page.close();
+      }
+    }, 60_000);
+
+  it("the leaderboard is a table on a desktop and one compact card per playbook on a phone", async () => {
+    for (const [width, cards, table] of [
+      [390, true, false],
+      [1440, false, true],
+    ] as const) {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      try {
+        await page.goto(`${seededUrl}/#/`);
+        const sel = 'section[aria-label="Playbook leaderboard"]';
+        await page.waitForSelector(`${sel}[data-panel-state="ok"]`, { timeout: 20_000 });
+        expect(await page.isVisible(`${sel} .lb-cards`), `${width} cards`).toBe(cards);
+        expect(await page.isVisible(`${sel} .lb-table`), `${width} table`).toBe(table);
+        // Only active playbooks, plus "Show all (N)".
+        const toggle = page.locator(`${sel} .panel-toggle`);
+        expect(await toggle.textContent()).toMatch(/^Show all \(\d+\)$/);
+      } finally {
+        await page.close();
+      }
+    }
+  }, 60_000);
+
+  it("Runway links straight to the top-up form in Controls", async () => {
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+    try {
+      await page.goto(`${seededUrl}/#/`);
+      const link = page.locator('section[aria-label="Runway"] .panel-drill');
+      expect(await link.getAttribute("href")).toBe("#/controls?section=pool");
+      await link.click();
+      await page.waitForSelector("#pool form");
+      expect(await page.isVisible("#pool input[type='number']")).toBe(true);
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
+});
+
+describe("unknown sends on Needs you (main e9b5fa1, cockpit merge)", () => {
+  it("the cockpit row and the full queue show the company link and what failed", async () => {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    try {
+      await page.goto(`${seededUrl}/#/`);
+      const row = page
+        .locator('section[aria-label="Needs you"] .decision-card')
+        .filter({ hasText: "Did the email to owner@example.test" });
+      await row.waitFor({ timeout: 20_000 });
+      expect(await row.locator(".decision-company").getAttribute("href")).toBe(
+        `#/crm/${companyId}`,
+      );
+      expect(await row.locator("button", { hasText: "Mark as sent" }).count()).toBe(1);
+      expect(await row.locator("button", { hasText: "Mark as not sent" }).count()).toBe(1);
+      await row.locator(".decision-more").click();
+      expect(await row.locator(".decision-failure").textContent()).toContain(
+        "What failed: SMTP timeout after 30 s",
+      );
+
+      await page.goto(`${seededUrl}/#/?tab=queue`);
+      const card = page
+        .locator(".card.decision")
+        .filter({ hasText: "Did the email to owner@example.test" });
+      await card.waitFor({ timeout: 20_000 });
+      expect(await card.locator(`a[href="#/crm/${companyId}"]`).count()).toBe(1);
+      expect(await card.textContent()).toContain("what failed: SMTP timeout after 30 s");
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
 });

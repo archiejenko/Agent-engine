@@ -5,7 +5,9 @@ import { keyFromEnv } from "@ae/infra";
 import { costGbp, type ModelClient, type ModelRequest } from "@ae/ports";
 import { AnthropicModelClient } from "@ae/ports/anthropic";
 import { GeminiModelClient } from "@ae/ports/gemini";
-import { generateSites, pagesForModel, WEBSITE_EXTRACT } from "@ae/verification";
+import { pagesForModel, WEBSITE_EXTRACT } from "@ae/verification";
+// The fake-website generator is a subpath export so it never ships in the Worker.
+import { generateSites } from "@ae/verification/synthetic-websites";
 import { loadDevVars, ROOT } from "./lib.ts";
 
 // Runs the SAME website pages through Claude Opus 5.5 and Gemini 4 Hydrogen with the extractor's real

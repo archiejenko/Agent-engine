@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getJson } from "./api.ts";
+import { requestThenDecide } from "./decide.ts";
+import { PagePanels } from "./pagePanels.tsx";
 
 interface Tile {
   market_key: string;
@@ -30,18 +32,16 @@ export function Board() {
     );
   }, []);
   useEffect(load, [load]);
+  // Pin, unpin or kill: opened as a decision and recorded through /api/decisions/:id/decide.
   const act = async (key: string, action: "pin" | "unpin" | "kill") => {
-    const r = await fetch(`/api/board/${encodeURIComponent(key)}/action`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action }),
-    });
-    setMsg(r.ok ? `Done: ${action}` : ((await r.json()).error ?? `HTTP ${r.status}`));
+    const err = await requestThenDecide({ kind: "board", key, action });
+    setMsg(err ? err : `Done: ${action}`);
     load();
   };
   return (
     <div>
       <h2>Board</h2>
+      <PagePanels page="board" />
       {msg && <p className="muted">{msg}</p>}
       {tiles && tiles.length === 0 && (
         <p className="empty">No markets yet. A scout's first signal puts one here.</p>

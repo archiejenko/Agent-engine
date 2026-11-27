@@ -1,0 +1,21 @@
+{
+  "page": "ideas",
+  "version": 1,
+  "sections": [
+    {
+      "id": "ideas_section",
+      "title": null,
+      "panels": [
+        {
+          "id": "ideas_board",
+          "title": "Idea board",
+          "component": "Kanban",
+          "query": "ideas_board",
+          "span": 4,
+          "refresh_s": 60,
+          "drill": "/ideas"
+        }
+      ]
+    }
+  ]
+}

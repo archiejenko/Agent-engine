@@ -1,0 +1,174 @@
+{
+  "page": "home",
+  "version": 1,
+  "sections": [
+    {
+      "id": "brief_section",
+      "title": null,
+      "panels": [
+        {
+          "id": "brief",
+          "title": "While you were away",
+          "component": "StatusList",
+          "query": "brief",
+          "span": 4,
+          "refresh_s": 300,
+          "drill": "/"
+        }
+      ]
+    },
+    {
+      "id": "kpis_section",
+      "title": null,
+      "panels": [
+        {
+          "id": "kpis_primary",
+          "title": "Money",
+          "component": "Kpi",
+          "query": "kpis",
+          "args": {
+            "set": "primary"
+          },
+          "span": 3,
+          "refresh_s": 300,
+          "drill": "/"
+        },
+        {
+          "id": "runway",
+          "title": "Runway",
+          "component": "Kpi",
+          "query": "runway",
+          "span": 1,
+          "refresh_s": 300,
+          "drill": "/controls?section=pool"
+        },
+        {
+          "id": "kpis_secondary",
+          "title": "Growth and unit economics",
+          "component": "Kpi",
+          "query": "kpis",
+          "args": {
+            "set": "secondary"
+          },
+          "span": 4,
+          "refresh_s": 300,
+          "drill": "/crm"
+        }
+      ]
+    },
+    {
+      "id": "needs_you_section",
+      "title": null,
+      "panels": [
+        {
+          "id": "needs_you",
+          "title": "Needs you",
+          "component": "DecisionCard",
+          "query": "needs_you",
+          "span": 4,
+          "refresh_s": 60,
+          "drill": "/?tab=queue",
+          "args": {
+            "limit": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "money_section",
+      "title": null,
+      "panels": [
+        {
+          "id": "money_by_day",
+          "title": "Revenue vs spend by day",
+          "component": "TrendChart",
+          "query": "money_by_day",
+          "span": 4,
+          "refresh_s": 300,
+          "drill": "/controls"
+        },
+        {
+          "id": "money_by_playbook",
+          "title": "By playbook",
+          "component": "SmallMultiples",
+          "query": "money_by_day",
+          "args": {
+            "split": "playbook"
+          },
+          "span": 4,
+          "refresh_s": 300,
+          "drill": "/controls"
+        }
+      ]
+    },
+    {
+      "id": "activity_section",
+      "title": "Agent activity",
+      "panels": [
+        {
+          "id": "live_runs",
+          "title": "Live runs",
+          "component": "StatusList",
+          "query": "live_runs",
+          "span": 2,
+          "refresh_s": 30,
+          "drill": "/controls",
+          "args": {
+            "limit": 6
+          }
+        },
+        {
+          "id": "pipeline",
+          "title": "Pipeline",
+          "component": "Funnel",
+          "query": "pipeline",
+          "span": 2,
+          "refresh_s": 300,
+          "drill": "/ideas"
+        }
+      ]
+    },
+    {
+      "id": "playbooks_section",
+      "title": "Playbooks",
+      "panels": [
+        {
+          "id": "playbook_board",
+          "title": "Playbook leaderboard",
+          "component": "Leaderboard",
+          "query": "playbook_board",
+          "span": 4,
+          "refresh_s": 60,
+          "drill": "/controls"
+        },
+        {
+          "id": "spend_split",
+          "title": "Spend split",
+          "component": "SegmentedBar",
+          "query": "spend_split",
+          "args": {
+            "group": "playbook"
+          },
+          "span": 4,
+          "refresh_s": 60,
+          "drill": "/controls"
+        }
+      ]
+    },
+    {
+      "id": "health_section",
+      "title": null,
+      "panels": [
+        {
+          "id": "health",
+          "title": "Health",
+          "component": "HealthStrip",
+          "query": "health",
+          "span": 4,
+          "refresh_s": 60,
+          "drill": "/controls"
+        }
+      ]
+    }
+  ]
+}

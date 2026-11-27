@@ -1,0 +1,21 @@
+{
+  "page": "vault",
+  "version": 1,
+  "sections": [
+    {
+      "id": "vault_section",
+      "title": null,
+      "panels": [
+        {
+          "id": "vault_learned",
+          "title": "Learned this week",
+          "component": "StatusList",
+          "query": "vault_learned",
+          "span": 4,
+          "refresh_s": 300,
+          "drill": "/vault"
+        }
+      ]
+    }
+  ]
+}

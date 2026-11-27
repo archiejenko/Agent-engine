@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getJson } from "./api.ts";
 import { Claims } from "./Claims.tsx";
+import { decideDecision } from "./decide.ts";
 import { recordReview } from "./reviewTimer.ts";
 
 interface Letter {
@@ -58,14 +59,21 @@ export function Letters() {
       b.id,
       b.letters.map((l) => l.task_id),
     );
-    return post(`/api/letters/batches/${b.id}/decision`, { decision, exclude: [...exclude] }).then(
-      (r) => {
-        setMsg(`Batch ${decision}d. ${r.note ?? ""}`);
+    // The batch's decision is already in the one queue: find it and record the choice through
+    // /api/decisions/:id/decide (rule 18), with any letters left out.
+    return getJson<{ open: { id: string; source_ref: string }[] }>(
+      "/api/decisions?type=print_batch",
+    )
+      .then(async (q) => {
+        const x = q.open.find((o) => o.source_ref === `batch:${b.id}`);
+        if (!x) throw new Error("This batch has no open decision (already decided?)");
+        const err = await decideDecision(x.id, decision, { exclude: [...exclude] });
+        if (err) throw new Error(err);
+        setMsg(`Batch ${decision}d.`);
         setExclude(new Set());
         load();
-      },
-      (e) => setMsg(String(e)),
-    );
+      })
+      .catch((e) => setMsg(String(e)));
   };
   return (
     <section>

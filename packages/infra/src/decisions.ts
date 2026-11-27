@@ -4,6 +4,7 @@ import { defaultContext, resolveConflict, type VerificationContext } from "@ae/v
 import { promotePlaybook } from "./autonomy.ts";
 import { type SpendTier, setSpendTier } from "./budget.ts";
 import { contactStatus } from "./contact.ts";
+import { K } from "./controls.ts";
 import { estimatePaid } from "./ev.ts";
 import {
   applyBoardOption,
@@ -16,6 +17,7 @@ import { settleUnknownSend } from "./outreach.ts";
 import { applyGraphPlanOption, parsePlanRef } from "./plans.ts";
 import { decidePrintBatch } from "./playbooks/sme_letter.ts";
 import { applyPromotionOption } from "./promotion.ts";
+import { runwayFigures } from "./runway.ts";
 import type { WorkflowPort } from "./workflow.ts";
 
 /**
@@ -355,8 +357,55 @@ export async function syncDecisions(d: DecisionDeps): Promise<number> {
       synthetic: false,
     });
 
+  opened += await lowRunway(d);
   await supersedeStale(d);
   return opened;
+}
+
+/**
+ * Low runway (cockpit U3): when runway (packages/infra/src/runway.ts) falls below
+ * `low_runway_days`, ONE "Top up or pause" decision opens. Its safe default pauses the task queue, which
+ * spends nothing (rule 19). It belongs to the latest pool event: once raised (whatever Archie chose, or
+ * if it defaulted) it is never raised again until another top-up or adjustment is recorded.
+ */
+export async function lowRunway(d: DecisionDeps): Promise<number> {
+  const { storage } = d;
+  const r = await runwayFigures(storage, d.now?.() ?? new Date());
+  if (!r.recorded || r.days === null || r.days >= d.dcfg.low_runway_days || !r.last_event_id)
+    return 0;
+  const source_ref = `runway:${r.last_event_id}`;
+  const earlier = (await storage.decisions.list({ type: "top_up_or_pause", limit: 1000 })).some(
+    (x) => x.source_ref === source_ref,
+  );
+  if (earlier) return 0;
+  await storage.decisions.open({
+    type: "top_up_or_pause",
+    source_ref,
+    summary: `Runway is ${r.days} days (below ${d.dcfg.low_runway_days}): top up the agent pool or pause`,
+    money_at_stake_gbp: r.balance ?? 0,
+    money_kind: "real",
+    options: [
+      opt(
+        "keep_running",
+        "Keep running, I'll top up",
+        "agents keep working; record the top-up in Controls → Agent pool",
+      ),
+      opt("pause", "Pause the task queue", "no new work starts, so nothing more is spent"),
+    ],
+    recommended: "keep_running",
+    safe_default: "pause",
+    deadline: deadline(d, "top_up_or_pause"),
+    context: {
+      runway_days: r.days,
+      balance_gbp: r.balance,
+      avg_live_spend_7d_gbp: r.avg7,
+      top_up_by: r.top_up_by,
+      threshold_days: d.dcfg.low_runway_days,
+      drill: "/controls?section=pool",
+    },
+    synthetic: false,
+  });
+  return 1;
 }
 
 /** Open decisions whose source no longer needs Archie (e.g. a task that moved on) are closed. */
@@ -462,37 +511,51 @@ export async function expireDecisions(d: DecisionDeps): Promise<number> {
   return n;
 }
 
+/** What Archie can ask for on the dashboard; each opens a decision he then decides like any other. */
+export type DashboardRequest = {
+  type: "spend_tier" | "autonomy" | "board" | "pool_topup";
+  source_ref: string;
+  summary: string;
+  /** The option the dashboard will choose (shown as the recommendation). */
+  option: string;
+  options: DecisionOption[];
+  money_at_stake_gbp?: number;
+  context?: unknown;
+};
+
 /**
- * Opens a decision for something Archie asked for on the dashboard (raise a spend tier, change autonomy)
- * and decides it straight away: one tap, same recorded path.
+ * Opens a decision for something Archie asked for on the dashboard (raise a spend tier, promote, pin or
+ * kill on the Board, record a pool top-up). It does NOT decide: the dashboard then calls
+ * /api/decisions/:id/decide, the one recorded-approval path (rule 18). The safe default is the "keep" or
+ * "cancel" option, so an unanswered request changes nothing.
  */
-export async function requestAndDecide(
-  d: DecisionDeps,
-  r: {
-    type: "spend_tier" | "autonomy" | "board";
-    source_ref: string;
-    summary: string;
-    option: string;
-    options: DecisionOption[];
-    context?: unknown;
-  },
-  by: string,
-) {
-  const x = await d.storage.decisions.open({
+export async function openRequest(d: DecisionDeps, r: DashboardRequest): Promise<DecisionRow> {
+  const already = await d.storage.decisions.openFor(r.type, r.source_ref);
+  if (already) return already;
+  return d.storage.decisions.open({
     type: r.type,
     source_ref: r.source_ref,
     summary: r.summary,
-    money_at_stake_gbp: 0,
-    money_kind: "none",
+    money_at_stake_gbp: r.money_at_stake_gbp ?? 0,
+    money_kind: r.money_at_stake_gbp ? "real" : "none",
     options: r.options,
     recommended: r.option,
     safe_default:
-      r.options.find((o) => o.key.startsWith("keep"))?.key ??
+      r.options.find((o) => o.key.startsWith("keep") || o.key === "cancel")?.key ??
       (r.options.at(-1) as DecisionOption).key,
     deadline: deadline(d, r.type),
     context: r.context ?? null,
     synthetic: false,
   });
+}
+
+/** Opens and decides at once: kept for the older server routes and the gates. */
+export async function requestAndDecide(
+  d: DecisionDeps,
+  r: Omit<DashboardRequest, "type"> & { type: "spend_tier" | "autonomy" | "board" },
+  by: string,
+) {
+  const x = await openRequest(d, r);
   return decide(d, x.id, r.option, by);
 }
 
@@ -702,6 +765,31 @@ async function apply(
       return;
     case "board":
       if (!o.defaulted) await applyBoardOption(ideaDeps(d), x.source_ref, option, o.by ?? "archie");
+      return;
+    case "pool_topup": {
+      // source_ref "pool:<request id>"; context.amount_gbp. Only Archie's "record" writes the top-up,
+      // carrying his approval id; a default or "cancel" records nothing.
+      if (o.defaulted || option !== "record") return;
+      const c = x.context as { amount_gbp: number; note?: string | null };
+      await storage.poolEvents.add({
+        event_id: `pool-${x.id}`,
+        at: (d.now?.() ?? new Date()).toISOString(),
+        kind: "topup",
+        amount_gbp: c.amount_gbp,
+        approval_id: o.approvalId,
+        by: o.by ?? x.decided_by ?? "archie",
+        note: c.note ?? null,
+      });
+      return;
+    }
+    case "top_up_or_pause":
+      // Pausing is the safe default: no new work starts, so nothing more is spent (rule 19).
+      if (option === "pause")
+        await storage.controls.set(
+          K.queuePaused,
+          true,
+          o.defaulted ? "low_runway (default)" : "low_runway",
+        );
       return;
     default:
       throw new Error(`no handler for decision type ${x.type}`);

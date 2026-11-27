@@ -5,13 +5,14 @@ import type { Storage } from "@ae/storage";
 import { beforeEach, describe, expect, it } from "vitest";
 import modelsJson from "../../../config/src/models.json" with { type: "json" };
 import type { VerificationContext } from "../context.ts";
+import { fakeWebsiteExtractor } from "../sources/website/fake-extractor.ts";
 import { collectWebsiteClaims } from "../sources/website/ingest.ts";
 import { websiteExtractorModels } from "../sources/website/models.ts";
 import { ingestWebsites, WEBSITE_PLAYBOOK, WEBSITE_STEP } from "../sources/website/pipeline.ts";
+import { generateSites } from "../sources/website/synthetic.ts";
 
 const modelsJsonRaw = () => modelsJson;
 
-import { fakeWebsiteExtractor, generateSites } from "../sources/website/synthetic.ts";
 import { setup } from "./helpers.ts";
 
 const entity = {

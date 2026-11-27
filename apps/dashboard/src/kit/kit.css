@@ -1,0 +1,823 @@
+/* Cockpit kit (cockpit UI plan §3.3). Colours come only from the tokens in styles.css. Numbers use
+   tabular figures so columns line up. Under 700px every panel takes the full width. */
+.num,
+.kpi-value,
+.leaderboard td,
+.segbar-legend .num {
+  font-variant-numeric: tabular-nums;
+}
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 1rem;
+}
+.span-1 {
+  grid-column: span 1;
+}
+.span-2 {
+  grid-column: span 2;
+}
+.span-3 {
+  grid-column: span 3;
+}
+.span-4 {
+  grid-column: span 4;
+}
+@media (max-width: 700px) {
+  .panel-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .panel-grid > * {
+    grid-column: 1 / -1;
+  }
+}
+.panel {
+  min-width: 0;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-bg);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.panel-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.panel-drill {
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+.panel-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--c-muted);
+  margin-top: auto;
+}
+.panel-empty {
+  color: var(--c-muted);
+  margin: 0.4rem 0;
+}
+.panel-error {
+  color: var(--c-danger);
+}
+.panel-error p {
+  margin: 0 0 0.4rem;
+}
+.panel-skeleton {
+  display: grid;
+  gap: 6px;
+}
+.panel-skeleton span {
+  display: block;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--c-grid);
+}
+.panel-skeleton span:nth-child(2) {
+  width: 70%;
+}
+.panel-skeleton span:nth-child(3) {
+  width: 45%;
+}
+
+/* Kind badges: every number says what it is. */
+.kind-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.kind-real {
+  color: var(--c-kind-real);
+}
+.kind-estimated {
+  color: var(--c-kind-estimated);
+}
+.kind-assumed {
+  color: var(--c-kind-assumed);
+}
+.kind-dry_run {
+  color: var(--c-kind-dry-run);
+}
+.kind-synthetic {
+  color: var(--c-kind-synthetic);
+}
+
+/* KPI */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.kpi {
+  min-width: 0;
+  border-left: 3px solid var(--c-border);
+  padding-left: 8px;
+}
+.kpi-label {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--c-muted);
+}
+.kpi-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.kpi-change {
+  font-size: 0.8rem;
+}
+.kpi-change.good {
+  color: var(--c-success);
+}
+.kpi-change.bad {
+  color: var(--c-danger);
+}
+.kpi-change.flat {
+  color: var(--c-muted);
+}
+.kpi-range,
+.kpi-note {
+  font-size: 0.75rem;
+}
+.kpi-spark {
+  width: 100%;
+  max-width: 180px;
+}
+
+/* Charts */
+.chart {
+  width: 100%;
+  min-width: 0;
+}
+.chart-legend {
+  font-size: 0.8rem;
+  color: var(--c-muted);
+  margin: 2px 0 0;
+}
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-right: 3px;
+}
+.swatch.revenue {
+  background: var(--c-revenue);
+}
+.swatch.spend {
+  background: var(--c-spend);
+}
+.multiples {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.multiple {
+  margin: 0;
+  min-width: 0;
+}
+.multiple figcaption {
+  font-size: 0.8rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  align-items: baseline;
+}
+
+/* Funnel */
+.funnel {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.funnel-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+.funnel-track,
+.lb-track,
+.cap-track {
+  height: 8px;
+  background: var(--c-grid);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.funnel-bar,
+.lb-bar,
+.cap-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--c-accent);
+  transform-origin: left center;
+}
+.lb-bar.neg {
+  background: var(--c-danger);
+}
+.funnel-meta {
+  font-size: 0.75rem;
+}
+
+/* Leaderboard */
+.leaderboard {
+  width: 100%;
+  font-size: 0.88rem;
+}
+.leaderboard th {
+  font-weight: 600;
+  color: var(--c-muted);
+  border-bottom: 1px solid var(--c-border);
+}
+.leaderboard tr.killed td {
+  color: var(--c-muted);
+}
+.lb-track {
+  height: 5px;
+  margin-top: 3px;
+}
+
+/* Segmented bar */
+.segbar-track {
+  display: flex;
+  height: 14px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--c-grid);
+}
+.seg {
+  flex-basis: 0;
+  min-width: 2px;
+}
+.seg-0 {
+  background: var(--c-seg-0);
+}
+.seg-1 {
+  background: var(--c-seg-1);
+}
+.seg-2 {
+  background: var(--c-seg-2);
+}
+.seg-3 {
+  background: var(--c-seg-3);
+}
+.seg-4 {
+  background: var(--c-seg-4);
+}
+.seg-5 {
+  background: var(--c-seg-5);
+}
+.segbar-legend {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+.segbar-legend li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: baseline;
+}
+.segbar-name {
+  flex: 1 1 auto;
+}
+.segbar p {
+  margin: 6px 0 0;
+}
+.cap {
+  margin-top: 6px;
+}
+.cap-fill {
+  background: var(--c-spend);
+}
+
+/* Heatmap */
+.heatmap-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.heatmap {
+  font-size: 0.85rem;
+}
+.heatmap td.heat {
+  text-align: center;
+  min-width: 56px;
+  background: color-mix(in srgb, var(--c-accent) calc(var(--i, 0) * 100%), var(--c-bg));
+}
+.heatmap th[scope="row"] {
+  text-align: left;
+  font-weight: 500;
+}
+
+/* Status list, health strip */
+.status-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.status-list li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.status-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.status-cost {
+  white-space: nowrap;
+}
+.dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--c-info);
+}
+.dot.ok,
+.dot.running {
+  background: var(--c-success);
+}
+.dot.warn,
+.dot.waiting,
+.dot.paused {
+  background: var(--c-warning);
+}
+.dot.bad {
+  background: var(--c-danger);
+}
+.health-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.health-strip .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+/* Decisions */
+.decision-list {
+  display: grid;
+  gap: 10px;
+}
+.decision-card {
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--c-surface);
+}
+.decision-card header {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+.decision-card .kind {
+  font-size: 0.75rem;
+  color: var(--c-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.decision-facts {
+  margin: 4px 0;
+  font-size: 0.85rem;
+}
+.decision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Filter bar */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--c-border);
+  margin-bottom: 10px;
+}
+.seg-control {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.seg-control button.on,
+.chips button.on {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: #fff;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.chips .chip {
+  border-radius: 999px;
+  padding: 1px 10px;
+}
+.filter-dates {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.toggle {
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+.sim-banner {
+  border-color: var(--c-kind-synthetic);
+  color: var(--c-kind-synthetic);
+}
+fieldset.seg-control,
+fieldset.chips {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+/* A wide table scrolls inside its own panel, never the page. */
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+/* Where the funnel's unit changes (ideas → revenue paths). */
+.funnel-divider {
+  border-top: 2px dashed var(--c-border);
+  padding-top: 6px;
+  font-size: 0.78rem;
+  color: var(--c-muted);
+}
+.panel-count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--c-accent);
+  color: #fff;
+  font-size: 0.75rem;
+  vertical-align: middle;
+}
+.kpi-lines {
+  margin: 8px 0 0;
+  display: grid;
+  gap: 2px;
+  font-size: 0.82rem;
+}
+.kpi-lines div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.kpi-lines dt {
+  color: var(--c-muted);
+}
+.kpi-lines dd {
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Home cockpit */
+.cockpit-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+}
+.data-badge {
+  display: inline-block;
+  padding: 1px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  border: 1px solid currentColor;
+}
+.data-badge.live {
+  color: var(--c-kind-real);
+}
+.data-badge.sim {
+  color: var(--c-kind-synthetic);
+}
+.cockpit-section {
+  margin-bottom: 4px;
+}
+.cockpit-title {
+  font-size: 1.05rem;
+  margin: 0.6rem 0 0.4rem;
+}
+
+/* Leaderboard: compact cards on a phone, the table on wider screens. */
+.lb-cards {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
+}
+.lb-cards li {
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.lb-cards li.killed {
+  color: var(--c-muted);
+}
+.lb-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+.lb-rank {
+  color: var(--c-muted);
+}
+.lb-net {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.lb-card-meta {
+  font-size: 0.8rem;
+  margin-top: 3px;
+}
+.panel-toggle {
+  font-size: 0.8rem;
+  padding: 1px 8px;
+}
+@media (max-width: 600px) {
+  .lb-cards {
+    display: grid;
+  }
+  .lb-table {
+    display: none;
+  }
+}
+
+/* Needs you: one compact row per decision; details expand on click. */
+.decision-card.compact {
+  padding: 6px 10px;
+}
+.decision-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.decision-title {
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.decision-money,
+.decision-due {
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+.decision-line .decision-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.decision-more {
+  font-size: 0.8rem;
+  padding: 1px 8px;
+}
+.decision-details {
+  margin-top: 6px;
+  font-size: 0.88rem;
+  border-top: 1px solid var(--c-border);
+  padding-top: 4px;
+}
+.decision-details ul {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+.decision-msg {
+  margin: 4px 0 0;
+}
+
+/* Kanban (Ideas, CRM): columns scroll inside the panel; on a phone they stack. */
+.kanban {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(210px, 1fr);
+  gap: 10px;
+  overflow-x: auto;
+  max-width: 100%;
+  padding-bottom: 4px;
+}
+.kanban-col {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 6px;
+  min-width: 0;
+}
+.kanban-col header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  align-items: baseline;
+}
+.kanban-value {
+  margin-left: auto;
+  font-size: 0.82rem;
+}
+.kanban-col ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.kanban-card {
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: 5px;
+  padding: 6px;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.kanban-title {
+  font-weight: 600;
+}
+.kanban-detail,
+.kanban-empty {
+  font-size: 0.78rem;
+}
+.kanban-figures {
+  margin: 4px 0;
+  display: grid;
+  gap: 1px;
+}
+.kanban-figures div {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.kanban-figures dt {
+  color: var(--c-muted);
+}
+.kanban-figures dd {
+  margin: 0;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .kanban {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    overflow-x: visible;
+  }
+}
+
+/* Gauges (Controls) */
+.gauges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+}
+.gauges > li {
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  min-width: 0;
+}
+.gauges > li.killed {
+  color: var(--c-muted);
+}
+.gauge-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: baseline;
+  font-size: 0.88rem;
+}
+.gauge {
+  height: 10px;
+  background: var(--c-grid);
+  border-radius: 5px;
+  overflow: hidden;
+  margin: 4px 0;
+}
+.gauge-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--c-success);
+  transform-origin: left center;
+}
+.gauge.high .gauge-fill {
+  background: var(--c-warning);
+}
+.gauge.full .gauge-fill {
+  background: var(--c-danger);
+}
+.autonomy-steps {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  font-size: 0.75rem;
+  text-align: center;
+}
+.autonomy-steps li {
+  border: 1px solid var(--c-border);
+  border-radius: 3px;
+  color: var(--c-muted);
+}
+.autonomy-steps li.past {
+  background: var(--c-grid);
+}
+.autonomy-steps li.on {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: #fff;
+}
+
+/* Stat strip (Inbox) */
+.stat-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+.stat-strip > li {
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  min-width: 0;
+}
+.stat-strip dl {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin: 4px 0 0;
+}
+.stat-strip dt {
+  font-size: 0.75rem;
+  color: var(--c-muted);
+}
+.stat-strip dd {
+  margin: 0;
+  font-weight: 600;
+}
+.decision-company {
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.decision-failure {
+  color: var(--c-danger);
+}

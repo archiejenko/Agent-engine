@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getJson } from "./api.ts";
 import { EmptyRow } from "./format.tsx";
+import { PagePanels } from "./pagePanels.tsx";
 
 interface NoteItem {
   path: string;
@@ -507,6 +508,7 @@ export function Vault({ route }: { route: string }) {
   return (
     <>
       <h2>Vault</h2>
+      <PagePanels page="vault" />
       <div className="filters">
         <input
           type="search"

@@ -525,6 +525,8 @@ export const DecisionsConfig = z.object({
   digest_hour_utc: z.number().int().min(0).max(23),
   /** An external action whose outcome is unknown shows on Needs you only after this many minutes. */
   uncertain_effect_grace_minutes: z.number().int().min(1).max(1440).default(15),
+  /** Runway (days) below which one "Top up or pause" decision opens (cockpit U3). */
+  low_runway_days: z.number().positive().max(365).default(14),
 });
 export type DecisionsConfig = z.infer<typeof DecisionsConfig>;
 /** v3 Phase 5: the key catalogue (names and dependants only; values never live in config). */
@@ -701,3 +703,5 @@ export type IdeasConfig = z.infer<typeof IdeasConfig>;
 export function loadIdeasConfig(raw: unknown = ideasJson): IdeasConfig {
   return IdeasConfig.parse(raw);
 }
+
+export { BUILT_IN_LAYOUTS, loadLayout } from "./layouts/index.ts";
