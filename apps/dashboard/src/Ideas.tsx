@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getJson } from "./api.ts";
 import type { Decision } from "./NeedsYou.tsx";
+import { PagePanels } from "./pagePanels.tsx";
 
 interface Figure {
   value: number;
@@ -361,31 +362,12 @@ export function Ideas({ route }: { route: string }) {
         </select>
       </div>
       {msg && <p className="muted">{msg}</p>}
-      {data && data.cards.length === 0 && (
-        <p className="empty">
-          No idea cards yet. Scouts raise signals; the planner turns them into cards here.
-        </p>
-      )}
-      {data?.cards.map((r) => (
-        <div key={r.card.card_id} className="card">
-          <div className="decision-head">
-            <a href={`#/ideas/${r.card.card_id}`}>
-              <b>{r.card.offer}</b>
-            </a>
-            <span className="kind">{r.status}</span>
-            {r.synthetic && <span className="kind kind-synthetic">synthetic</span>}
-          </div>
-          <p className="muted" style={{ margin: "0.2rem 0" }}>
-            {r.card.market.buyer}
-            {r.card.market.industry ? ` · ${r.card.market.industry}` : ""} · {r.card.taxonomy_node}{" "}
-            · plan: {r.plan_status}
-          </p>
-          <p style={{ margin: "0.2rem 0" }}>
-            <Fig f={r.card.economics.profit_per_owner_hour} /> per hour of your time · test{" "}
-            <Fig f={r.card.test.budget_gbp} />
-          </p>
-        </div>
-      ))}
+      {/* The board (cockpit U3): cards in columns new → approved → executing → earning → killed;
+          pass, fail and park go through /api/decisions/:id/decide; Ask is on each card's page. */}
+      <PagePanels
+        page="ideas"
+        args={{ ...(fn ? { function: fn } : {}), ...(market ? { market } : {}) }}
+      />
       {data && data.held_back.length > 0 && (
         <details>
           <summary className="muted">{data.held_back.length} held back before reaching you</summary>

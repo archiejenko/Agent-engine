@@ -14,6 +14,7 @@ import { openSqliteStorage } from "@ae/storage/sqlite";
 import { defaultContext, getVerifiedFacts } from "@ae/verification";
 import { runPhase4Gate } from "../../apps/api/src/gates/phase4.ts";
 import { runPhase5Gate } from "../../apps/api/src/gates/phase5.ts";
+import { markTestWorldLeadsSimulated } from "../../apps/api/src/gates/test-world.ts";
 import { log, ROOT } from "../lib.ts";
 
 /**
@@ -83,6 +84,8 @@ async function topUp() {
 // Review and a print batch left pending), then the x402 and measurement gates.
 log("phase 5 gate");
 record("5", await runPhase5Gate(storage, ROOT, { count: 1200, leads: 8, letters: 6, log }));
+// Test data only (cockpit U2 answer b): the fake-Companies-House leads are marked simulated.
+await markTestWorldLeadsSimulated(storage);
 log("phase 2 gate");
 record("2", await runPhase2Gate(storage, ROOT, { count: 1200, drafts: 12, log }));
 const batch = await topUp();

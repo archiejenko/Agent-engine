@@ -824,6 +824,48 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **Fixed on the way:** Needs you's "recent" list now reads newest first from `decided_at`. Before, it
   came back empty when 30 or more decisions were open.
 
+## 2026-11-26 — OpenUI not adopted; cockpit UI built in-house (plan awaiting approval)
+
+- **What:** OpenUI (Thesys generative UI) was installed and reviewed for the Home cockpit, then dropped
+  at Archie's call. The cockpit is planned in-house in `brain/build-reports/cockpit-ui-plan.md`.
+- **Why:** its dashboards run model-written scripts (breaks rule 4, all maths in code), send data-tool
+  results to Thesys's servers when scripts run, and add a third-party key and vendor storage, all for a
+  single-user dashboard over known data.
+- **Kept from it, as our own code:** layout as data (Zod-checked JSON), one registry of read-only panel
+  queries, panels that load and fail on their own, and its chart vocabulary (KPI with change vs the
+  previous period, funnel, leaderboard, segmented bar, heatmap, small multiples, filter bar).
+
+## 2026-11-26 — Cockpit U1: choices made while building (plan `brain/build-reports/cockpit-ui-plan.md`)
+
+Approved by Archie before the build: Recharts; runway = pool balance ÷ 7-day average live spend; light
+theme only (CSS variables); default view last 30 days, live only, compare on. Made during the build
+(each one is in the U1 gate report for Archie to confirm or change):
+
+- **Runway, exactly.** Pool balance = every `pool_events` row (top-ups *and* adjustments, because an
+  adjustment corrects a top-up) − live spend since the day of the first pool event. The average is the
+  last 7 *complete* days (today is partial). Days left are rounded to 0.1; "top up by" = today + whole
+  days left. No top-up recorded → "–" and "record a top-up in Controls". Live = mode 'live', synthetic
+  0, dry_run 0, whatever the simulated switch says.
+- **Never cached** (always live): `runway`, `spend_split`, `playbook_board` (they read caps or the pool),
+  plus `health` (the kill switch you just flipped must show at once) and `needs_you` (a cached queue
+  would show an item again after you decide it). Cached for 60 s: `kpis`, `money_by_day`, `brief`,
+  `live_runs`, `pipeline`.
+- **Holdout:** panel rows that name a holdout company are dropped entirely, and arm/cohort fields are
+  stripped. The aggregate "Ranked vs holdout" lift stays (it names no company).
+- **The API does every sum the browser would have needed:** a `days` period parameter (the 7/30/90
+  presets), a `share` per funnel stage, `bar_share` and `rank` on the leaderboard, a shared `scale_max`
+  for small multiples, and a `value_kind` badge per chart or list.
+- **Pipeline:** the first three stages count idea cards, the last two count revenue paths (revenue isn't
+  recorded per idea), so there is no conversion rate between those two groups.
+- **Leaderboard revenue** is attributed to a playbook through `revenue_events.task_id`; revenue with no
+  task shows as "<revenue path> (no playbook)". Test-mode money is left out.
+- **Decision cards** for drafts, print batches, plans and site publishing link to the full item instead
+  of showing approve buttons: those need reading before deciding.
+- **Recharts 3.10.1**, loaded only with the kit (its own chunk), so pages without charts don't pay for it.
+- **Approvals static test:** kit code may post only to `/api/decisions/:id/decide`. Four older pages
+  post approvals to their own routes (owner approvals, promote, board action, print batch); the test
+  lists them, checks each records through the decisions path on the server, and fails on any new one.
+
 ## 2026-11-26 — What's live (checked read-only)
 
 - **Live Worker: commit `e42272e`**, deploy run 6 (GitHub Actions, started by Archie, succeeded). Its
@@ -995,6 +1037,115 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   - latency 3.1 s on average, 5.1 s at p90.
 
   Opus wasn't run (no Claude key), so the default stays Opus until both run on the same pages.
+
+## 2026-11-27 — Cockpit U2: Home cockpit (U1 approved with changes)
+
+Archie's answers at the U1 gate, now built:
+
+- **Rule 22 means blind, not drop.** `toPanelResult` keeps rows about holdout companies and strips every
+  field named arm, cohort, cohort_id or …holdout…, at any depth. Holdout drafts reach Needs you
+  unlabelled. Totals include holdout money; only the lift figure compares the groups.
+- **Needs you on Home:** the top 5 by money at stake, the open count beside the title, and "See all (N)",
+  which opens the full queue in a new Home tab (`#/?tab=queue`).
+- **Health and Needs you are never cached** (approved).
+- **No `/api/layouts/home`.** `home.json` is checked with the full LayoutSpec by a Vite plugin
+  (`apps/dashboard/layout-check.ts`) before every build and dev start; a bad file fails the build. The
+  dashboard imports the JSON directly, runs only a light check (no Zod in the bundle) and keeps the
+  built-in fallback.
+- **Chart chunk accepted;** Home starts fetching it the moment it mounts.
+- **The four older approval buttons move to `/api/decisions/:id/decide` in U3.**
+
+Choices made while building:
+
+- **Compare periods.** Both windows are [from, to): the previous one ends exactly where the current
+  one starts. The real overlap was in `unitEconomics` (behind margin, cost to acquire and cost to
+  serve): it had a start date but no end, so the previous period also counted every task created in
+  the current period. It now takes an optional `until`, and `homeFigures` passes the window's end. The
+  note names both windows' first and last days.
+- **Simulated decisions.** A decision counts as simulated if its own flag says so, if its source task
+  is simulated, or if its company was only ever drawn into simulated cohorts. In the gate's simulator
+  world, the "SYNTHETIC TRADING …" leads still carry no flag anywhere: the companies come from fake
+  Companies House files loaded through the normal pipeline. Not guessed from the name; open question
+  for Archie (U2 report).
+- **The brief's "waiting" count is the Needs you count** (same code), so the two always agree.
+- **Home layout:** the leaderboard and spend split are full width (the leaderboard's table doesn't fit
+  half a row); Runway (one column) shows one big figure and two compact lines so it stays level with
+  the KPI row; Live runs shows up to 6 (with "See all" when there are more); single-panel sections
+  have no heading of their own.
+- **Home has three tabs** in the hash: Cockpit, Needs you (all), and Quality (every figure, the daily
+  digest, "Data and today", "Quality, lift and unit economics"). Nothing removed.
+
+## 2026-11-27 — Cockpit U3: the other pages (U2 approved with changes)
+
+Archie's answers at the U2 gate, now built:
+
+- **Simulated leads: option (b), test data only.** `markTestWorldLeadsSimulated` (apps/api/src/gates/
+  test-world.ts) marks the test world's lead decisions simulated through a new storage method,
+  `decisions.markSynthetic`. No migration, no guessing from names. An architecture test allows calls
+  only from the test world: marking a real decision would hide it from Archie.
+- **Production databases can't be written by the simulator or rehearsal loaders**, and a test proves it
+  (tests/simulator-isolation.test.ts). There was no such path, so nothing was stopped for. Found on the
+  way and reported: the deployed Worker's pre-cutover fake model includes the website extractor; it
+  quotes real pages and invents nothing. Its file is now separate from the fake-website generator,
+  which (with every other generator, gate and loader) is proved absent from the Worker bundle.
+- **Leaderboard:** only playbooks with live money in the period, plus "Show all (N)". Today's cap spend
+  doesn't count as activity (it includes simulated spend, as caps always have). One compact card per
+  playbook on a phone.
+- **Runway → Controls top-up form.** No form existed (only a gate ever wrote pool_events), so one was
+  built: it opens a "record top-up" decision and records it through /api/decisions/:id/decide, with
+  Archie's approval id on the pool event. Raising the pool raises what agents may spend, so it is an
+  approval, like raising a spend tier.
+- **Low runway:** below `low_runway_days` (packages/config/src/decisions.json, default 14) one "Top up
+  or pause" decision opens; safe default = pause the task queue (spends nothing, rule 19). One per
+  pool event: once raised (whatever the outcome) it never repeats until another top-up or adjustment
+  is recorded. The runway maths moved to packages/infra/src/runway.ts, shared with the panel.
+- **The four older approval buttons** (Budgets raise-tier, Controls promote, Board pin/kill, Letters
+  batch) now resolve through /api/decisions/:id/decide. Things Archie starts himself first open a
+  decision with POST /api/decisions/request, which approves nothing. The static test has no allow-list.
+
+Choices made while building:
+
+- **Ideas confidence** is the lowest current confidence among the card's evidence facts (the same rule
+  as an opportunity's confidence). Columns: new = proposed or parked; approved = passed or
+  budget_pending; executing = testing; earning = succeeded; killed = killed or failed. Held-back cards
+  never appear. **Ask** stays a question on the card's page (a thread entry); routing it through
+  /decide would close the card's decision.
+- **Board heatmap:** rows are industries, columns what we'd sell (the market's field). Colour = the
+  market's best live idea's expected profit per hour of Archie's time, scaled to the best market
+  (estimated); number = agent spend there.
+- **Inbox strip:** per playbook (or test, where a send belongs to one), counted in companies; reply and
+  positive-reply rates are per company sent to.
+- **Vault feed:** agent-written notes (author `agent:…`) from the last 7 days, with author, source count,
+  ledger rows and labels.
+- **One layout file per page** (ideas, board, crm, inbox, controls, vault), checked at build time like
+  home.json, each with a built-in fallback. Not cached: the Ideas board (its buttons must never show a
+  decision just made), plus the U2 list.
+
+## 2026-11-27 — Cockpit branch brought up to date with claude/nifty-curie-91l1nq (merge, not rebase)
+
+- **How:** `origin/claude/nifty-curie-91l1nq` (8 commits since e42272e, up to f58444d) merged INTO
+  `claude/cockpit-ui-plan` as a merge commit, so no force push. Not merged the other way: Archie does that.
+- **Conflicts, all resolved by keeping both sides:**
+  - this file: every entry from both branches, by date (26 Nov, then 27 Nov; each branch's own order
+    within a day);
+  - `decisions.json` and the config schema: `uncertain_effect_grace_minutes` (15) and the £5/day
+    `website_ingest` cap from main, `low_runway_days` (14) from the cockpit;
+  - verification: main's behaviour unchanged (6,000-token page budget, Opus default, optional Gemini 4
+    Hydrogen extractor, extractor on the cost ledger, spend caps). The cockpit's split also stays: the
+    stand-in fake extractor in its own file, the fake-website generator a subpath export that never
+    ships in the Worker. Main's new `scripts/compare-extractors.ts` now imports the generator from
+    that subpath. Both held cleanly, so nothing needed Archie's choice.
+- **Unknown sends on the cockpit (main e9b5fa1):** Needs-you rows carry the company link, the
+  recipient and "what failed" (key-shaped text in a provider error is masked so the guard never has
+  to refuse the whole queue). The compact row shows a Company link; Details shows what failed. The
+  full queue now shows "what failed" even when the company isn't known. Mark as sent / Mark as not sent
+  resolve through /api/decisions/:id/decide; the static approvals test still has no allow-list.
+- **Board heatmap colour (Archie, U3 gate):** expected monthly profit per £1 of agent spend: for each
+  live idea card, its expected profit (first year of the test) ÷ 12 ÷ the agent spend it plans (its
+  test budget); the market takes its best card; colour is that scaled to the best market (estimated).
+  The planned test budget is used rather than spend so far, because spend so far is usually £0 before
+  a test runs. Profit per hour of Archie's time stays in the hover text; the number in each cell is
+  still agent spend so far.
 
 ## 2026-11-27 — Key aliases (Claude key as EXTRACTOR_ANTHROPIC_API_KEY)
 

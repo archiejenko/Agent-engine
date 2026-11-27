@@ -298,6 +298,14 @@ export function v3Storage(db: SqlDriver, bodies: Bodies, blobs: BlobStore) {
       setError: async (id: string, error: string) => {
         await db.run("UPDATE decisions SET error = ? WHERE id = ?", [error, id]);
       },
+      /**
+       * TEST WORLD ONLY (cockpit U3): marks decisions built from simulated data as simulated, so the
+       * cockpit hides them unless "Include simulated" is on. Real decisions must never be marked: that
+       * would hide them from Archie. tests/architecture.test.ts allows calls only from the test world.
+       */
+      markSynthetic: async (ids: string[]) => {
+        for (const id of ids) await db.run("UPDATE decisions SET synthetic = 1 WHERE id = ?", [id]);
+      },
       /** The latest closed decisions (decided or defaulted), newest first, from the decided_at index. */
       recentClosed: async (limit: number) =>
         (

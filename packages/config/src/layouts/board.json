@@ -1,0 +1,21 @@
+{
+  "page": "board",
+  "version": 1,
+  "sections": [
+    {
+      "id": "board_section",
+      "title": null,
+      "panels": [
+        {
+          "id": "board_heatmap",
+          "title": "Industry × what we'd sell",
+          "component": "Heatmap",
+          "query": "board_heatmap",
+          "span": 4,
+          "refresh_s": 300,
+          "drill": "/board"
+        }
+      ]
+    }
+  ]
+}

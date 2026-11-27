@@ -1,0 +1,24 @@
+{
+  "page": "crm",
+  "version": 1,
+  "sections": [
+    {
+      "id": "crm_section",
+      "title": null,
+      "panels": [
+        {
+          "id": "crm_pipeline",
+          "title": "Pipeline",
+          "component": "Kanban",
+          "query": "crm_pipeline",
+          "args": {
+            "limit": 6
+          },
+          "span": 4,
+          "refresh_s": 300,
+          "drill": "/crm?view=table"
+        }
+      ]
+    }
+  ]
+}

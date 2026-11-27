@@ -4,16 +4,20 @@
  * reading an item is charged to the item decided next. Capped server-side at 4 hours per item.
  */
 let activeMs = 0;
-let visibleSince: number | null = document.visibilityState === "visible" ? Date.now() : null;
+// Safe to import outside a browser (component tests render without a document).
+const hasDocument = typeof document !== "undefined";
+let visibleSince: number | null =
+  hasDocument && document.visibilityState === "visible" ? Date.now() : null;
 let startedAt = new Date().toISOString();
 
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") visibleSince = Date.now();
-  else if (visibleSince !== null) {
-    activeMs += Date.now() - visibleSince;
-    visibleSince = null;
-  }
-});
+if (hasDocument)
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") visibleSince = Date.now();
+    else if (visibleSince !== null) {
+      activeMs += Date.now() - visibleSince;
+      visibleSince = null;
+    }
+  });
 
 export type ReviewItemType =
   | "opportunity"

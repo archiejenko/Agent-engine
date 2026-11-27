@@ -1,0 +1,39 @@
+{
+  "page": "controls",
+  "version": 1,
+  "sections": [
+    {
+      "id": "controls_section",
+      "title": null,
+      "panels": [
+        {
+          "id": "playbook_gauges",
+          "title": "Today's spend against each cap",
+          "component": "Gauges",
+          "query": "playbook_board",
+          "args": {
+            "all": 1
+          },
+          "span": 4,
+          "refresh_s": 60,
+          "drill": "/controls"
+        }
+      ]
+    },
+    {
+      "id": "pool_section",
+      "title": null,
+      "panels": [
+        {
+          "id": "pool_runway",
+          "title": "Agent pool",
+          "component": "Kpi",
+          "query": "runway",
+          "span": 4,
+          "refresh_s": 60,
+          "drill": "/controls?section=pool"
+        }
+      ]
+    }
+  ]
+}

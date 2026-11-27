@@ -30,10 +30,11 @@ const blank = (key: string): EconomicsRow => ({
 export async function unitEconomics(
   storage: Storage,
   cfg: InfraConfig,
-  o: { since: string; includeSynthetic: boolean; taskLimit?: number },
+  /** `until` (exclusive) closes the window, so two adjacent periods never share a task or minute. */
+  o: { since: string; until?: string; includeSynthetic: boolean; taskLimit?: number },
 ) {
   const tasks = (await storage.tasks.list({ since: o.since, limit: 100_000 })).filter(
-    (t) => o.includeSynthetic || !t.synthetic,
+    (t) => (o.includeSynthetic || !t.synthetic) && (!o.until || t.created_at < o.until),
   );
   const cost = await storage.runLog.costByTask(o.since);
   const minutes = new Map<string, number>();
@@ -41,6 +42,7 @@ export async function unitEconomics(
     since: o.since,
     includeSynthetic: o.includeSynthetic,
   })) {
+    if (o.until && s.decided_at >= o.until) continue;
     const share = s.active_ms / 60_000 / Math.max(1, s.task_ids.length);
     for (const id of s.task_ids) minutes.set(id, (minutes.get(id) ?? 0) + share);
   }
