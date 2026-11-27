@@ -4,3 +4,8 @@ CH_API_KEY=
 # Cloudflare Access (only needed to test Access validation locally; leave blank for local dev)
 ACCESS_TEAM_DOMAIN=
 ACCESS_POLICY_AUD=
+# Website extraction comparison / Gemini 4 Hydrogen (only when models.json website_extractor.model is
+# "gemini-4-hydrogen", or to run `pnpm compare:extractors`). Gemini key from aistudio.google.com.
+GEMINI_API_KEY=
+# Claude API key: the extractor's fallback and the comparison's Opus side.
+ANTHROPIC_API_KEY=

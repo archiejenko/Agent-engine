@@ -3,7 +3,7 @@ import type { UniverseConfig } from "@ae/contracts";
 import type { Storage } from "@ae/storage";
 import type { VerificationContext } from "../../context.ts";
 import { ingestClaims } from "../../ingest.ts";
-import { type CostMode, meteredModel, withMeter } from "../../metered-model.ts";
+import { type CostMode, meteredModel, withFallback, withMeter } from "../../metered-model.ts";
 import { dailyCapProblems } from "../../spend-caps.ts";
 import { collectWebsiteClaims, type WebsitePorts } from "./ingest.ts";
 
@@ -37,17 +37,24 @@ export async function ingestWebsites(
   // Every extraction call writes one cost event (and its daily rollup) as it returns, like every
   // agent call (data layer plan, follow-up). A real model call is real money: live, never dry run.
   // The fake model's calls are marked synthetic.
+  const md = { storage, models: o.models ?? loadModelsConfig() };
+  // With a fallback model (Gemini 4 Hydrogen first, Claude on failure), each side is metered on its
+  // own, so every attempt is on the ledger.
+  const extractor = ports.fallbackModel
+    ? withFallback(meteredModel(ports.model, md), meteredModel(ports.fallbackModel, md), {
+        onFallback: () => {
+          stats.extractor_fallbacks++;
+        },
+      })
+    : meteredModel(ports.model, md);
   const metered: WebsitePorts = {
     ...ports,
-    model: withMeter(
-      meteredModel(ports.model, { storage, models: o.models ?? loadModelsConfig() }),
-      {
-        playbook: WEBSITE_PLAYBOOK,
-        step_id: WEBSITE_STEP,
-        run_id: run.run_id,
-        mode: o.costMode ?? "live",
-      },
-    ),
+    model: withMeter(extractor, {
+      playbook: WEBSITE_PLAYBOOK,
+      step_id: WEBSITE_STEP,
+      run_id: run.run_id,
+      mode: o.costMode ?? "live",
+    }),
   };
   const members = (await storage.universe.list(universe.name, { included: true })).map(
     (m) => m.entity_id,
@@ -59,6 +66,8 @@ export async function ingestWebsites(
     quarantined: 0,
     claims: 0,
     rejected_extractions: 0,
+    /** Pages the extractor sent to the fallback model after the primary failed twice. */
+    extractor_fallbacks: 0,
     /** Pages cut to the per-page token budget (each one recorded in page_cuts). */
     pages_cut: 0,
     /** Why the run stopped early (a daily spend cap), or null. */

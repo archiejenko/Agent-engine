@@ -1,11 +1,11 @@
 # Phase graph-g2 gate report
 
-Generated 2026-11-26T20:43:14.503Z on SYNTHETIC data with fake external systems.
+Generated 2026-11-27T15:02:31.057Z on SYNTHETIC data with fake external systems.
 
 | Criterion | Status | Evidence |
 |---|---|---|
 | sme_outreach runs end to end on the graph runtime in dry-run, with the approval resolved from the dashboard | passed (synthetic) | instance waited at the approval (sleeping); approved through POST /api/decisions/:id/decide (200); steps research@research, draft@draft, check@check, send@send; 1 email, dry_run; task done |
-| Every model and tool call produces exactly one cost event; roll-ups equal the sum of their events | passed (synthetic) | 1 model calls → 1 model events; 3 tool calls → 3 tool events; 7 infra events; per-node roll-up £0.003236 = sum £0.003236 |
+| Every model and tool call produces exactly one cost event; roll-ups equal the sum of their events | failed | 1 model calls → 1 model events; 3 tool calls → 3 tool events; 7 infra events; per-node roll-up £0.003236 = sum £0.003236 |
 | The kill switch stops a running instance before its next step; clearing it resumes the run | passed (synthetic) | paused before the next node: "sme_outreach's kill switch is on"; the send didn't run while paused; after the switch went off, the run resumed and finished (done) |
 | A forced failure resumes without repeating a completed external step | passed (synthetic) | the send job crashed after the step ran; the retried job found the recorded effect, so 1 email exists (not 2); task done |
 | An approval left unanswered takes the safe default (nothing sent), never counted as Archie's approval | passed (synthetic) | after the 7-day deadline the task is cancelled; owner approvals 1 → 1; no approval row for the task |

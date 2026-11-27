@@ -1,10 +1,16 @@
 import { loadInfraConfig, loadModelsConfig } from "@ae/config";
 import { costGbp, FakeModel, FakeWebFetcher, FakeWebsiteFinder, type ModelClient } from "@ae/ports";
+import { GeminiModelClient } from "@ae/ports/gemini";
 import type { Storage } from "@ae/storage";
 import { beforeEach, describe, expect, it } from "vitest";
+import modelsJson from "../../../config/src/models.json" with { type: "json" };
 import type { VerificationContext } from "../context.ts";
 import { collectWebsiteClaims } from "../sources/website/ingest.ts";
+import { websiteExtractorModels } from "../sources/website/models.ts";
 import { ingestWebsites, WEBSITE_PLAYBOOK, WEBSITE_STEP } from "../sources/website/pipeline.ts";
+
+const modelsJsonRaw = () => modelsJson;
+
 import { fakeWebsiteExtractor, generateSites } from "../sources/website/synthetic.ts";
 import { setup } from "./helpers.ts";
 
@@ -411,5 +417,155 @@ describe("per-page cut is recorded", () => {
     // What the model was sent stays near the budget, not the whole page.
     const sent = model.calls[0]?.untrusted ?? "";
     expect(sent.length).toBeLessThan(3 * 6000 * 4 + 1000);
+  });
+});
+
+describe("Gemini 4 Hydrogen for website extraction", () => {
+  const ALL = { from: "2000-01-01T00:00:00Z", to: "2100-01-01T00:00:00Z" };
+  const usage = { promptTokenCount: 8_000, candidatesTokenCount: 300, thoughtsTokenCount: 200 };
+  const gemini = (bodies: (string | number)[]) => {
+    let i = 0;
+    const sent: string[] = [];
+    const client = new GeminiModelClient({
+      apiKey: "test-key-not-real",
+      model: "gemini-4-hydrogen",
+      fetch: (async (_u: string, init: RequestInit) => {
+        sent.push(String(init.body));
+        const b = bodies[Math.min(i++, bodies.length - 1)] as string | number;
+        if (typeof b === "number") return new Response("{}", { status: b });
+        return new Response(
+          JSON.stringify({
+            candidates: [{ content: { parts: [{ text: b }] }, finishReason: "STOP" }],
+            usageMetadata: usage,
+          }),
+          { status: 200 },
+        );
+      }) as never,
+    });
+    return { client, sent, calls: () => i };
+  };
+  const seedOne = async () => {
+    await storage.entities.upsertMany([entity], runId);
+    await storage.universe.setMany(
+      [
+        {
+          universe: "test",
+          entity_id: entity.entity_id,
+          included: true,
+          reason: "t",
+          staff_flag: "known",
+        },
+      ],
+      runId,
+    );
+  };
+  const models = loadModelsConfig();
+  const price = (m: string) => {
+    const p = models.prices[m];
+    if (!p) throw new Error(`no price ${m}`);
+    return p;
+  };
+  const events = async () =>
+    (await storage.costEvents.range(ALL)).filter((e) => e.playbook === WEBSITE_PLAYBOOK);
+
+  it("prices come from Google's official page and sit beside the Anthropic prices", () => {
+    expect(price("gemini-4-hydrogen")).toMatchObject({
+      input_usd_per_mtok: 1.5,
+      output_usd_per_mtok: 7.5,
+    });
+    expect(models.other_price_sources["gemini-4-hydrogen"]?.source).toBe(
+      "https://ai.google.dev/gemini-api/docs/pricing",
+    );
+    // Agents stay on Claude: the config refuses a non-Claude model for any agent role.
+    expect(() =>
+      loadModelsConfig({
+        ...JSON.parse(JSON.stringify(modelsJsonRaw())),
+        roles: { ...models.roles, writer: { model: "gemini-4-hydrogen", effort: "medium" } },
+      }),
+    ).toThrow(/agent roles stay on Claude/);
+  });
+
+  it("one Hydrogen call writes exactly one cost event and rollup at Hydrogen's price (thinking billed as output)", async () => {
+    await seedOne();
+    const g = gemini(['{"facts":[]}']);
+    const p = { ...ports(goodSite()), model: g.client };
+    const r = await ingestWebsites(storage, ctx, { name: "test" } as never, p, { models });
+    expect(g.calls()).toBe(1);
+    const ev = await events();
+    expect(ev).toHaveLength(1);
+    const expected = costGbp(
+      { input_tokens: 8000, output_tokens: 500 },
+      price("gemini-4-hydrogen"),
+      models.usd_to_gbp,
+    );
+    expect(ev[0]).toMatchObject({
+      mode: "live",
+      dry_run: false,
+      synthetic: false,
+      step_id: WEBSITE_STEP,
+    });
+    expect(ev[0]?.amount_gbp).toBeCloseTo(expected, 12);
+    // £0.0123 = (8,000 × $1.50 + 500 × $7.50) / 1M × 0.79
+    expect(expected).toBeCloseTo(((8000 * 1.5 + 500 * 7.5) / 1e6) * 0.79, 12);
+    const roll = (await storage.dailyRollups.range(ALL)).filter(
+      (x) => x.playbook === WEBSITE_PLAYBOOK,
+    );
+    expect(roll).toHaveLength(1);
+    expect(roll[0]?.cost_events).toBe(1);
+    expect(roll[0]?.cost_gbp).toBeCloseTo(expected, 12);
+    expect(r.extractor_fallbacks).toBe(0);
+    // Internal fields never reach Google.
+    for (const s of g.sent)
+      for (const x of ["meter", WEBSITE_PLAYBOOK, "prompt_id"]) expect(s).not.toContain(x);
+  });
+
+  it("invalid JSON twice falls back to Claude for that page; every attempt is metered", async () => {
+    await seedOne();
+    const g = gemini(["not json", "still not json"]);
+    const claude = new FakeModel({ website_extract: fakeWebsiteExtractor });
+    const p = { ...ports(goodSite()), model: g.client, fallbackModel: claude };
+    const r = await ingestWebsites(storage, ctx, { name: "test" } as never, p, { models });
+    expect(g.calls()).toBe(2); // the call and one retry
+    expect(claude.calls).toHaveLength(1);
+    expect(r.extractor_fallbacks).toBe(1);
+    const ev = await events();
+    // Two Hydrogen responses (they cost money even though unusable) + the Claude fallback.
+    expect(ev.map((e) => e.unit_price_gbp > 0)).toEqual([true, true, true]);
+    expect(ev).toHaveLength(3);
+    const hyd = costGbp(
+      { input_tokens: 8000, output_tokens: 500 },
+      price("gemini-4-hydrogen"),
+      models.usd_to_gbp,
+    );
+    expect(ev.filter((e) => Math.abs(e.amount_gbp - hyd) < 1e-12)).toHaveLength(2);
+    // The fallback's extraction still produced claims.
+    expect(r.claims).toBeGreaterThan(0);
+  });
+
+  it("a Hydrogen error (HTTP 5xx) twice falls back; errored requests cost nothing", async () => {
+    await seedOne();
+    const g = gemini([503, 503]);
+    const claude = new FakeModel({ website_extract: fakeWebsiteExtractor });
+    const p = { ...ports(goodSite()), model: g.client, fallbackModel: claude };
+    const r = await ingestWebsites(storage, ctx, { name: "test" } as never, p, { models });
+    expect(g.calls()).toBe(2);
+    expect(r.extractor_fallbacks).toBe(1);
+    expect(await events()).toHaveLength(1); // only the Claude call
+  });
+
+  it("the factory keeps Claude unless config says Hydrogen, and refuses Hydrogen without a key", () => {
+    expect(
+      websiteExtractorModels(models, { anthropic: null, gemini: null }).fallbackModel,
+    ).toBeUndefined();
+    const hyd = {
+      ...models,
+      website_extractor: { ...models.website_extractor, model: "gemini-4-hydrogen" as const },
+    };
+    expect(() => websiteExtractorModels(hyd, { anthropic: null, gemini: null })).toThrow(
+      /GEMINI_API_KEY/,
+    );
+    const m = websiteExtractorModels(hyd, { anthropic: "x", gemini: "y" });
+    expect(m.model.name).toBe("gemini-4-hydrogen");
+    expect(m.fallbackModel).toBeDefined();
   });
 });

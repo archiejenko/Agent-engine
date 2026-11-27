@@ -69,7 +69,7 @@ describe("pricing model calls from reported usage", () => {
   });
 
   it("the price table carries a version and the date it was checked", () => {
-    expect(models.price_table_version).toBe("2026-11-18");
+    expect(models.price_table_version).toBe("2026-11-27");
     expect(models.prices_checked_at).toBe("2026-11-18");
   });
 

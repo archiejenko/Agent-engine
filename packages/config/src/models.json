@@ -1,6 +1,6 @@
 {
   "_note": "Prices are USD per million tokens, checked against https://platform.claude.com/docs/en/about-claude/pricing on 2026-11-18 (the page shows no 'last updated' date). price_table_version is stamped on every cost event. Cache reads are 0.05x input on Opus 5.5 / Sonnet 5.5; cache writes: 5-minute 1.25x, 1-hour 2x input. Haiku 5.5 is tiered: prompts over 100,000 tokens (all input incl. cache reads/writes) use the long_context prices. Default model for every role is claude-opus-5-5; switching bulk roles to a cheaper model is Archie's decision (see docs/decisions.md).",
-  "price_table_version": "2026-11-18",
+  "price_table_version": "2026-11-27",
   "prices_checked_at": "2026-11-18",
   "prices_source": "https://platform.claude.com/docs/en/about-claude/pricing",
   "usd_to_gbp": 0.79,
@@ -36,6 +36,11 @@
       "cache_read_usd_per_mtok": 0.2,
       "cache_write_5m_usd_per_mtok": 5.0,
       "cache_write_1h_usd_per_mtok": 8.0
+    },
+    "gemini-4-hydrogen": {
+      "input_usd_per_mtok": 1.5,
+      "output_usd_per_mtok": 7.5,
+      "cache_read_usd_per_mtok": 0.075
     }
   },
   "roles": {
@@ -71,5 +76,18 @@
       "model": "claude-opus-5-5",
       "effort": "medium"
     }
+  },
+  "other_price_sources": {
+    "gemini-4-hydrogen": {
+      "source": "https://ai.google.dev/gemini-api/docs/pricing",
+      "checked_at": "2026-11-27",
+      "note": "Google Gemini Developer API, paid tier, Standard (not Batch), per 1M tokens: input $1.50, output $7.50 (output INCLUDES thinking tokens), context caching $0.075 (implicit only). The page now redirects to aistudio.google.com/docs/pricing and shows no last-updated date."
+    }
+  },
+  "website_extractor": {
+    "_note": "Which model the website extractor uses. All agent roles stay on Claude (roles above). To try Gemini 4 Hydrogen set model to \"gemini-4-hydrogen\" (needs GEMINI_API_KEY); a Hydrogen call that errors or returns invalid JSON is retried once, then the page falls back to fallback_model. Every attempt is metered.",
+    "model": "claude-opus-5-5",
+    "fallback_model": "claude-opus-5-5",
+    "gemini_thinking_level": "LOW"
   }
 }

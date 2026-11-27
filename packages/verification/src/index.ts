@@ -24,6 +24,7 @@ export * from "./sources/companies-house/stream.ts";
 export * from "./sources/ons/postcodes.ts";
 export * from "./sources/website/ingest.ts";
 export * from "./sources/website/model-text.ts";
+export * from "./sources/website/models.ts";
 export * from "./sources/website/pipeline.ts";
 export * from "./sources/website/prompts.ts";
 export * from "./sources/website/synthetic.ts";

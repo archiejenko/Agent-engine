@@ -27,6 +27,8 @@ export interface WebsitePorts {
   finder: WebsiteFinder;
   fetcher: WebFetcher;
   model: ModelClient;
+  /** Used for a page when `model` errors or returns invalid JSON twice (Gemini → Claude). */
+  fallbackModel?: ModelClient;
 }
 
 export interface WebsiteResult {

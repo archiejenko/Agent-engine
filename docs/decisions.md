@@ -942,3 +942,41 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   the evidence check.
 - **Every cut is recorded** in the new `page_cuts` table (facts database, migration `0003`): run,
   company, page, original and kept tokens, and when. The run's stats also count `pages_cut`.
+
+## 2026-11-27 — Gemini 4 Hydrogen for website extraction (built, not switched on)
+
+- **Prices**, from Google's official Gemini Developer API pricing page
+  (https://ai.google.dev/gemini-api/docs/pricing, which now redirects to
+  aistudio.google.com/docs/pricing; no last-updated date shown), read on 2026-11-27. Paid tier,
+  Standard, per 1M tokens:
+  - input **$1.50**;
+  - output **$7.50**, including thinking tokens;
+  - context caching $0.075 (implicit only).
+
+  They're in `models.json` beside the Anthropic prices, with their source recorded in
+  `other_price_sources`. The config refuses a non-Claude price without a source, and refuses a
+  non-Claude model for any agent role. The price table version is now `2026-11-27`.
+- **The adapter** (`@ae/ports/gemini`) calls `generateContent`:
+  - the key is in the `x-goog-api-key` header only;
+  - structured output via `responseMimeType: application/json` + `responseJsonSchema`, with the
+    extractor's existing schema (Hydrogen's model page lists structured outputs as supported);
+  - thinking level LOW.
+
+  Billed output is `candidatesTokenCount + thoughtsTokenCount`. Results are priced under the
+  configured id `gemini-4-hydrogen`, so the meter, `cost_events` and `daily_rollups` use Hydrogen's
+  price and the same USD→GBP rate (0.79). Only named fields are sent, so `meter` and other internal
+  fields never reach Google.
+- **The switch:** `models.json → website_extractor.model`. It's `claude-opus-5-5` today; set it to
+  `gemini-4-hydrogen` to use Hydrogen, with `fallback_model` Claude. A Hydrogen call that errors or
+  returns invalid JSON is retried once, then that page goes to Claude. Every attempt that returned a
+  response is metered, failed Hydrogen ones included. Agents never use it.
+- **Default stays Opus.** The quality comparison (`pnpm compare:extractors`) couldn't run: no keys in
+  this session, and the key form can't store either provider's header. There's no evidence yet that
+  Hydrogen is close to Opus.
+- **Cost per call** (8,500 input + 400 output tokens):
+  - Opus £0.033;
+  - Hydrogen £0.012 with no thinking, about £0.015–£0.018 with 500–1,000 thinking tokens at LOW.
+
+  A 100-company run would cost about £1.20–£1.80 on Hydrogen, against about £3.30 on Opus.
+- **The £5/day `website_ingest` cap is unchanged.** It still fits Opus. If Hydrogen becomes the
+  default, about £2.50 would keep the same ~50% headroom over a normal run. That's Archie's call.

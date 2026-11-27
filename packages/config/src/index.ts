@@ -180,8 +180,54 @@ export const ModelsConfig = z
       }),
     ),
     roles: z.record(RoleName, z.object({ model: z.string().min(1), effort: Effort })),
+    /** Where non-Anthropic prices come from (one official page per model). */
+    other_price_sources: z
+      .record(
+        z.string(),
+        z.object({
+          source: z.url(),
+          checked_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          note: z.string(),
+        }),
+      )
+      .default({}),
+    /** The website extractor's model (the only place a non-Claude model may be used). */
+    website_extractor: z
+      .object({
+        model: z.enum([
+          "claude-opus-5-5",
+          "claude-sonnet-5-5",
+          "claude-haiku-5-5",
+          "gemini-4-hydrogen",
+        ]),
+        fallback_model: z.enum(["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]),
+        gemini_thinking_level: z.enum(["MINIMAL", "LOW", "MEDIUM", "HIGH", "XHIGH"]).default("LOW"),
+      })
+      .default({
+        model: "claude-opus-5-5",
+        fallback_model: "claude-opus-5-5",
+        gemini_thinking_level: "LOW",
+      }),
   })
   .superRefine((c, ctx) => {
+    for (const m of [c.website_extractor.model, c.website_extractor.fallback_model])
+      if (!c.prices[m])
+        ctx.addIssue({ code: "custom", path: ["website_extractor"], message: `no price for ${m}` });
+    for (const m of Object.keys(c.prices))
+      if (!m.startsWith("claude-") && m !== "fake-model" && !c.other_price_sources[m])
+        ctx.addIssue({
+          code: "custom",
+          path: ["prices", m],
+          message: `no official source for ${m}`,
+        });
+    // Agents stay on Claude: no role may name a non-Claude model.
+    for (const [role, r] of Object.entries(c.roles))
+      if (!r.model.startsWith("claude-"))
+        ctx.addIssue({
+          code: "custom",
+          path: ["roles", role],
+          message: "agent roles stay on Claude",
+        });
     for (const [role, r] of Object.entries(c.roles)) {
       if (!c.prices[r.model])
         ctx.addIssue({ code: "custom", path: ["roles", role], message: `no price for ${r.model}` });

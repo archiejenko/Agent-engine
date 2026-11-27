@@ -110,3 +110,48 @@ export function taskMeter(
     ...extra,
   };
 }
+
+/**
+ * The website extractor's fallback (2026-11-27): try `primary` (Gemini 4 Hydrogen); if a call errors,
+ * or returns text that isn't a JSON object when a JSON schema was asked for, try once more; then use
+ * `fallback` (Claude) for that request. Both clients must already be metered, so EVERY attempt that
+ * returned a response writes its own cost event: a failed Hydrogen attempt still cost money. A request
+ * that errored before any response cost nothing and writes nothing.
+ */
+export function withFallback(
+  primary: ModelClient,
+  fallback: ModelClient,
+  o: { retries?: number; onFallback?: (reason: string) => void } = {},
+): ModelClient {
+  if (!isMetered(primary) || !isMetered(fallback))
+    throw new Error("withFallback: both models must be metered, so every attempt is on the ledger");
+  const tries = 1 + (o.retries ?? 1);
+  const wrapped: ModelClient = {
+    name: `${primary.name}→${fallback.name}`,
+    complete: async (req: ModelRequest) => {
+      let reason = "";
+      for (let i = 0; i < tries; i++) {
+        try {
+          const r = await primary.complete(req);
+          if (!req.json_schema || isJsonObject(r.text)) return r;
+          reason = "invalid JSON";
+        } catch (e) {
+          reason = (e as Error).message.slice(0, 200);
+        }
+      }
+      o.onFallback?.(reason);
+      return fallback.complete(req);
+    },
+  };
+  Object.defineProperty(wrapped, METERED, { value: true });
+  return wrapped;
+}
+
+function isJsonObject(text: string): boolean {
+  try {
+    const v = JSON.parse(text);
+    return v !== null && typeof v === "object" && !Array.isArray(v);
+  } catch {
+    return false;
+  }
+}
