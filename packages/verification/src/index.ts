@@ -26,4 +26,5 @@ export * from "./sources/website/ingest.ts";
 export * from "./sources/website/pipeline.ts";
 export * from "./sources/website/prompts.ts";
 export * from "./sources/website/synthetic.ts";
+export * from "./spend-caps.ts";
 export * from "./universe.ts";

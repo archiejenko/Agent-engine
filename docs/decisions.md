@@ -875,3 +875,25 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
 - **Measured:** a send makes 2 core round trips (the pre-write and one batch); before, it made 5 or
   more. `send_email` has no price, so there's no task cost write; the batch would carry one if it had
   a price.
+
+## 2026-11-27 — Daily cap for the website extractor
+
+- **`website_ingest` gets a £5/day cap** in `infra.json`. The pricing behind it:
+  - one extraction call is about 8,500 input + 400 output tokens on `claude-opus-5-5`, about £0.033;
+  - a normal pilot run is about 100 companies (the pilot needs 50 leads a week), so about £3.30;
+  - £5 leaves about 50% headroom.
+
+  The full Greater Manchester universe (~10,000 companies, ~£330) would need a recorded spend-tier
+  raise.
+- **One check for everyone.** The daily-cap test (`dailyCapProblems`) now lives beside the model
+  meter in `@ae/verification`, and the agent playbooks' `checkSpend` calls it.
+- **How the pipeline uses it:** it checks before every extraction call. The call that crosses the cap
+  is already recorded at call time, and the next call never runs. The run then stops cleanly (its
+  claims so far stand) and raises a `spend_cap` alert. It doesn't pause the agent queue, which is for
+  agent tasks.
+- **What counts:** sandbox, probe and planner spend never count (live, non-dry-run spend only). The
+  website cap also counts **real money only** (`realOnly`, which leaves out synthetic fake-model
+  spend), so a 20,000-company rehearsal can't trip it. Agent caps still count synthetic spend, as
+  before, so their budget gates bite in simulated worlds.
+- **Flag:** the extractor sends whole pages with no size limit, so one huge site could cost more than
+  the estimate. The cap bounds the day, not a single call.

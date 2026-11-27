@@ -1,4 +1,4 @@
-import { loadModelsConfig } from "@ae/config";
+import { loadInfraConfig, loadModelsConfig } from "@ae/config";
 import { costGbp, FakeModel, FakeWebFetcher, FakeWebsiteFinder, type ModelClient } from "@ae/ports";
 import type { Storage } from "@ae/storage";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -251,5 +251,133 @@ describe("website extractor on the cost ledger", () => {
     expect(rollups[0]?.cost_gbp).toBeCloseTo(2 * each, 12);
     // Real money: it counts against the caps.
     expect(await storage.costEvents.spendSince(all.from)).toBeCloseTo(2 * each, 12);
+  });
+});
+
+describe("website_ingest daily cap (guardrail 6)", () => {
+  const ALL = { from: "2000-01-01T00:00:00Z", to: "2100-01-01T00:00:00Z" };
+  const NOW = new Date("2026-11-27T10:00:00.000Z");
+  const usage = { input_tokens: 100_000, output_tokens: 10_000 };
+  const realModel = (): ModelClient & { calls: number } => {
+    const m = {
+      name: "claude-opus-5-5",
+      calls: 0,
+      complete: async (req: Parameters<ModelClient["complete"]>[0]) => {
+        m.calls++;
+        return {
+          text: fakeWebsiteExtractor(req),
+          model: "claude-opus-5-5",
+          usage,
+          stop_reason: "end_turn" as const,
+        };
+      },
+    };
+    return m;
+  };
+  const seed = async (n: number) => {
+    const ids = Array.from({ length: n }, (_, i) => `1000000${i}`);
+    await storage.entities.upsertMany(
+      ids.map((id) => ({ ...entity, entity_id: id })),
+      runId,
+    );
+    await storage.universe.setMany(
+      ids.map((id) => ({
+        universe: "test",
+        entity_id: id,
+        included: true,
+        reason: "test",
+        staff_flag: "known" as const,
+      })),
+      runId,
+    );
+    const p = ports(goodSite());
+    p.finder = new FakeWebsiteFinder(new Map(ids.map((id) => [id, URL])));
+    return p;
+  };
+  const models = loadModelsConfig();
+  const each = () => {
+    const price = models.prices["claude-opus-5-5"];
+    if (!price) throw new Error("no price");
+    return costGbp(usage, price, models.usd_to_gbp);
+  };
+  const capsWith = (cap: number) => {
+    const c = loadInfraConfig().caps;
+    return {
+      ...c,
+      per_playbook_per_day_gbp: { ...c.per_playbook_per_day_gbp, website_ingest: cap },
+    };
+  };
+  const run = (p: Awaited<ReturnType<typeof seed>>, model: ModelClient, cap: number) =>
+    ingestWebsites(
+      storage,
+      ctx,
+      { name: "test" } as never,
+      { ...p, model },
+      {
+        models,
+        caps: capsWith(cap),
+        now: () => NOW,
+      },
+    );
+
+  it("has a cap in infra.json, and a run under it does every company", async () => {
+    expect(loadInfraConfig().caps.per_playbook_per_day_gbp.website_ingest).toBe(5);
+    const p = await seed(3);
+    const m = realModel();
+    const r = await run(p, m, each() * 10);
+    expect(m.calls).toBe(3);
+    expect(r.stopped).toBeNull();
+  });
+
+  it("the call that crosses the cap is recorded, and the next call never runs", async () => {
+    const p = await seed(5);
+    const m = realModel();
+    // Under the cap before calls 1 and 2; call 2 crosses it; call 3 is refused.
+    const r = await run(p, m, each() * 1.5);
+    expect(m.calls).toBe(2);
+    expect(r.stopped).toMatch(/website_ingest daily cap/);
+    const events = (await storage.costEvents.range(ALL)).filter(
+      (e) => e.playbook === WEBSITE_PLAYBOOK,
+    );
+    expect(events).toHaveLength(2);
+    expect(events.every((e) => e.mode === "live" && !e.dry_run && !e.synthetic)).toBe(true);
+    expect((await storage.alerts.list({ limit: 10 })).some((a) => a.kind === "spend_cap")).toBe(
+      true,
+    );
+  });
+
+  it("sandbox spend (and synthetic rehearsal spend) never counts toward it", async () => {
+    const p = await seed(3);
+    for (const o of [
+      { mode: "sandbox" as const, synthetic: false },
+      { mode: "live" as const, synthetic: true },
+    ])
+      await storage.costEvents.add({
+        event_id: crypto.randomUUID(),
+        at: NOW.toISOString(),
+        run_id: null,
+        graph_id: null,
+        graph_version: null,
+        node_id: null,
+        task_id: null,
+        opportunity_id: null,
+        revenue_path: null,
+        shape_fingerprint: null,
+        mode: o.mode,
+        category: "model",
+        unit: "model_call",
+        quantity: 1,
+        unit_price_gbp: 100,
+        amount_gbp: 100,
+        price_table_version: "t",
+        synthetic: o.synthetic,
+        dry_run: false,
+        playbook: WEBSITE_PLAYBOOK,
+        step_id: WEBSITE_STEP,
+      });
+    const m = realModel();
+    const r = await run(p, m, each() * 10);
+    expect(m.calls).toBe(3);
+    expect(r.stopped).toBeNull();
   });
 });

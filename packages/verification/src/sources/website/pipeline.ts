@@ -1,9 +1,10 @@
-import { loadModelsConfig, type ModelsConfig } from "@ae/config";
+import { type InfraConfig, loadInfraConfig, loadModelsConfig, type ModelsConfig } from "@ae/config";
 import type { UniverseConfig } from "@ae/contracts";
 import type { Storage } from "@ae/storage";
 import type { VerificationContext } from "../../context.ts";
 import { ingestClaims } from "../../ingest.ts";
 import { type CostMode, meteredModel, withMeter } from "../../metered-model.ts";
+import { dailyCapProblems } from "../../spend-caps.ts";
 import { collectWebsiteClaims, type WebsitePorts } from "./ingest.ts";
 
 /** Cost labels for the website extractor's model calls. */
@@ -27,6 +28,9 @@ export async function ingestWebsites(
     models?: ModelsConfig;
     /** Cost mode (default "live"). A sandbox building its own world passes "sandbox". */
     costMode?: CostMode;
+    /** Spend caps (default: packages/config infra.json). */
+    caps?: InfraConfig["caps"];
+    now?: () => Date;
   } = {},
 ) {
   const run = await storage.runs.start({ kind: "websites" });
@@ -49,11 +53,37 @@ export async function ingestWebsites(
     (m) => m.entity_id,
   );
   const targets = o.limit ? members.slice(0, o.limit) : members;
-  const stats = { companies: 0, found: 0, quarantined: 0, claims: 0, rejected_extractions: 0 };
+  const stats = {
+    companies: 0,
+    found: 0,
+    quarantined: 0,
+    claims: 0,
+    rejected_extractions: 0,
+    /** Why the run stopped early (a daily spend cap), or null. */
+    stopped: null as string | null,
+  };
+  const caps = o.caps ?? loadInfraConfig().caps;
   try {
     for (const id of targets) {
       const entity = await storage.entities.get(id);
       if (!entity) continue;
+      // Guardrail 6, the same daily check the agent playbooks use, before every extraction call: the
+      // call that crossed a cap is already on the ledger (metered at call time); the next one never
+      // runs. Real money only, so a rehearsal on the fake model can't trip it; never sandbox spend.
+      const over = await dailyCapProblems(storage, caps, WEBSITE_PLAYBOOK, {
+        realOnly: true,
+        ...(o.now ? { now: o.now() } : {}),
+      });
+      if (over.length) {
+        stats.stopped = over.join(", ");
+        await storage.alerts.raise("spend_cap", `Website ingestion stopped: ${stats.stopped}`, {
+          playbook: WEBSITE_PLAYBOOK,
+          run_id: run.run_id,
+          companies_done: stats.companies,
+        });
+        o.log?.(`websites: stopped at ${stats.companies} companies (${stats.stopped})`);
+        break;
+      }
       const r = await collectWebsiteClaims(entity, metered, run.run_id, storage);
       stats.companies++;
       if (r.quarantined) stats.quarantined++;

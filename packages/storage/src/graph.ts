@@ -577,9 +577,11 @@ export function graphStorage(db: SqlDriver) {
        */
       spendSince: async (
         since: string,
-        o: { playbook?: string; excludeSteps?: string[] } = {},
+        o: { playbook?: string; excludeSteps?: string[]; realOnly?: boolean } = {},
       ): Promise<number> => {
         const ex = o.excludeSteps ?? [];
+        // realOnly: leave out synthetic (fake-model) spend.
+        const real = o.realOnly ? " AND synthetic = 0" : "";
         const sum = async (sql: string, args: SqlValue[]) =>
           Number((await all(sql, args))[0]?.s ?? 0);
         if (isDayStart(since)) {
@@ -590,7 +592,7 @@ export function graphStorage(db: SqlDriver) {
             args.push(o.playbook);
           }
           const total = await sum(
-            `SELECT COALESCE(SUM(cost_gbp), 0) AS s FROM daily_rollups WHERE ${where.join(" AND ")}`,
+            `SELECT COALESCE(SUM(cost_gbp), 0) AS s FROM daily_rollups WHERE ${where.join(" AND ")}${real}`,
             args,
           );
           if (!ex.length) return total;
@@ -608,7 +610,7 @@ export function graphStorage(db: SqlDriver) {
           return (
             total -
             (await sum(
-              `SELECT COALESCE(SUM(amount_gbp), 0) AS s FROM cost_events WHERE ${exWhere.join(" AND ")}`,
+              `SELECT COALESCE(SUM(amount_gbp), 0) AS s FROM cost_events WHERE ${exWhere.join(" AND ")}${real}`,
               exArgs,
             ))
           );
@@ -624,7 +626,7 @@ export function graphStorage(db: SqlDriver) {
           args.push(...ex);
         }
         return sum(
-          `SELECT COALESCE(SUM(amount_gbp), 0) AS s FROM cost_events WHERE ${where.join(" AND ")}`,
+          `SELECT COALESCE(SUM(amount_gbp), 0) AS s FROM cost_events WHERE ${where.join(" AND ")}${real}`,
           args,
         );
       },
