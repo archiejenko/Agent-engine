@@ -622,6 +622,35 @@ async function supersede(d: IdeaDeps, c: IdeaCard) {
 // ---- Thread: questions (answered by the planner, with evidence), comments, legal check
 
 const REVISABLE = ["first_year_value_gbp", "budget_gbp", "sample_size", "time_cap_days"] as const;
+/**
+ * The planner's answer schema. v2 (2026-11-27): every object sets additionalProperties: false and
+ * `revise` lists its keys; v1's bare {type: ["object","null"]} would be refused by Anthropic's
+ * structured output (guarded by tests/structured-output.test.ts).
+ */
+export const IDEA_ANSWER_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  required: ["answer", "evidence"],
+  properties: {
+    answer: { type: "string" },
+    evidence: { type: "array", items: { type: "string" } },
+    revise: {
+      anyOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["key", "value", "why"],
+          properties: {
+            key: { type: "string", enum: [...REVISABLE] },
+            value: { type: "number" },
+            why: { type: "string" },
+          },
+        },
+        { type: "null" },
+      ],
+    },
+  },
+};
 interface PlannerAnswer {
   answer: string;
   evidence: string[];
@@ -649,20 +678,12 @@ export async function askQuestion(d: IdeaDeps, cardId: string, question: string,
   if (!d.model) throw new Error("no planner model");
   const res = await d.model.complete({
     prompt_id: "idea_answer",
-    prompt_version: 1,
+    prompt_version: 2,
     role: "planner",
     system:
       "You answer Archie's question about one idea card. Use only the card. Cite the evidence ids you rely on (fact ids or signal ids from the card). If the question shows an assumption should change, propose one revision of first_year_value_gbp, budget_gbp, sample_size or time_cap_days. Reply as JSON.",
     user: JSON.stringify({ card: c, question }),
-    json_schema: {
-      type: "object",
-      properties: {
-        answer: { type: "string" },
-        evidence: { type: "array", items: { type: "string" } },
-        revise: { type: ["object", "null"] },
-      },
-      required: ["answer", "evidence"],
-    },
+    json_schema: IDEA_ANSWER_SCHEMA,
     max_tokens: 800,
     meter: { mode: "planner", opportunity_id: cardId },
   });

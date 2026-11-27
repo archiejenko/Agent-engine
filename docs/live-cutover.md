@@ -140,7 +140,7 @@ Hand-verify first, so the comparison has a yardstick
 - [ ] Hand-verify 150 companies on the Golden set page; read Metrics → accuracy and calibration
 
 Prompts on the real model (~20 real companies each; read every output)
-- [ ] `website_extract` v1 (`packages/verification/src/sources/website/prompts.ts`): exact quotes, allow-listed fields only, role-based emails only; include pages with injected instructions
+- [ ] `website_extract` v2 (`packages/verification/src/sources/website/prompts.ts`; value typed per field): exact quotes, allow-listed fields only, role-based emails only; include pages with injected instructions
 - [ ] `opportunity_explain` v1 (`packages/opportunity/src/explain.ts`): cites only trace facts; measure how often the code check falls back to the template
 - [ ] `sme_outreach_draft` v2 (`packages/infra/src/playbooks/sme_outreach.ts`) and `sme_letter_draft` v2 (`packages/infra/src/playbooks/sme_letter.ts`): one brief statement verbatim as the first sentence, why it matters, then the offer; measure how often the copy rules reject a draft and which rule; read 20 of each for tone and repeated phrases (the checker doesn't catch repetition)
 

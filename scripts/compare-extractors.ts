@@ -89,7 +89,7 @@ async function run(m: ModelClient, req: ModelRequest) {
       ms: Date.now() - t0,
       gbp: 0,
       usage: null,
-      error: (e as Error).message.slice(0, 160),
+      error: (e as Error).message.replace(/\s+/g, " ").slice(0, 300),
     };
   }
 }
@@ -103,6 +103,59 @@ const NOT_RUN = {
   usage: null,
   error: "not run (no ANTHROPIC_API_KEY)",
 } satisfies Awaited<ReturnType<typeof run>>;
+// Per-model health: print each model's first error, and stop calling a model after
+// MAX_CONSECUTIVE_ERRORS errors in a row (a broken request fails every time; no point paying for the
+// other side's calls just to collect the same 400 twenty times).
+const MAX_CONSECUTIVE_ERRORS = 3;
+type Side = "opus" | "hyd";
+const LABEL: Record<Side, string> = { opus: "claude-opus-5-5", hyd: "gemini-4-hydrogen" };
+const health: Record<
+  Side,
+  {
+    calls: number;
+    ok: number;
+    consecutive: number;
+    stopped_after: number | null;
+    first_error: string | null;
+  }
+> = {
+  opus: {
+    calls: 0,
+    ok: 0,
+    consecutive: 0,
+    stopped_after: null,
+    first_error: withOpus ? null : "no ANTHROPIC_API_KEY",
+  },
+  hyd: { calls: 0, ok: 0, consecutive: 0, stopped_after: null, first_error: null },
+};
+async function call(k: Side, m: ModelClient | null, req: ModelRequest) {
+  const hl = health[k];
+  if (!m) return NOT_RUN;
+  if (hl.stopped_after !== null)
+    return {
+      ...NOT_RUN,
+      error: `skipped: stopped after ${MAX_CONSECUTIVE_ERRORS} consecutive errors`,
+    };
+  const r = await run(m, req);
+  hl.calls++;
+  if (r.ok) {
+    hl.ok++;
+    hl.consecutive = 0;
+    return r;
+  }
+  hl.consecutive++;
+  if (hl.first_error === null) {
+    hl.first_error = r.error;
+    console.error(`${LABEL[k]} first error: ${r.error}`);
+  }
+  if (hl.consecutive >= MAX_CONSECUTIVE_ERRORS) {
+    hl.stopped_after = hl.calls;
+    console.error(
+      `${LABEL[k]}: ${MAX_CONSECUTIVE_ERRORS} consecutive errors, no more calls to it this run`,
+    );
+  }
+  return r;
+}
 const rows: {
   id: string;
   expected: Facts;
@@ -124,7 +177,7 @@ for (const t of sample) {
     system: WEBSITE_EXTRACT.system,
     user: `Company: ${c.name}. Extract the allowed facts from the website pages below.`,
     untrusted: forModel.pages.map((p) => `--- ${p.url}\n${p.text}`).join("\n\n"),
-    json_schema: WEBSITE_EXTRACT.schema as unknown as Record<string, unknown>,
+    json_schema: WEBSITE_EXTRACT.schema,
     max_tokens: 2000,
   };
   const expected: Facts = {
@@ -133,11 +186,11 @@ for (const t of sample) {
     contact_email: `info@site-${t.entity_id}.example`,
     ...(t.jobs.length ? { job_postings: t.jobs } : {}),
   };
-  const o = opus ? await run(opus, req) : NOT_RUN;
-  const h = await run(hydrogen, req);
+  const o = await call("opus", opus, req);
+  const h = await call("hyd", hydrogen, req);
   rows.push({ id: t.entity_id, expected, opus: o, hyd: h });
   console.log(
-    `${rows.length}/${sample.length} ${t.entity_id}: opus ${opus ? `${o.ms}ms` : "not run"}, hydrogen ${h.ms}ms${h.ok ? "" : ` ERROR ${h.error}`}`,
+    `${rows.length}/${sample.length} ${t.entity_id}: opus ${o.ok ? `${o.ms}ms` : "error/not run"}, hydrogen ${h.ok ? `${h.ms}ms` : "error/not run"}`,
   );
 }
 
@@ -183,28 +236,34 @@ const score = (k: "opus" | "hyd") => {
     p90_ms: sorted[Math.floor(sorted.length * 0.9)] ?? 0,
   };
 };
-// If every Hydrogen call failed (no credit, an outage…), there's nothing to compare: say so and leave
-// the report as it was, rather than writing a table of zeros that reads as "Hydrogen got it all wrong".
-const failed = rows.filter((r) => !r.hyd.ok);
-if (failed.length === rows.length) {
-  const reasons = [...new Set(failed.map((r) => r.hyd.error))].join(" | ");
-  console.error(`Every Hydrogen call failed, so no comparison was written. Reasons: ${reasons}`);
+// A model with no successful call didn't run: its row says so, with the error, instead of a table of
+// zeros that reads as "it got everything wrong". If neither ran, there's nothing to report.
+const ran = (k: Side) => health[k].ok > 0;
+if (!ran("opus") && !ran("hyd")) {
+  console.error(
+    `Neither model returned a result, so no comparison was written. Opus: ${health.opus.first_error}; Hydrogen: ${health.hyd.first_error}`,
+  );
   process.exit(3);
 }
 const O = score("opus");
 const H = score("hyd");
 let agree = 0;
 let compared = 0;
-for (const r of rows)
-  for (const f of FIELDS) {
-    if (!(f in r.opus.facts) && !(f in r.hyd.facts)) continue;
-    compared++;
-    if (norm(r.opus.facts[f]) === norm(r.hyd.facts[f])) agree++;
-  }
+if (ran("opus") && ran("hyd"))
+  for (const r of rows)
+    for (const f of FIELDS) {
+      if (!(f in r.opus.facts) && !(f in r.hyd.facts)) continue;
+      compared++;
+      if (norm(r.opus.facts[f]) === norm(r.hyd.facts[f])) agree++;
+    }
 const expectedTotal = rows.reduce((a, r) => a + FIELDS.filter((f) => f in r.expected).length, 0);
 const pct = (x: number, of: number) => (of ? `${((100 * x) / of).toFixed(1)}%` : "n/a");
-const line = (name: string, s: ReturnType<typeof score>) =>
-  `| ${name} | ${pct(s.right, expectedTotal)} (${s.right}/${expectedTotal}) | ${s.wrong} | ${s.missing} | ${s.extra} | ${s.errors} | ${s.invalid_json} | £${s.avg_gbp.toFixed(4)} | ${Math.round(s.avg_in)} / ${Math.round(s.avg_out)} | ${Math.round(s.avg_ms)} ms (p90 ${s.p90_ms} ms) |`;
+const didntRun = (k: Side) =>
+  `| ${LABEL[k]} | didn't run (error: ${(health[k].first_error ?? "unknown").replace(/\|/g, "/")}) | | | | | | | | |`;
+const line = (k: Side, s: ReturnType<typeof score>) =>
+  !ran(k)
+    ? didntRun(k)
+    : `| ${LABEL[k]} | ${pct(s.right, expectedTotal)} (${s.right}/${expectedTotal}) | ${s.wrong} | ${s.missing} | ${s.extra} | ${s.errors} | ${s.invalid_json} | £${s.avg_gbp.toFixed(4)} | ${Math.round(s.avg_in)} / ${Math.round(s.avg_out)} | ${Math.round(s.avg_ms)} ms (p90 ${s.p90_ms} ms) |`;
 const md = `# Website extractor: Claude Opus 5.5 vs Gemini 4 Hydrogen
 
 Run ${new Date().toISOString()} on ${rows.length} synthetic-world fixture sites (3 pages each, cut by the
@@ -213,20 +272,28 @@ repo. Prices: models.json (price table ${models.price_table_version}), USD→GBP
 
 | Model | Fields right | Wrong | Missing | Extra (not asked / injected) | Errors | Invalid JSON | Avg cost a call | Avg tokens in / out | Avg latency |
 |---|---|---|---|---|---|---|---|---|---|
-${withOpus ? line("claude-opus-5-5", O) : "| claude-opus-5-5 | not run: no ANTHROPIC_API_KEY in this session | | | | | | | | |"}
-${line("gemini-4-hydrogen", H)}
+${line("opus", O)}
+${line("hyd", H)}
+${(["opus", "hyd"] as const)
+  .filter((k) => ran(k) && health[k].stopped_after !== null)
+  .map(
+    (k) =>
+      `\n${LABEL[k]} stopped after ${health[k].stopped_after} calls (${MAX_CONSECUTIVE_ERRORS} errors in a row; first error: ${health[k].first_error}). Its score counts the pages it never saw as missing.\n`,
+  )
+  .join("")}
 
-Field-level agreement between the two models: ${withOpus ? `${pct(agree, compared)} (${agree}/${compared} fields either returned)` : "not measured (Opus not run)"}.
+Field-level agreement between the two models: ${ran("opus") && ran("hyd") ? `${pct(agree, compared)} (${agree}/${compared} fields either returned)` : "not measured (one model didn't run)"}.
 
-Wrong values, Opus: ${withOpus ? (O.wrongs.length ? O.wrongs.slice(0, 20).join("; ") : "none") : "not run"}
+Wrong values, Opus: ${ran("opus") ? (O.wrongs.length ? O.wrongs.slice(0, 20).join("; ") : "none") : "didn't run"}
 
-Wrong values, Hydrogen: ${H.wrongs.length ? H.wrongs.slice(0, 20).join("; ") : "none"}
+Wrong values, Hydrogen: ${ran("hyd") ? (H.wrongs.length ? H.wrongs.slice(0, 20).join("; ") : "none") : "didn't run"}
 `;
+const tidy = md.replace(/\n{3,}/g, "\n\n");
 const out = resolve(ROOT, "docs/gates/extractor-comparison.md");
-writeFileSync(out, md);
+writeFileSync(out, tidy);
 writeFileSync(
   resolve(ROOT, "data/extractor-comparison.json"),
-  JSON.stringify({ opus: O, hydrogen: H, agree, compared, rows }, null, 1),
+  JSON.stringify({ opus: O, hydrogen: H, health, agree, compared, rows }, null, 1),
 );
-console.log(md);
+console.log(tidy);
 console.log(`Written: ${out}`);

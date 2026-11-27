@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ModelClient, ModelRequest, ModelResult } from "./model.ts";
+import { structuredOutputProblems } from "./structured-output.ts";
 
 /**
  * REAL ModelClient (cutover). Built against @anthropic-ai/sdk 1.6.0's type definitions; NOT yet run
@@ -36,6 +37,15 @@ export class AnthropicModelClient implements ModelClient {
 
   async complete(req: ModelRequest): Promise<ModelResult> {
     const role = this.roles[req.role];
+    // Fail closed before the call: a schema Anthropic's structured output rejects would 400 anyway;
+    // this names the exact problem instead.
+    if (req.json_schema) {
+      const problems = structuredOutputProblems(req.json_schema);
+      if (problems.length)
+        throw new Error(
+          `${req.prompt_id} v${req.prompt_version}: schema not accepted by Claude structured output: ${problems.join("; ")}`,
+        );
+    }
     const content: Anthropic.Beta.BetaContentBlockParam[] = [{ type: "text", text: req.user }];
     if (req.untrusted) {
       content.push({

@@ -47,3 +47,32 @@ describe("Claude adapter request shape", () => {
     expect(res.usage).toEqual({ input_tokens: 10, output_tokens: 2 });
   });
 });
+
+describe("Claude adapter refuses a schema structured output would reject", () => {
+  it("throws before any network call when json_schema has an empty value schema", async () => {
+    let called = false;
+    const fakeFetch = (async () => {
+      called = true;
+      return Response.json({});
+    }) as unknown as typeof fetch;
+    const roles = { extractor: { model: "claude-opus-5-5", effort: "low" as const } } as never;
+    const client = new AnthropicModelClient(roles, { apiKey: "test-dummy", fetch: fakeFetch });
+    await expect(
+      client.complete({
+        prompt_id: "website_extract",
+        prompt_version: 1,
+        role: "extractor",
+        system: "s",
+        user: "u",
+        json_schema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["value"],
+          properties: { value: {} },
+        },
+        max_tokens: 100,
+      }),
+    ).rejects.toThrow(/empty schema/);
+    expect(called).toBe(false);
+  });
+});

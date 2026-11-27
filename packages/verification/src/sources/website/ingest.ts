@@ -144,7 +144,7 @@ export async function collectWebsiteClaims(
     system: WEBSITE_EXTRACT.system,
     user: `Company: ${entity.name}. Extract the allowed facts from the website pages below.`,
     untrusted: forModel.pages.map((t) => `--- ${t.url}\n${t.text}`).join("\n\n"),
-    json_schema: WEBSITE_EXTRACT.schema as unknown as Record<string, unknown>,
+    json_schema: WEBSITE_EXTRACT.schema,
     max_tokens: 2000,
   });
   result.model_usage = { ...res.usage, model: res.model };

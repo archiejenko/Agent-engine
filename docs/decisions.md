@@ -1005,3 +1005,30 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   (environment or `.dev.vars`).
 - **`pnpm compare:extractors` reads both its keys that way.**
 - **An alias belongs to its own key only,** and no value is ever shown.
+
+## 2026-11-27 — Extractor schema typed per field; first real Opus vs Hydrogen comparison
+
+- **Why.** `website_extract` v1 sent `value: {}` (any JSON) in its structured-output schema. Anthropic
+  rejects an empty schema with a 400, so every Opus call failed: the production default extractor
+  could not have run at cutover. Gemini accepted it, which is why only Hydrogen had results.
+- **`website_extract` v2.** Each fact is one `anyOf` branch per allowed field; `value` is typed from
+  the field registry's `value_type` (string/date/enum → string, integer, number, boolean, array → list
+  of strings; object is refused). The field name is a one-value `enum` (both providers accept it). A
+  field-registry type change now changes the schema with no code change.
+- **`idea_answer` v2.** The planner's answer schema had the same class of problem (no
+  `additionalProperties: false`; `revise` an object with no properties). It now lists `revise`'s keys.
+- **Guard.** `structuredOutputProblems` (`packages/ports/src/structured-output.ts`) checks a schema
+  against Anthropic's documented structured-output limits (read 2026-11-27, fail closed on unknown
+  keywords). `tests/structured-output.test.ts` checks every schema we send and fails if any call site
+  sends a schema that isn't in its checked list. The Claude adapter also refuses a failing schema
+  before making the call.
+- **Script honesty.** `pnpm compare:extractors` prints each model's first error, stops calling a model
+  after 3 errors in a row, and reports "didn't run (error: …)" rather than 0%.
+- **Result, 2026-11-27 19:59 UTC, 20 fixture sites, same pages and v2 prompt for both:**
+  - Opus 5.5: 70/70 fields right, 0 errors, £0.0068 a call, 2.3 s average (2.9 s p90);
+  - Hydrogen: 69/70 (dropped one of two job postings), 0 errors, £0.0041 a call, 2.8 s (4.6 s p90);
+  - both resisted the prompt injection (0 extra fields); the models agreed on 69/70 fields;
+  - the whole run cost about £0.22.
+
+  These are small synthetic pages; real pages are ~8,500 tokens. **The default extractor is unchanged
+  (Opus).** Choosing it is Archie's call from `docs/gates/extractor-comparison.md`.
