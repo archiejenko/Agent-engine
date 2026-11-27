@@ -23,12 +23,13 @@ const vars = loadDevVars();
 const key = (n: string) => process.env[n] ?? vars[n] ?? "";
 const anthropicKey = key("ANTHROPIC_API_KEY");
 const geminiKey = key("GEMINI_API_KEY");
-if (!anthropicKey || !geminiKey) {
-  console.error(
-    "Needs ANTHROPIC_API_KEY and GEMINI_API_KEY (environment or .dev.vars). Nothing was run.",
-  );
+if (!geminiKey) {
+  console.error("Needs GEMINI_API_KEY (environment or .dev.vars). Nothing was run.");
   process.exit(2);
 }
+// Without a Claude key, only Hydrogen runs (scored against the fixtures' known answers); the Opus
+// columns say "not run". Nothing is filled in for the side that didn't run.
+const withOpus = Boolean(anthropicKey);
 const models = loadModelsConfig();
 const textCfg = loadVerificationConfig().website_extraction;
 const n = Number(arg("pages") ?? 20);
@@ -43,7 +44,9 @@ const companies = Array.from({ length: Math.ceil(n / 0.8) + 4 }, (_, i) => ({
 const fx = generateSites(companies, 2026);
 const sample = fx.truth.filter((t) => t.has_site).slice(0, n);
 
-const opus: ModelClient = new AnthropicModelClient(models.roles, { apiKey: anthropicKey });
+const opus: ModelClient | null = withOpus
+  ? new AnthropicModelClient(models.roles, { apiKey: anthropicKey })
+  : null;
 const hydrogen: ModelClient = new GeminiModelClient({
   apiKey: geminiKey,
   model: "gemini-4-hydrogen",
@@ -90,6 +93,15 @@ async function run(m: ModelClient, req: ModelRequest) {
   }
 }
 
+const NOT_RUN = {
+  ok: false,
+  valid: false,
+  facts: {} as Facts,
+  ms: 0,
+  gbp: 0,
+  usage: null,
+  error: "not run (no ANTHROPIC_API_KEY)",
+} satisfies Awaited<ReturnType<typeof run>>;
 const rows: {
   id: string;
   expected: Facts;
@@ -120,9 +132,12 @@ for (const t of sample) {
     contact_email: `info@site-${t.entity_id}.example`,
     ...(t.jobs.length ? { job_postings: t.jobs } : {}),
   };
-  const [o, h] = [await run(opus, req), await run(hydrogen, req)];
+  const o = opus ? await run(opus, req) : NOT_RUN;
+  const h = await run(hydrogen, req);
   rows.push({ id: t.entity_id, expected, opus: o, hyd: h });
-  console.log(`${rows.length}/${sample.length} ${t.entity_id}: opus ${o.ms}ms, hydrogen ${h.ms}ms`);
+  console.log(
+    `${rows.length}/${sample.length} ${t.entity_id}: opus ${opus ? `${o.ms}ms` : "not run"}, hydrogen ${h.ms}ms${h.ok ? "" : ` ERROR ${h.error}`}`,
+  );
 }
 
 const score = (k: "opus" | "hyd") => {
@@ -167,6 +182,14 @@ const score = (k: "opus" | "hyd") => {
     p90_ms: sorted[Math.floor(sorted.length * 0.9)] ?? 0,
   };
 };
+// If every Hydrogen call failed (no credit, an outage…), there's nothing to compare: say so and leave
+// the report as it was, rather than writing a table of zeros that reads as "Hydrogen got it all wrong".
+const failed = rows.filter((r) => !r.hyd.ok);
+if (failed.length === rows.length) {
+  const reasons = [...new Set(failed.map((r) => r.hyd.error))].join(" | ");
+  console.error(`Every Hydrogen call failed, so no comparison was written. Reasons: ${reasons}`);
+  process.exit(3);
+}
 const O = score("opus");
 const H = score("hyd");
 let agree = 0;
@@ -189,12 +212,12 @@ repo. Prices: models.json (price table ${models.price_table_version}), USD→GBP
 
 | Model | Fields right | Wrong | Missing | Extra (not asked / injected) | Errors | Invalid JSON | Avg cost a call | Avg tokens in / out | Avg latency |
 |---|---|---|---|---|---|---|---|---|---|
-${line("claude-opus-5-5", O)}
+${withOpus ? line("claude-opus-5-5", O) : "| claude-opus-5-5 | not run: no ANTHROPIC_API_KEY in this session | | | | | | | | |"}
 ${line("gemini-4-hydrogen", H)}
 
-Field-level agreement between the two models: ${pct(agree, compared)} (${agree}/${compared} fields either returned).
+Field-level agreement between the two models: ${withOpus ? `${pct(agree, compared)} (${agree}/${compared} fields either returned)` : "not measured (Opus not run)"}.
 
-Wrong values, Opus: ${O.wrongs.length ? O.wrongs.slice(0, 20).join("; ") : "none"}
+Wrong values, Opus: ${withOpus ? (O.wrongs.length ? O.wrongs.slice(0, 20).join("; ") : "none") : "not run"}
 
 Wrong values, Hydrogen: ${H.wrongs.length ? H.wrongs.slice(0, 20).join("; ") : "none"}
 `;

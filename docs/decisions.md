@@ -1022,6 +1022,21 @@ theme only (CSS variables); default view last 30 days, live only, compare on. Ma
   A 100-company run would cost about £1.20–£1.80 on Hydrogen, against about £3.30 on Opus.
 - **The £5/day `website_ingest` cap is unchanged.** It still fits Opus. If Hydrogen becomes the
   default, about £2.50 would keep the same ~50% headroom over a normal run. That's Archie's call.
+- **Comparison attempt, 2026-11-27 16:23 UTC.** With `GEMINI_API_KEY` set (and still no Claude key),
+  Hydrogen was run alone on 20 fixture sites. Google refused every call: 19 with HTTP 402 (prepaid
+  credits depleted) and 1 with HTTP 503. Nothing was billed and there is still no quality evidence,
+  so the default stays Opus. The request did reach Google with a key it accepted: the answer was a
+  billing refusal, not 401 (bad key) or 400 (bad request). The script now writes no report when
+  every call fails.
+- **Second run, 2026-11-27 16:42 UTC (after credit was added).** Hydrogen alone on 20 fixture sites:
+  - 69/70 fields right; the 1 wrong one dropped one of two job postings (the text it was sent had
+    both);
+  - 0 missing, 0 extra (the prompt injection was resisted), 0 errors, 0 invalid JSON;
+  - £0.0038 a call on these tiny pages (~710 input tokens), about £0.013 at a real page's ~8,500
+    tokens;
+  - latency 3.1 s on average, 5.1 s at p90.
+
+  Opus wasn't run (no Claude key), so the default stays Opus until both run on the same pages.
 
 ## 2026-11-27 — Cockpit U2: Home cockpit (U1 approved with changes)
 
