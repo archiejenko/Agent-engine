@@ -59,6 +59,33 @@ export interface KeyView {
 
 export class KeyError extends Error {}
 
+/** The names a key may be read under: its own, then its catalogue aliases (keys.json). */
+export function keyNames(name: string, catalogue: KeysConfig = loadKeysConfig()): string[] {
+  return [name, ...(catalogue.keys.find((k) => k.name === name)?.aliases ?? [])];
+}
+
+/** Reveals a key by name, falling back to its aliases. The only place aliases are applied. */
+async function revealKey(store: KeyStore, name: string, catalogue: KeysConfig) {
+  for (const n of keyNames(name, catalogue)) {
+    const v = await store.reveal(n);
+    if (v) return v;
+  }
+  return null;
+}
+
+/**
+ * For hand-run Node scripts (no storage, no key registry): a key from the environment or .dev.vars,
+ * by name or one of its aliases. The value goes straight into a client; it's never printed.
+ */
+export function keyFromEnv(
+  name: string,
+  env: Record<string, string | undefined>,
+  catalogue: KeysConfig = loadKeysConfig(),
+): string | null {
+  for (const n of keyNames(name, catalogue)) if (env[n]) return env[n] as string;
+  return null;
+}
+
 export class KeyRing {
   readonly catalogue: KeysConfig;
   constructor(
@@ -80,7 +107,8 @@ export class KeyRing {
     const out: KeyView[] = [];
     for (const k of this.catalogue.keys) {
       const r = rows.get(k.name);
-      const saved = await this.store.has(k.name);
+      let saved = false;
+      for (const n of keyNames(k.name, this.catalogue)) if (!saved) saved = await this.store.has(n);
       out.push({
         name: k.name,
         label: k.label,
@@ -128,7 +156,7 @@ export class KeyRing {
       const row = await this.storage.keyRegistry.get(name);
       if (row?.status === "failing")
         throw new KeyError(`key ${name} is failing; its playbooks are paused until it's replaced`);
-      const v = await this.store.reveal(name);
+      const v = await revealKey(this.store, name, this.catalogue);
       if (!v) {
         if (row?.status !== "unset")
           await this.storage.keyRegistry.put(name, {
@@ -160,7 +188,7 @@ export class KeyRing {
   /** The model client's key (header only). Null when unset. */
   async modelKey(): Promise<string | null> {
     const k = this.catalogue.keys.find((x) => x.model);
-    return k ? this.store.reveal(k.name) : null;
+    return k ? revealKey(this.store, k.name, this.catalogue) : null;
   }
 }
 

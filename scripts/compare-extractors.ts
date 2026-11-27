@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadModelsConfig, loadVerificationConfig } from "@ae/config";
+import { keyFromEnv } from "@ae/infra";
 import { costGbp, type ModelClient, type ModelRequest } from "@ae/ports";
 import { AnthropicModelClient } from "@ae/ports/anthropic";
 import { GeminiModelClient } from "@ae/ports/gemini";
@@ -20,7 +21,9 @@ const arg = (n: string) => {
   return i > 0 ? process.argv[i + 1] : undefined;
 };
 const vars = loadDevVars();
-const key = (n: string) => process.env[n] ?? vars[n] ?? "";
+// Keys through keys.ts (rule 20), which also tries each key's catalogue aliases (keys.json): the Claude
+// key may be saved as EXTRACTOR_ANTHROPIC_API_KEY.
+const key = (n: string) => keyFromEnv(n, { ...vars, ...process.env }) ?? "";
 const anthropicKey = key("ANTHROPIC_API_KEY");
 const geminiKey = key("GEMINI_API_KEY");
 if (!geminiKey) {

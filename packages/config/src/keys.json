@@ -16,7 +16,8 @@
         "monitoring_subscription",
         "watch_alert"
       ],
-      "tools": []
+      "tools": [],
+      "aliases": ["EXTRACTOR_ANTHROPIC_API_KEY"]
     },
     {
       "name": "CH_API_KEY",
