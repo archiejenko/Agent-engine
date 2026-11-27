@@ -81,3 +81,4 @@ export function createD1Storage(d: {
     r2BlobStore(d.files),
   );
 }
+export type { SourceFetchRow, V4Storage } from "./v4.ts";

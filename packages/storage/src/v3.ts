@@ -695,7 +695,7 @@ export function v3Storage(db: SqlDriver, bodies: Bodies, blobs: BlobStore) {
           if (Number(r.synthetic) === 1) a.synthetic = true;
         }
         for (const r of await all(
-          `SELECT entity_id, expected_value_gbp, status, module FROM opportunities
+          `SELECT entity_id, expected_value_gbp, status, module FROM lead_scores
            WHERE status IN ('proposed', 'approved', 'actioned') ORDER BY created_at`,
         ))
           get(r.entity_id as string).opportunity = {

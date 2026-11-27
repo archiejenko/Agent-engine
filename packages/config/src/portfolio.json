@@ -1,0 +1,120 @@
+{
+  "_note": "v4 routes (how we make money) and channels (how buyers find us). Template graphs are built in Phase 4; until then they're null. Default stage caps are ASSUMED placeholders (rule 23): each opportunity's config sets its own, signed by Archie.",
+  "version": 1,
+  "routes": [
+    {
+      "route_id": "service_retainer",
+      "template_graph": null,
+      "default_stage_caps": {
+        "smoke_test": 25,
+        "build_minimum": 25,
+        "distribute": 75,
+        "serve": 25
+      },
+      "cost_to_serve_model": {
+        "assumed": true
+      },
+      "status": "active"
+    },
+    {
+      "route_id": "productised_tool",
+      "template_graph": null,
+      "default_stage_caps": {
+        "smoke_test": 25,
+        "build_minimum": 25,
+        "distribute": 75,
+        "serve": 25
+      },
+      "cost_to_serve_model": {
+        "assumed": true
+      },
+      "status": "planned"
+    },
+    {
+      "route_id": "x402_api",
+      "template_graph": null,
+      "default_stage_caps": {
+        "smoke_test": 25,
+        "build_minimum": 25,
+        "distribute": 75,
+        "serve": 25
+      },
+      "cost_to_serve_model": {
+        "assumed": true
+      },
+      "status": "planned"
+    },
+    {
+      "route_id": "marketplace_gig",
+      "template_graph": null,
+      "default_stage_caps": {
+        "smoke_test": 25,
+        "build_minimum": 25,
+        "distribute": 75,
+        "serve": 25
+      },
+      "cost_to_serve_model": {
+        "assumed": true
+      },
+      "status": "planned"
+    },
+    {
+      "route_id": "digital_product",
+      "template_graph": null,
+      "default_stage_caps": {
+        "smoke_test": 25,
+        "build_minimum": 25,
+        "distribute": 75,
+        "serve": 25
+      },
+      "cost_to_serve_model": {
+        "assumed": true
+      },
+      "status": "planned"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "cold_email",
+      "template_graph": null,
+      "allowed_markets": ["UK", "US"],
+      "compliance_pack_ids": ["uk@1", "us@1"],
+      "status": "active"
+    },
+    {
+      "channel_id": "marketplace_listing",
+      "template_graph": null,
+      "allowed_markets": ["UK", "US"],
+      "compliance_pack_ids": [],
+      "status": "planned"
+    },
+    {
+      "channel_id": "seo_pages",
+      "template_graph": null,
+      "allowed_markets": ["UK", "US"],
+      "compliance_pack_ids": [],
+      "status": "planned"
+    },
+    {
+      "channel_id": "agent_directory",
+      "template_graph": null,
+      "allowed_markets": ["UK", "US"],
+      "compliance_pack_ids": [],
+      "status": "planned"
+    },
+    {
+      "channel_id": "x_content",
+      "template_graph": null,
+      "allowed_markets": ["UK", "US"],
+      "compliance_pack_ids": [],
+      "status": "planned"
+    },
+    {
+      "channel_id": "partnership",
+      "template_graph": null,
+      "allowed_markets": ["UK", "US"],
+      "compliance_pack_ids": [],
+      "status": "planned"
+    }
+  ]
+}

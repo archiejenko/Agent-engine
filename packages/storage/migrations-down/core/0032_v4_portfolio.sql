@@ -1,0 +1,27 @@
+-- Reverses 0032_v4_portfolio (local and test use only).
+ALTER TABLE suppressions DROP COLUMN expires_at;
+ALTER TABLE suppressions DROP COLUMN source;
+ALTER TABLE suppressions DROP COLUMN market;
+ALTER TABLE suppressions DROP COLUMN scope;
+ALTER TABLE cost_events DROP COLUMN market;
+ALTER TABLE cost_events DROP COLUMN cost_kind;
+ALTER TABLE cost_events DROP COLUMN stage;
+ALTER TABLE outcomes DROP COLUMN channel_id;
+ALTER TABLE outcomes DROP COLUMN route_id;
+ALTER TABLE outcomes DROP COLUMN arm_id;
+ALTER TABLE outcomes DROP COLUMN region;
+ALTER TABLE outcomes DROP COLUMN market;
+DROP TABLE replies;
+DROP TABLE touches;
+DROP TABLE inboxes;
+DROP TABLE compliance_rules;
+DROP TABLE market_packs;
+DROP TABLE judgements;
+DROP TABLE assets;
+DROP TABLE diagnoses;
+DROP TABLE opportunity_stages;
+DROP TABLE opportunities;
+DROP TABLE channels;
+DROP TABLE routes;
+DROP TABLE segments;
+DROP TABLE problems;

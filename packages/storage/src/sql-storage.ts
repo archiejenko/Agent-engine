@@ -27,6 +27,7 @@ import type {
 } from "./storage.ts";
 import { v2Storage } from "./v2.ts";
 import { v3Storage } from "./v3.ts";
+import { v4Storage } from "./v4.ts";
 
 type Row = Record<string, unknown>;
 
@@ -173,6 +174,7 @@ export class SqlStorage implements Storage {
       graphStorage(db),
       ideasStorage(db),
       ideaMatrixStorage(db),
+      v4Storage(db, bodies),
     );
   }
   declare signals: Storage["signals"];
@@ -225,6 +227,9 @@ export class SqlStorage implements Storage {
   declare audit: Storage["audit"];
   declare hypotheses: Storage["hypotheses"];
   declare ideaMatrix: Storage["ideaMatrix"];
+  declare vault: Storage["vault"];
+  declare portfolio: Storage["portfolio"];
+  declare auditLog: Storage["auditLog"];
   declare scoutSignals: Storage["scoutSignals"];
   declare ideaCards: Storage["ideaCards"];
   declare ideaThread: Storage["ideaThread"];

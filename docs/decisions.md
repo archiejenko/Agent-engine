@@ -1183,3 +1183,70 @@ Choices made while building:
 
   These are small synthetic pages; real pages are ~8,500 tokens. **The default extractor is unchanged
   (Opus).** Choosing it is Archie's call from `docs/gates/extractor-comparison.md`.
+
+## 2026-11-27 — v4 plan approved (Archie), with amendments
+
+- **What:** `PLAN.md` (the opportunity system: Opportunity = Problem × Segment × Route × Channel)
+  approved. Decisions 1–5 as recommended:
+  - a third data lane, `paid_own_use`;
+  - v4 replaces v3 Milestone D;
+  - opportunity #1 is the SME website path;
+  - Florida is the first US state;
+  - the allocator is advisory until 3 opportunities have real paid outcomes.
+- **Amendments:**
+  1. Opportunity #1's segment is limited companies matched to Companies House only (PECR); price is
+     a bandit arm with two monthly retainer price points, which Archie sets.
+  2. Google Places stores `place_id` only; other fields are re-fetched on demand.
+  3. The per-contact cost covers LLM nodes only, and deterministic nodes use no model. Batch API +
+     prompt caching apply to all non-urgent LLM work (≈ 4.1p a contacted business; Phase 4
+     ≈ £155/month, Phase 6 ≈ £445–495/month; PLAN.md §10).
+  4. `opportunities` → `lead_scores` by migration.
+  5. The cockpit stays the in-house panel kit.
+- **Checked against current docs (2026-11-27):** Anthropic's pricing page says batch and prompt-caching
+  discounts combine, and batches finish within 24 hours (cache hits in a batch are best-effort, so
+  batches use the 1-hour cache). Google's Places policy pages couldn't be read from the build session.
+  Archie's place_id-only rule is implemented as given, and the exact terms get checked before Places
+  connects (Phase 6).
+
+## 2026-11-27 — v4 Phase 1: vault schema + source registry (built; gate passed, waiting for Archie)
+
+- **Migrations:**
+  - core `0031` renames `opportunities` → `lead_scores` (indexes renamed too; rows kept);
+  - core `0032` adds the portfolio tables (problems, segments, routes, channels, opportunities,
+    opportunity_stages, diagnoses, assets, judgements, market_packs, compliance_rules, inboxes, touches,
+    replies) and widens outcomes, cost_events and suppressions with market/region;
+  - facts `0004` adds businesses, external_ids, contacts, signals, sources, source_fetches, briefs;
+  - telemetry `0004` adds the append-only audit_log.
+
+  Every one has a down file and an up → down → up test.
+- **The old lead accessor keeps its name** (`storage.opportunities`); only its SQL changed. The new
+  portfolio accessor is `storage.portfolio`. This keeps the rename to SQL only, as PLAN.md §0.7 says.
+- **Canonical business ID is deterministic:** `gb-ch:<number>` (upper case) for UK companies, so
+  every existing claim and fact keeps its `entity_id` (= the `uk_ch` external ID). Region comes from
+  the LAD code's nation letter. Industry comes from the first SIC code's division via
+  `packages/config/src/industries.json`. The NAICS side of that file is a coarse hand mapping,
+  **assumed** until checked against the official concordance before the US pack.
+- **One `signals` table** (facts) holds engine signals (copied from `signal_values`, same store) and
+  scout signals (copied from `scout_signals`, core, through two separate queries: no query crosses a
+  database). The old tables stay, still read by their code, until Phase 3 moves the readers. That
+  departs from PLAN.md's "views" wording, because `scout_signals` is in another database and a view
+  can't cross it.
+- **Problems are seeded from the 500 seed ideas in `packages/infra`, not verification.** One problem
+  per industry × function × category gives 70 problems, all `sensed` with no evidence (rule 23). The
+  rule-23 guard test caught the first version, which lived in the verification package. Scoring code
+  still never reads the idea backlog.
+- **Source registry** (`packages/verification/src/sources/registry.ts`, config
+  `packages/config/src/sources.json`, 10 sources):
+  - an unregistered source is refused, and a registered one is refused until it's connected for a
+    named opportunity;
+  - only the 5 sources in use before v4 start connected;
+  - fetches are cached until the source's freshness target, with bodies through the storage body
+    helper (inline or R2; the body-key guard test caught a first version that handled keys outside
+    storage);
+  - `id_only` sources never store a body;
+  - a changed response shape marks the source `schema_drift` and stops fetches;
+  - a paid call writes a cost event at call time.
+- **`paid_own_use` lane:** it's on sources, contacts, signals and opportunities from now on. Facts
+  still use the two-value lane until Phase 2 wires the third lane through the query layer and tool
+  registry (with x402 refusal tests).
+- **Gate:** `pnpm gate:v4 --phase 1` → `docs/gates/v4-phase1.md`, 10 of 10 on the synthetic world.

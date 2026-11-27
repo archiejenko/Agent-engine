@@ -74,6 +74,26 @@ Three layers, in dependency order:
 - **Milestone D (v3 Phases 6–10)** — agents and autonomy. Waits for Archie after Milestone C. Replaces
   the v2 Milestone B plan.
 
+### v4: the opportunity system (approved 2026-11-27, plan: `PLAN.md`)
+
+- **Opportunity = Problem × Segment × Route × Channel.** Every opportunity runs the same lifecycle
+  (sense → … → scale | kill | spawn) on the same node library, guardrails and cockpit. Opportunity #1
+  is just the first config. Replaces v3 Milestone D.
+- **Phases 1–7 with a gate each** (`pnpm gate:v4 --phase N` → `docs/gates/v4-phaseN.md`). **Stop at
+  every gate for Archie's approval.** Everything stays dry-run until Phase 4's live step on Archie's
+  deployment.
+- **`market` (UK | US) and `region`** (UK nation / US state) on every table describing a business, buyer,
+  send or money. Canonical business IDs: `gb-ch:<number>`, `us-<state>:<id>`, `bz:<id>`.
+- **Three data lanes:** `open`, `paid_own_use` (bought for our own outreach; never in an x402 response
+  or a customer report), `licensed`. Sources connect lazily, through the source registry only.
+- **Autonomy is per node, per opportunity** (never per run). The top rung still needs Archie's
+  recorded approval (rule 14).
+- **Deterministic nodes never call a model:** detect, score, resolve (except ambiguous merges),
+  comply, suppress and route. All non-urgent LLM work uses the Batch API with prompt caching.
+- **`lead_scores`** is Phase 2's per-company scored leads (renamed from `opportunities`); the
+  `opportunities` table is the portfolio. Frozen revenue paths stay frozen; they come back only as
+  opportunity configs Archie signs.
+
 ## 2. Stack (approved)
 
 - TypeScript 5.9 everywhere, Node 22, pnpm workspaces. Biome for lint + format. Vitest 4.1.
@@ -204,6 +224,9 @@ pnpm gate:v3 --phase seed      # seeded ideas import → docs/gates/v3-seed.md
 
 # Task graph layer (plan: brain/build-reports/graph-plan.md)
 pnpm gate:graph --gate N       # graph gate N (0–5) → docs/gates/graph-gN.md
+
+# v4 (PLAN.md)
+pnpm gate:v4 --phase N         # v4 gate N (1–7) → docs/gates/v4-phaseN.md
 ```
 
 ## 7. Repo map

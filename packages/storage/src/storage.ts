@@ -11,6 +11,7 @@ import type { Phase5Storage } from "./phase5.ts";
 import type { RuntimeStorage } from "./runtime.ts";
 import type { V2Storage } from "./v2.ts";
 import type { V3Storage } from "./v3.ts";
+import type { V4Storage } from "./v4.ts";
 
 export type RunStatus = "running" | "succeeded" | "failed" | "rolled_back";
 
@@ -90,7 +91,8 @@ export interface Storage
     V3Storage,
     GraphStorage,
     IdeasStorage,
-    IdeaMatrixStorage {
+    IdeaMatrixStorage,
+    V4Storage {
   runs: {
     start(input: { kind: string; config_versions?: Record<string, string> }): Promise<Run>;
     finish(runId: string, status: Exclude<RunStatus, "running">): Promise<void>;

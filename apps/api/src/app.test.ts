@@ -23,8 +23,8 @@ describe("GET /api/health", () => {
     expect(body.status).toBe("ok");
     expect(body.storage).toEqual({
       ok: true,
-      migrations: 30,
-      databases: { core: 30, facts: 3, telemetry: 3 },
+      migrations: 32,
+      databases: { core: 32, facts: 4, telemetry: 4 },
     });
   });
 

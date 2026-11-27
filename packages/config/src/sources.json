@@ -1,0 +1,198 @@
+{
+  "_note": "v4 source registry (PLAN.md \u00a72.2). Sources are connected lazily: only those in use before v4 start connected; every other one connects when an approved opportunity needs it. Prices marked assumed are placeholders, checked before a source connects.",
+  "version": 1,
+  "sources": [
+    {
+      "source_id": "companies_house",
+      "name": "Companies House API",
+      "market": "UK",
+      "region": null,
+      "kind": "api",
+      "tier": 1,
+      "lane": "open",
+      "retention": "full",
+      "cost_model": {
+        "kind": "free"
+      },
+      "freshness_target_h": 720,
+      "reliability": null,
+      "terms_url": "https://developer.company-information.service.gov.uk/",
+      "terms_checked_at": null,
+      "connected_by_default": true,
+      "notes": "In use since Phase 1 (needs CH_API_KEY)."
+    },
+    {
+      "source_id": "companies_house_bulk",
+      "name": "Companies House bulk company data",
+      "market": "UK",
+      "region": null,
+      "kind": "bulk",
+      "tier": 1,
+      "lane": "open",
+      "retention": "full",
+      "cost_model": {
+        "kind": "free"
+      },
+      "freshness_target_h": 744,
+      "reliability": null,
+      "terms_url": "https://download.companieshouse.gov.uk/en_output.html",
+      "terms_checked_at": null,
+      "connected_by_default": true,
+      "notes": "In use since Phase 1 (monthly file, by hand)."
+    },
+    {
+      "source_id": "companies_house_accounts",
+      "name": "Companies House accounts data",
+      "market": "UK",
+      "region": null,
+      "kind": "bulk",
+      "tier": 1,
+      "lane": "open",
+      "retention": "full",
+      "cost_model": {
+        "kind": "free"
+      },
+      "freshness_target_h": 168,
+      "reliability": null,
+      "terms_url": "https://download.companieshouse.gov.uk/en_accountsdata.html",
+      "terms_checked_at": null,
+      "connected_by_default": true,
+      "notes": "In use since Phase 1 (staff numbers)."
+    },
+    {
+      "source_id": "ons_postcode_directory",
+      "name": "ONS Postcode Directory",
+      "market": "UK",
+      "region": null,
+      "kind": "bulk",
+      "tier": 2,
+      "lane": "open",
+      "retention": "full",
+      "cost_model": {
+        "kind": "free"
+      },
+      "freshness_target_h": 2208,
+      "reliability": null,
+      "terms_url": "https://geoportal.statistics.gov.uk/",
+      "terms_checked_at": null,
+      "connected_by_default": true,
+      "notes": "In use since Phase 1 (postcode to borough, by hand)."
+    },
+    {
+      "source_id": "company_website",
+      "name": "Company's own website",
+      "market": "UK",
+      "region": null,
+      "kind": "scrape",
+      "tier": 3,
+      "lane": "open",
+      "retention": "full",
+      "cost_model": {
+        "kind": "free"
+      },
+      "freshness_target_h": 2160,
+      "reliability": null,
+      "terms_url": null,
+      "terms_checked_at": null,
+      "connected_by_default": true,
+      "notes": "In use since Phase 2. Model cost is on the cost ledger per extraction, not here."
+    },
+    {
+      "source_id": "the_gazette",
+      "name": "The Gazette (notices)",
+      "market": "UK",
+      "region": null,
+      "kind": "api",
+      "tier": 2,
+      "lane": "open",
+      "retention": "full",
+      "cost_model": {
+        "kind": "free"
+      },
+      "freshness_target_h": 24,
+      "reliability": null,
+      "terms_url": "https://www.thegazette.co.uk/data",
+      "terms_checked_at": null,
+      "connected_by_default": false,
+      "notes": "UK pack. Connected when an approved opportunity needs insolvency or other notices."
+    },
+    {
+      "source_id": "find_a_tender",
+      "name": "Find a Tender",
+      "market": "UK",
+      "region": null,
+      "kind": "api",
+      "tier": 2,
+      "lane": "open",
+      "retention": "full",
+      "cost_model": {
+        "kind": "free"
+      },
+      "freshness_target_h": 24,
+      "reliability": null,
+      "terms_url": "https://www.find-tender.service.gov.uk/",
+      "terms_checked_at": null,
+      "connected_by_default": false,
+      "notes": "UK pack. Above-threshold public contracts."
+    },
+    {
+      "source_id": "contracts_finder",
+      "name": "Contracts Finder",
+      "market": "UK",
+      "region": "ENG",
+      "kind": "api",
+      "tier": 2,
+      "lane": "open",
+      "retention": "full",
+      "cost_model": {
+        "kind": "free"
+      },
+      "freshness_target_h": 24,
+      "reliability": null,
+      "terms_url": "https://www.contractsfinder.service.gov.uk/",
+      "terms_checked_at": null,
+      "connected_by_default": false,
+      "notes": "UK pack. Lower-value public contracts in England."
+    },
+    {
+      "source_id": "planning_data",
+      "name": "Planning Data (England)",
+      "market": "UK",
+      "region": "ENG",
+      "kind": "api",
+      "tier": 2,
+      "lane": "open",
+      "retention": "full",
+      "cost_model": {
+        "kind": "free"
+      },
+      "freshness_target_h": 168,
+      "reliability": null,
+      "terms_url": "https://www.planning.data.gov.uk/",
+      "terms_checked_at": null,
+      "connected_by_default": false,
+      "notes": "UK pack: planning applications. Coverage varies by council; individual council portals are added as separate sources only if needed."
+    },
+    {
+      "source_id": "google_places_us",
+      "name": "Google Places (US)",
+      "market": "US",
+      "region": null,
+      "kind": "vendor",
+      "tier": 3,
+      "lane": "paid_own_use",
+      "retention": "id_only",
+      "cost_model": {
+        "kind": "per_call",
+        "gbp": 0,
+        "assumed": true
+      },
+      "freshness_target_h": 720,
+      "reliability": null,
+      "terms_url": "https://cloud.google.com/maps-platform/terms",
+      "terms_checked_at": null,
+      "connected_by_default": false,
+      "notes": "Phase 6. Archie's rule (2026-11-27): store place_id only; re-fetch every other field on demand. Price and the exact caching terms are to be checked before connecting (the policy pages couldn't be read from the build session)."
+    }
+  ]
+}

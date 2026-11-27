@@ -10,5 +10,7 @@ export * from "./layout.ts";
 export * from "./ledger.ts";
 export * from "./opportunity.ts";
 export * from "./panels.ts";
+export * from "./portfolio.ts";
 export * from "./query.ts";
 export * from "./registry.ts";
+export * from "./vault.ts";

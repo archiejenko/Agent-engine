@@ -39,9 +39,24 @@ const FACTS = [
   "backtests",
   "weight_suggestions",
   "page_cuts",
+  // v4 vault + source registry (PLAN.md §2.2)
+  "businesses",
+  "external_ids",
+  "contacts",
+  "signals",
+  "sources",
+  "source_fetches",
+  "briefs",
 ] as const;
 
-const TELEMETRY = ["run_log", "trigger_stats", "runtime_status", "dead_letters"] as const;
+const TELEMETRY = [
+  "run_log",
+  "trigger_stats",
+  "runtime_status",
+  "dead_letters",
+  // v4: append-only audit of external actions (PLAN.md §2.3)
+  "audit_log",
+] as const;
 
 const LOCAL = ["workflow_steps", "workflow_events"] as const;
 
@@ -70,9 +85,24 @@ const CORE = [
   "board_moves",
   "experiments",
   "scout_signals",
-  // opportunities and outcomes
-  "opportunities",
+  // lead scores (Phase 2's per-company opportunities, renamed in 0031) and outcomes
+  "lead_scores",
   "outcomes",
+  // v4 portfolio: Opportunity = Problem × Segment × Route × Channel (PLAN.md §2.1, §2.3)
+  "problems",
+  "segments",
+  "routes",
+  "channels",
+  "opportunities",
+  "opportunity_stages",
+  "diagnoses",
+  "assets",
+  "judgements",
+  "market_packs",
+  "compliance_rules",
+  "inboxes",
+  "touches",
+  "replies",
   "outreach_cohorts",
   "cohort_members",
   // customers and outreach

@@ -170,6 +170,10 @@ describe("data layer migrations run up, down and up again", () => {
     ["facts", "0003_page_cuts.sql"],
     ["facts", "0002_indexes.sql"],
     ["telemetry", "0003_indexes.sql"],
+    // v4 Phase 1
+    ["core", "0032_v4_portfolio.sql"],
+    ["facts", "0004_v4_vault.sql"],
+    ["telemetry", "0004_v4_audit.sql"],
   ] as const)("%s %s", async (store, n) => {
     const all = loadMigrations(migrationsDirFor(store)).filter((m) => m.name <= n);
     const before = sqliteDriver(":memory:");

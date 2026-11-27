@@ -233,7 +233,7 @@ export function phase2(db: SqlDriver, bodies: Bodies) {
             opps.slice(i, i + 100).map((input) => {
               const o = Opportunity.parse(input);
               return {
-                sql: `INSERT INTO opportunities (opportunity_id, module, module_version, note_hash, entity_id, as_of, score, expected_value_gbp, confidence, trace, lane, explore, status, rank, rationale, run_id, created_at)
+                sql: `INSERT INTO lead_scores (opportunity_id, module, module_version, note_hash, entity_id, as_of, score, expected_value_gbp, confidence, trace, lane, explore, status, rank, rationale, run_id, created_at)
                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 params: [
                   o.opportunity_id,
@@ -261,7 +261,7 @@ export function phase2(db: SqlDriver, bodies: Bodies) {
       },
       get: async (id: string) => {
         const r = (
-          await db.all<Row>("SELECT * FROM opportunities WHERE opportunity_id = ?", [id])
+          await db.all<Row>("SELECT * FROM lead_scores WHERE opportunity_id = ?", [id])
         )[0];
         return r ? rowToOpp(r) : null;
       },
@@ -292,20 +292,20 @@ export function phase2(db: SqlDriver, bodies: Bodies) {
           p.push(q.entityId);
         }
         const rows = await db.all<Row>(
-          `SELECT * FROM opportunities ${w.length ? `WHERE ${w.join(" AND ")}` : ""} ORDER BY created_at DESC, rank LIMIT ? OFFSET ?`,
+          `SELECT * FROM lead_scores ${w.length ? `WHERE ${w.join(" AND ")}` : ""} ORDER BY created_at DESC, rank LIMIT ? OFFSET ?`,
           [...p, q.limit, q.offset ?? 0],
         );
         return rows.map(rowToOpp);
       },
       setStatus: async (id: string, status: Opportunity["status"]) => {
         const r = await db.run(
-          "UPDATE opportunities SET status = ?, decided_at = ? WHERE opportunity_id = ?",
+          "UPDATE lead_scores SET status = ?, decided_at = ? WHERE opportunity_id = ?",
           [status, nowIso(), id],
         );
         if (r.changes !== 1) throw new Error(`opportunity ${id} not found`);
       },
       setRationale: async (id: string, rationale: string) => {
-        await db.run("UPDATE opportunities SET rationale = ? WHERE opportunity_id = ?", [
+        await db.run("UPDATE lead_scores SET rationale = ? WHERE opportunity_id = ?", [
           rationale,
           id,
         ]);

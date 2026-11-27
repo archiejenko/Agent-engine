@@ -1,6 +1,6 @@
 ---
 type: plan
-status: awaiting Archie's approval (no implementation code written)
+status: approved 2026-11-27 with amendments (§12); Phase 1 in build
 date: 2026-11-27
 supersedes: v3 Milestone D (agents and autonomy), if approved
 ---
@@ -23,7 +23,7 @@ domains, cost and your decisions.
 
 These come from the repo. Each one is either corrected here or listed as a decision in §11.
 
-1. **The cockpit is not OpenUI.** OpenUI was reviewed and **not adopted** on 2026-11-26
+1. **The cockpit is not OpenUI** (confirmed by Archie, 2026-11-27). OpenUI was reviewed and **not adopted** on 2026-11-26
    (`docs/decisions.md`). The cockpit is in-house:
    - a layout-as-data contract (`packages/contracts/src/layout.ts`);
    - panel queries (`apps/api/src/panels.ts`);
@@ -55,9 +55,10 @@ These come from the repo. Each one is either corrected here or listed as a decis
    and they still won't. They are used only to judge copy, which rule 12 allows. Allocators read the
    outcome ledger only.
 7. **Name clash: the `opportunities` table already exists.** It holds Phase 2's per-company scored
-   leads. I'll rename it to `lead_scores` in one migration with all code changed in the same commit.
-   The new `opportunities` table is the portfolio-level object. Assumed; tell me if you'd rather keep
-   the old name.
+   leads. **Approved:** it's renamed to `lead_scores` by migration, with its SQL changed in the same
+   commit. The new `opportunities` table is the portfolio-level object. In code, the old accessor keeps
+   its name (`storage.opportunities`, now documented as lead scores) and the new one is
+   `storage.portfolio`, so the rename touches only SQL.
 8. **The `agent-house` Worker isn't touched.** Nothing in this plan deploys to it or binds to it;
    `wrangler-config.test.ts` already fails if a binding names it. Cloud sessions never deploy (deploys
    stay the GitHub "Deploy" workflow, run by you).
@@ -189,7 +190,7 @@ A future `agent-engine-us` facts database is a new placement, not a new platform
 | `entities` (F, exists) | Stays as the UK Companies House record. `entity_id` = CH number = the `uk_ch` external ID, so **every existing fact, claim and test keeps working**. `claims.entity_id` and `verified_facts.entity_id` take a `business_id` for non-UK rows (a widening of the format, not a rename) |
 | `contacts` (F) | `contact_id`, `business_id`, `kind` (`role_address`/`named_person`), `email`, `email_verified` (`valid`/`risky`/`invalid`/`unknown`), `verifier_source_id`, `name`, `title`, `source_id`, `lane`, `fetched_at`, `confidence`, `recipient_type` (`corporate`/`sole_trader`/`partnership`/`unknown`; drives PECR), `market`, `region` |
 | `signals` (F, replaces `signal_values` + `scout_signals`) | `signal_id`, `definition_id@version`, `business_id` (nullable for market-level signals), `problem_id`, `value`, `fact_ids` (json), `market`, `region`, `observed_at`, `valid_from`, `lane`, `synthetic`. Old tables kept as read-only views for one release |
-| `sources` (F) | `source_id`, `name`, `market`, `region`, `kind` (`bulk`/`api`/`scrape`/`vendor`), `tier` (1–5), `lane` (`open`/`paid_own_use`/`licensed`), `cost_model` (json: per call / per record / monthly), `freshness_target_h`, `reliability` (measured; tier prior until measured), `health` (`ok`/`degraded`/`paused`/`schema_drift`), `schema_hash`, `connected` (bool: lazy), `connected_at`, `terms_url`, `terms_checked_at`, `used_by` (json opportunity ids) |
+| `sources` (F) | `source_id`, `name`, `market`, `region`, `kind` (`bulk`/`api`/`scrape`/`vendor`), `retention` (`full` / `id_only`: for `id_only` sources only the ID is stored; every other field is re-fetched on demand and never cached), `tier` (1–5), `lane` (`open`/`paid_own_use`/`licensed`), `cost_model` (json: per call / per record / monthly), `freshness_target_h`, `reliability` (measured; tier prior until measured), `health` (`ok`/`degraded`/`paused`/`schema_drift`), `schema_hash`, `connected` (bool: lazy), `connected_at`, `terms_url`, `terms_checked_at`, `used_by` (json opportunity ids) |
 | `source_fetches` (F) | `fetch_key` (source + normalised request), `source_id`, `fetched_at`, `expires_at`, `r2_key` (body), `cost_gbp`, `status`, `schema_hash` (cache + drift detection) |
 | `briefs` (F) | `business_id`, `brief_version`, `fact_ids` (json), `body_r2_key`, `model`, `cost_gbp`, `created_at`, `expires_at`. One brief per business, shared by every opportunity |
 
@@ -339,12 +340,14 @@ every run. Approving it is signing it: one decision card, one `owner_approvals` 
   "opportunity_id": "opp_uk_gm_website_retainer_email",
   "version": 1,
   "problem":  { "problem_id": "prb_no_modern_website", "evidence_fact_ids": ["…"] },
-  "segment":  { "segment_id": "seg_uk_gm_5_100_staff", "market": "UK", "region": "ENG",
-                "filters": { "lad_codes": ["E08000001", "…"], "staff_band": "5-100", "sic_exclude": ["64209", "68209", "74990", "99999"] } },
-  "route":    { "route_id": "service_retainer", "offer": { "setup_gbp": 0, "monthly_gbp": 0 } },   // you fill prices
+  "segment":  { "segment_id": "seg_uk_gm_ltd_5_100_staff", "market": "UK", "region": "ENG",
+                "filters": { "lad_codes": ["E08000001", "…"], "staff_band": "5-100", "sic_exclude": ["64209", "68209", "74990", "99999"],
+                             "company_types": ["ltd", "plc"], "require_ch_match": true } },   // PECR: limited companies matched to CH only
+  "route":    { "route_id": "service_retainer", "offer": { "setup_gbp": null } },   // you set it
   "channel":  { "channel_id": "cold_email", "market_pack": "uk@1" },
   "signals":  [{ "definition_id": "website_outdated@1", "min_confidence": 0.7 }],
-  "arms":     { "signal": ["website_outdated", "no_website"], "offer": ["A", "B"], "region": ["ENG"] },
+  "arms":     { "signal": ["website_outdated", "no_website"], "offer": ["A", "B"], "region": ["ENG"],
+                "price":  [{ "arm": "P1", "monthly_gbp": null }, { "arm": "P2", "monthly_gbp": null }] },   // you set both
   "budget":   { "total_gbp": 150, "daily_max_gbp": 10 },
   "stages": {
     "smoke_test":    { "cap_gbp": 25, "max_days": 21, "units": { "sends": 50 },
@@ -373,8 +376,11 @@ every run. Approving it is signing it: one decision card, one `owner_approvals` 
   compiler refuses the config.
 - **`autonomy_ceiling` can't be raised by an agent.** Raising it is a new config version (a new
   contract).
-- **Prices, offers and caps are yours.** Placeholders are labelled `assumed` (rule 23), and an
-  opportunity with an assumed price can't reach `distribute`.
+- **Prices, offers and caps are yours.** A `null` price, or a placeholder labelled `assumed` (rule 23),
+  stops an opportunity before `distribute`.
+- **Price is an arm like any other.** Each price arm is a monthly retainer value you set. The
+  within-opportunity bandit splits sends across them; each touch records its price arm; and paid
+  outcomes are attributed to the price the buyer was quoted.
 
 ---
 
@@ -416,7 +422,7 @@ outcomes recorded before T (rule 11).
 
 ### 5.3 Within-opportunity allocator
 
-- **Arms** = signal × region × offer (from `arms` in the config).
+- **Arms** = signal × region × offer × price (from `arms` in the config).
 - **Thompson sampling** on positive-reply rate during the smoke test, and on paid rate once paid
   outcomes exist.
 - **Each arm keeps at least 10%** of sends until it has 30 sends, so no arm is starved on noise.
@@ -570,12 +576,12 @@ your deployment.
 2. Batch API + prompt caching in the Anthropic adapter for non-urgent roles.
 3. Eval sets checked in under `evals/`.
 4. Real `EmailSender` + inbound adapters (provider you choose in cutover Stage 6), behind dry-run.
-- **Gate:** each node passes its eval in the sandbox; per-node cost within 1.5× estimate on fakes; `send` idempotency test.
+- **Gate:** each node passes its eval in the sandbox; per-node cost within 1.5× estimate on fakes; `send` idempotency test; **deterministic nodes (detect, score, resolve outside adjudication, comply, suppress, route) can't reach the model port (test)**; every non-urgent LLM call goes through the Batch API with prompt caching (test on the adapter's request shape).
 
 **Phase 4: Opportunity compiler, opportunity #1 end to end**
 1. Opportunity config schema + compiler: config → GraphSpec from route and channel template graphs, deterministic, same config → same graph hash.
 2. Lifecycle state machine with stage exits, kill rules, diagnoses, assets.
-3. Opportunity #1 = today's SME website path: UK · Greater Manchester · "no modern website" signal (CH + website facts) · service retainer (claim this site) · cold email.
+3. Opportunity #1 = today's SME website path: UK · Greater Manchester · **limited companies matched to Companies House only** (no sole traders or partnerships, PECR) · "no modern website" signal (CH + website facts) · service retainer (claim this site) at **two monthly price points as a bandit arm** · cold email.
 - **Gate:**
   - the same flow runs through the compiler (the hand-built `sme_outreach` path stays as the fallback);
   - a dry-run smoke test of 50 touches passes every guardrail;
@@ -633,22 +639,50 @@ There's no code in this track. It's checklist items added to `docs/live-cutover.
 
 ## 10. Cost model (monthly, estimates; every price re-checked against the vendor's page at build time)
 
-**Assumptions.** Opus 5.5 for every LLM node (no model split). Briefs batched and shared. Per
-contacted business ≈ brief £0.019 + write £0.011 + verify £0.014 + website enrich £0.015 ≈ **£0.06**.
+**What the per-contact figure covers: LLM nodes only.** Deterministic nodes never call a model: detect,
+score, resolve (except the ≤5% ambiguous merges), comply, suppress and route. Their cost is Cloudflare
+compute, counted in the Cloudflare row. Phase 3 enforces this:
+- each node contract declares `uses_llm`;
+- a test fails if a deterministic node's code can reach the model port.
+
+**Batch API + prompt caching on all non-urgent LLM work.** That's enrichment, briefs, drafts,
+verification and ambiguous-merge adjudication. Anthropic's pricing page (read 2026-11-27) says the
+two discounts combine:
+- batch is 50% off;
+- Opus 5.5 cache reads are 0.05× input.
+
+Batches finish within 24 hours, mostly within 1 hour, and cache hits inside a batch are best-effort,
+so batches use the 1-hour cache. Only reply classification runs real-time (a reply can be urgent).
+It's rare and costs under 0.1p a contact.
+
+**Per contacted business, Opus 5.5, all batched** (tokens are estimates; cached part = system prompt + template):
+
+| LLM node | Tokens in (cached) / out | Cost |
+|---|---|---|
+| Website enrich (`website_extract` v2) | 8,500 (500) / 300 | £0.015 |
+| Brief (shared by every opportunity that contacts the business) | 8,000 (1,000) / 800 | £0.0175 |
+| Write message | 2,000 (1,500) / 300 | £0.0033 |
+| Verify | 3,000 (1,000) / 300 | £0.0056 |
+| **Total** | | **≈ £0.041 (4.1p)**; ≈ 4.6p if every cache read misses |
+
+This replaces the 6p in the first draft, which assumed batching on briefs and enrichment only.
+Enrichment also runs on businesses we check but don't contact. The model assumes one checked-only
+business per contact, at £0.015 each.
 
 | Item | Phase 4 (UK, 1 opportunity, ~1,500 touches/mo) | Phase 6 (UK + FL, ~4 opportunities, ~5,000 touches/mo) |
 |---|---|---|
-| Cloudflare Workers Paid (D1, Queues, Workflows, DO, R2 within allowances) | £4–8 | £8–15 |
-| LLM (Opus 5.5, batched, cached briefs) | £90 | £250 (briefs reused across opportunities cut this) |
+| Cloudflare Workers Paid (D1, Queues, Workflows, DO, R2 within allowances; all deterministic nodes) | £4–8 | £8–15 |
+| LLM: contacted (4.1p each) | £62 | £205 |
+| LLM: checked, not contacted (1.5p each) | £23 | £75 |
+| LLM: brief reuse across opportunities (≈ 20% overlap) | £0 | −£17 |
 | Email sending provider | £12 | £35 |
 | Domains (5, annualised) + mailboxes (10) | £45 | £55 |
 | Email verification | £6 | £20 |
-| Paid sources (contacts vendor, Google Places, OpenCorporates only if a state has no bulk file) | £0 (UK is open data) | £50–90 |
+| Paid sources (contacts vendor; Google Places by place ID only; OpenCorporates only if a state has no bulk file) | £0 (UK is open data) | £50–90 |
 | US virtual postal address | n/a | £15 |
-| **Total** | **≈ £160/month** | **≈ £430–480/month** |
+| **Total** | **≈ £155/month** | **≈ £445–495/month** |
 
-Break-even for Phase 4 is about one retainer client a month at a typical SME web retainer. Your real
-price goes in the config.
+Phase 6 is a little above the first draft (£430–480) because checked-only enrichment is now counted.
 
 ## 11. Open decisions for you (max 5, my recommendation first)
 
@@ -681,3 +715,23 @@ price goes in the config.
 - the `opportunities` → `lead_scores` rename.
 
 **I'm stopping here for your approval.**
+
+## 12. Amendments approved by Archie (2026-11-27)
+
+1. Decisions 1–5 in §11 approved as recommended:
+   - the `paid_own_use` lane;
+   - v4 replaces v3 Milestone D;
+   - opportunity #1 is the SME website path;
+   - Florida is the first US state;
+   - the allocator stays advisory until 3 opportunities have real paid outcomes.
+2. **Opportunity #1's segment** is limited companies matched to Companies House only (no sole traders
+   or partnerships, PECR). **Price is a bandit arm** with two monthly retainer price points; Archie
+   sets the values in the config (`null` until then, which blocks `distribute`).
+3. **Google Places: store `place_id` only.** Every other field is re-fetched on demand, per Google's
+   terms. Sources carry `retention: id_only`, and the fetch cache refuses to store their bodies.
+   Google's policy pages couldn't be read from the build session, so the exact terms get checked
+   before Places is connected (Phase 6).
+4. **Cost model:** the per-contact figure is LLM nodes only, and deterministic nodes use no model.
+   Batch + prompt caching apply to all non-urgent LLM work. Figures restated in §10.
+5. **`opportunities` → `lead_scores`** by migration (§0.7).
+6. **Cockpit:** the in-house panel kit; OpenUI was dropped on 2026-11-26.

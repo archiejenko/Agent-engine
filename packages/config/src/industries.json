@@ -1,0 +1,148 @@
+{
+  "_note": "v4 Phase 1: the internal industry list behind the problem taxonomy (industry \u00d7 function \u00d7 problem). UK side = the 17 sectors in sic-sectors.json (SIC 2007 divisions). US side = NAICS 2022 two-digit sectors, mapped coarsely by hand: ASSUMED until checked against the ONS/Census concordance before the first US pack (Phase 6). seed_category_industry maps the five seed-idea categories that are industries; every other seed category is not industry-specific (all_smes).",
+  "version": 1,
+  "assumed": true,
+  "industries": [
+    {
+      "code": "all_smes",
+      "name": "All SMEs (not industry-specific)",
+      "cross_industry": true,
+      "sic_divisions": [],
+      "naics_sectors": []
+    },
+    {
+      "code": "manufacturing",
+      "name": "Manufacturing",
+      "sic_divisions": [
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "27",
+        "28",
+        "29",
+        "30",
+        "31",
+        "32",
+        "33"
+      ],
+      "naics_sectors": ["31"]
+    },
+    {
+      "code": "construction",
+      "name": "Construction and trades",
+      "sic_divisions": ["41", "42", "43"],
+      "naics_sectors": ["23"]
+    },
+    {
+      "code": "motor",
+      "name": "Motor trade",
+      "sic_divisions": ["45"],
+      "naics_sectors": ["44", "81"]
+    },
+    {
+      "code": "wholesale",
+      "name": "Wholesale",
+      "sic_divisions": ["46"],
+      "naics_sectors": ["42"]
+    },
+    {
+      "code": "retail",
+      "name": "Retail and e-commerce",
+      "sic_divisions": ["47"],
+      "naics_sectors": ["44"]
+    },
+    {
+      "code": "transport",
+      "name": "Transport and logistics",
+      "sic_divisions": ["49", "50", "51", "52", "53"],
+      "naics_sectors": ["48"]
+    },
+    {
+      "code": "hospitality",
+      "name": "Hospitality",
+      "sic_divisions": ["55", "56"],
+      "naics_sectors": ["72"]
+    },
+    {
+      "code": "digital",
+      "name": "Digital, media and IT",
+      "sic_divisions": ["58", "59", "60", "61", "62", "63"],
+      "naics_sectors": ["51", "54"]
+    },
+    {
+      "code": "finance",
+      "name": "Finance and insurance",
+      "sic_divisions": ["64", "65", "66"],
+      "naics_sectors": ["52"]
+    },
+    {
+      "code": "property",
+      "name": "Property",
+      "sic_divisions": ["68"],
+      "naics_sectors": ["53"]
+    },
+    {
+      "code": "professional",
+      "name": "Professional services",
+      "sic_divisions": ["69", "70", "71"],
+      "naics_sectors": ["54"]
+    },
+    {
+      "code": "creative",
+      "name": "Creative, scientific and technical",
+      "sic_divisions": ["72", "73", "74", "75"],
+      "naics_sectors": ["54"]
+    },
+    {
+      "code": "support",
+      "name": "Business support and rental",
+      "sic_divisions": ["77", "78", "79", "80", "81", "82"],
+      "naics_sectors": ["56", "53"]
+    },
+    {
+      "code": "education",
+      "name": "Education",
+      "sic_divisions": ["85"],
+      "naics_sectors": ["61"]
+    },
+    {
+      "code": "health",
+      "name": "Health and care",
+      "sic_divisions": ["86", "87", "88"],
+      "naics_sectors": ["62"]
+    },
+    {
+      "code": "leisure",
+      "name": "Arts, sport and leisure",
+      "sic_divisions": ["90", "91", "92", "93"],
+      "naics_sectors": ["71"]
+    },
+    {
+      "code": "personal",
+      "name": "Personal and other services",
+      "sic_divisions": ["94", "95", "96"],
+      "naics_sectors": ["81"]
+    }
+  ],
+  "seed_category_industry": {
+    "Property and construction": "construction",
+    "Professional services": "professional",
+    "Local consumer businesses": "personal",
+    "Traditional industries": "manufacturing",
+    "E-commerce and marketplaces": "retail"
+  }
+}

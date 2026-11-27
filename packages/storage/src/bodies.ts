@@ -22,7 +22,9 @@ export type BodyKind =
   | "mail"
   | "note"
   | "runlog"
-  | "run_output";
+  | "run_output"
+  | "source_fetch"
+  | "brief";
 
 /** What a row stores for one body. `inline` is "" when the body is in the blob store. */
 export interface StoredBody {
@@ -62,6 +64,10 @@ export function bodyKey(kind: BodyKind, id: string, sha: string) {
       return `runlog/${safe(id)}-${sha}`;
     case "run_output":
       return `runs/${safe(id)}-${sha}`;
+    case "source_fetch":
+      return `sources/${safe(id)}-${sha}.json`;
+    case "brief":
+      return `briefs/${safe(id)}-${sha}`;
   }
 }
 

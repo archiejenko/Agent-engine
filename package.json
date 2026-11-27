@@ -40,6 +40,7 @@
     "gate:v2-phase4": "tsx scripts/gate-v2-phase4.ts",
     "gate:v3": "tsx scripts/gate-v3.ts",
     "gate:graph": "tsx scripts/gate-graph.ts",
+    "gate:v4": "tsx scripts/gate-v4.ts",
     "gen:graphs": "tsx scripts/gen-graphs.ts",
     "ideas:import": "tsx scripts/import-ideas.ts",
     "compare:extractors": "tsx scripts/compare-extractors.ts"

@@ -2,6 +2,9 @@ import {
   ConfidenceConfig,
   type FieldDefinition,
   FieldRegistry,
+  IndustriesConfig,
+  PortfolioConfig,
+  SourceDefinition,
   UniverseConfig,
 } from "@ae/contracts";
 import { z } from "zod";
@@ -13,12 +16,15 @@ import graphPolicyJson from "./graph-policy.json" with { type: "json" };
 import ideaCategoriesJson from "./idea-categories.json" with { type: "json" };
 import ideaFunctionsJson from "./idea-functions.json" with { type: "json" };
 import ideasJson from "./ideas.json" with { type: "json" };
+import industriesJson from "./industries.json" with { type: "json" };
 import infraJson from "./infra.json" with { type: "json" };
 import infraPricesJson from "./infra-prices.json" with { type: "json" };
 import keysJson from "./keys.json" with { type: "json" };
 import modelsJson from "./models.json" with { type: "json" };
+import portfolioJson from "./portfolio.json" with { type: "json" };
 import productsJson from "./products.json" with { type: "json" };
 import sicSectorsJson from "./sic-sectors.json" with { type: "json" };
+import sourcesJson from "./sources.json" with { type: "json" };
 import triggersJson from "./triggers.json" with { type: "json" };
 import universeJson from "./universe.lead_gen.json" with { type: "json" };
 import verificationJson from "./verification.json" with { type: "json" };
@@ -705,3 +711,39 @@ export function loadIdeasConfig(raw: unknown = ideasJson): IdeasConfig {
 }
 
 export { BUILT_IN_LAYOUTS, loadLayout } from "./layouts/index.ts";
+
+// ---- v4 (PLAN.md §2): the source registry, the industry list and the routes/channels.
+
+export const SourcesConfig = z
+  .strictObject({
+    _note: z.string().optional(),
+    version: z.number().int().positive(),
+    sources: z.array(SourceDefinition).min(1),
+  })
+  .superRefine((c, ctx) => {
+    const seen = new Set<string>();
+    for (const s of c.sources) {
+      if (seen.has(s.source_id))
+        ctx.addIssue({
+          code: "custom",
+          message: `duplicate source ${s.source_id}`,
+          path: ["sources"],
+        });
+      seen.add(s.source_id);
+    }
+  });
+export type SourcesConfig = z.infer<typeof SourcesConfig>;
+
+export function loadSourcesConfig(raw: unknown = sourcesJson): SourcesConfig {
+  return SourcesConfig.parse(raw);
+}
+
+export function loadIndustriesConfig(raw: unknown = industriesJson): IndustriesConfig {
+  const { _note, ...rest } = raw as Record<string, unknown>;
+  return IndustriesConfig.parse(rest);
+}
+
+export function loadPortfolioConfig(raw: unknown = portfolioJson): PortfolioConfig {
+  const { _note, ...rest } = raw as Record<string, unknown>;
+  return PortfolioConfig.parse(rest);
+}
