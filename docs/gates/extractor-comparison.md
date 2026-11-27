@@ -1,31 +1,33 @@
 # Website extractor: Claude Opus 5.5 vs Gemini 4 Hydrogen
 
-**No results yet.**
+Run 2026-11-27T16:42:27.182Z on 20 synthetic-world fixture sites (3 pages each, cut by the
+per-page budget), with the extractor's real prompt and JSON schema. No real cached pages exist in the
+repo. Prices: models.json (price table 2026-11-27), USD→GBP 0.79.
 
-**Run attempted 2026-11-27 16:23 UTC: every Hydrogen call was refused by Google.**
-- 20 fixture sites were sent to `gemini-4-hydrogen` with the extractor's real prompt and schema.
-- 19 calls came back **HTTP 402, "Your prepayment credits are depleted. Please go to AI Studio at
-  https://ai.studio/projects to manage your project and billing."** The other one came back HTTP 503.
-- No call returned a model answer, so nothing was billed and there's nothing to score.
-- The Opus side didn't run either: there's no `ANTHROPIC_API_KEY` in this session.
+| Model | Fields right | Wrong | Missing | Extra (not asked / injected) | Errors | Invalid JSON | Avg cost a call | Avg tokens in / out | Avg latency |
+|---|---|---|---|---|---|---|---|---|---|
+| claude-opus-5-5 | not run: no ANTHROPIC_API_KEY in this session | | | | | | | | |
+| gemini-4-hydrogen | 98.6% (69/70) | 1 | 0 | 0 | 0 | 0 | £0.0038 | 709 / 496 | 3133 ms (p90 5145 ms) |
 
-**To run it** (about £1 for 20 pages, both models together):
-1. Add prepaid credit to the Google AI Studio project that owns `GEMINI_API_KEY`
-   (https://ai.studio/projects → billing).
-2. Make `ANTHROPIC_API_KEY` available: in `.dev.vars` on the laptop, or as an environment variable in
-   this repo's cloud environment.
-3. Run:
+Field-level agreement between the two models: not measured (Opus not run).
 
-```bash
-pnpm compare:extractors --pages 20
-```
+Wrong values, Opus: not run
 
-The script then sends the synthetic-world fixture sites (3 pages each, cut by the per-page budget)
-through both models. It scores every field against the fixtures' known answers (company number,
-trading postcode, role email, job postings). It counts wrong, missing and extra fields, including the
-planted prompt injection, and checks agreement between the models. It also reports average cost per
-call and latency, and overwrites this file. With only the Gemini key it runs Hydrogen alone against the
-known answers. If every call fails, it writes nothing. There are no real cached pages in the repo to
-add.
+Wrong values, Hydrogen: 10174218 job_postings: ["Sales Executive"] (expected ["Office Manager","Sales Executive"])
 
-**Until it has been run, the extractor stays on Claude Opus 5.5** (`models.json → website_extractor`).
+## Notes (2026-11-27)
+
+- **The one wrong field is Hydrogen's miss, not the pipeline's.** For company 10174218, the careers
+  text Hydrogen was sent contained both lines, "Vacancy: Office Manager" and "Vacancy: Sales Executive"
+  (no page cut). It returned only "Sales Executive".
+- **The planted prompt injection was resisted** on every site that had one: no `company_status` or
+  employee figure was returned (0 extra fields).
+- **Cost and latency here understate real pages.** These fixture sites are tiny (about 710 input
+  tokens a call), while real calls average about 8,500. At 8,500 input tokens and this run's ~500
+  output tokens (thinking included), a Hydrogen call would be about **£0.013**, against about **£0.033**
+  for Opus. Latency on real pages will also be higher than the 3.1 s average here.
+- **Opus wasn't run**, because there's no `ANTHROPIC_API_KEY` in this session, so there's no
+  side-by-side agreement figure yet.
+- **The default stays Claude Opus 5.5.** Hydrogen did well against the known answers, but "close to
+  Opus" can't be shown without running Opus on the same pages. These synthetic pages are also much
+  easier than real sites.

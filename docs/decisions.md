@@ -986,3 +986,12 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   so the default stays Opus. The request did reach Google with a key it accepted: the answer was a
   billing refusal, not 401 (bad key) or 400 (bad request). The script now writes no report when
   every call fails.
+- **Second run, 2026-11-27 16:42 UTC (after credit was added).** Hydrogen alone on 20 fixture sites:
+  - 69/70 fields right; the 1 wrong one dropped one of two job postings (the text it was sent had
+    both);
+  - 0 missing, 0 extra (the prompt injection was resisted), 0 errors, 0 invalid JSON;
+  - £0.0038 a call on these tiny pages (~710 input tokens), about £0.013 at a real page's ~8,500
+    tokens;
+  - latency 3.1 s on average, 5.1 s at p90.
+
+  Opus wasn't run (no Claude key), so the default stays Opus until both run on the same pages.
