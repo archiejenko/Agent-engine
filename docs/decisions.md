@@ -980,3 +980,9 @@ Plan: `brain/build-reports/v2-plan.md`. Answers:
   A 100-company run would cost about £1.20–£1.80 on Hydrogen, against about £3.30 on Opus.
 - **The £5/day `website_ingest` cap is unchanged.** It still fits Opus. If Hydrogen becomes the
   default, about £2.50 would keep the same ~50% headroom over a normal run. That's Archie's call.
+- **Comparison attempt, 2026-11-27 16:23 UTC.** With `GEMINI_API_KEY` set (and still no Claude key),
+  Hydrogen was run alone on 20 fixture sites. Google refused every call: 19 with HTTP 402 (prepaid
+  credits depleted) and 1 with HTTP 503. Nothing was billed and there is still no quality evidence,
+  so the default stays Opus. The request did reach Google with a key it accepted: the answer was a
+  billing refusal, not 401 (bad key) or 400 (bad request). The script now writes no report when
+  every call fails.
